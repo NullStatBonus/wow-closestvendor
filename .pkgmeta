@@ -1,0 +1,23 @@
+package-as: ClosestVendor
+
+# The addon lives in ClosestVendor/ inside the repository; move it to the top of the package.
+move-folders:
+  ClosestVendor/ClosestVendor: ClosestVendor
+
+# No libraries are fetched: the addon has none. LICENSE and THIRD_PARTY.md ship in the package
+# so the pfQuest notice travels with the data.
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - .claude
+  - .github
+  - CLAUDE.md
+  - CONTRIBUTING.md
+  - Makefile
+  - README.md
+  - docs
+  - openspec
+  - tests
+  - tools

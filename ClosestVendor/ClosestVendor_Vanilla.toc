@@ -1,0 +1,24 @@
+## Interface: 11509
+## Title: Closest Vendor
+## Notes: Points you at the nearest vendor to sell to or repair at when bags are nearly full or gear is worn.
+## Version: 0.1.0
+## Author: NullStatBonus
+## SavedVariables: ClosestVendorDB
+## OptionalDeps: TomTom, WaypointUI
+## Category: Interface Enhancements
+
+Locales\enUS.lua
+
+Triggers.lua
+Professions.lua
+Adapter.lua
+Search.lua
+Discovery.lua
+Nav.lua
+Controller.lua
+Commands.lua
+Options.lua
+Log.lua
+Report.lua
+Data\Vendors.lua
+Core.lua

@@ -1,0 +1,19 @@
+# Packager output and zips
+.release/
+*.zip
+
+# Downloaded build inputs (tools/fetch_data.py recreates them)
+tools/data/
+tools/.cache/
+
+# Local notes and assistant files
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store

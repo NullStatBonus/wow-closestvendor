@@ -1,0 +1,43 @@
+-- Fake of the Blizzard Settings API (vertical layout) that records what an addon registers.
+local M = {}
+
+function M.new()
+    local rec = { settings = {}, checkboxes = {}, sliders = {} }
+    local S = { VarType = { Boolean = "boolean", Number = "number" } }
+
+    function S.RegisterVerticalLayoutCategory(name)
+        local c = { name = name, id = 42 }
+        function c:GetID() return self.id end
+        rec.category = c
+        return c
+    end
+    function S.RegisterAddOnSetting(category, variable, key, tbl, vtype, name, default)
+        local s = { category = category, variable = variable, key = key, tbl = tbl, vtype = vtype, name = name, default = default }
+        function s:GetValue() return tbl[key] end
+        function s:SetValue(v) tbl[key] = v; if self.cb then self.cb(self, v) end end
+        function s:SetValueChangedCallback(cb) self.cb = cb end
+        rec.settings[#rec.settings + 1] = s
+        return s
+    end
+    function S.CreateCheckbox(category, setting, tip)
+        local i = { setting = setting, tip = tip }
+        rec.checkboxes[#rec.checkboxes + 1] = i
+        return i
+    end
+    function S.CreateSliderOptions(min, max, step)
+        local o = { min = min, max = max, step = step }
+        function o:SetLabelFormatter(where, fn) self.where, self.fmt = where, fn end
+        return o
+    end
+    function S.CreateSlider(category, setting, options, tip)
+        local i = { setting = setting, options = options, tip = tip }
+        function i:SetParentInitializer(parent, pred) self.parent, self.pred = parent, pred end
+        rec.sliders[#rec.sliders + 1] = i
+        return i
+    end
+    function S.RegisterAddOnCategory(category) rec.registered = category end
+    function S.OpenToCategory(id) rec.opened = id end
+    return S, rec
+end
+
+return M

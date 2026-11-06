@@ -1,0 +1,35 @@
+name: Release
+
+# Tag vX.Y.Z to test, package and publish. The tag must equal the version in both TOC files.
+# CurseForge and Wago uploads are skipped for a site whose project ID is missing from the TOCs
+# (## X-Curse-Project-ID, ## X-Wago-ID); see docs/publishing.md.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the packager reads tags and history
+      - name: Install LuaJIT
+        run: sudo apt-get update && sudo apt-get install -y luajit
+      - name: Tests
+        run: make test
+      - name: Checks
+        run: |
+          make check
+          sh tools/check-version.sh "${{ github.ref_name }}"
+      - uses: BigWigsMods/packager@v2
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+      - name: GitHub release
+        run: gh release create "$GITHUB_REF_NAME" .release/*.zip --title "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
