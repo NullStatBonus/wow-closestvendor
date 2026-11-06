@@ -55,8 +55,8 @@ small.Add("after")
 eq(#small.Entries(), 1, "records again after clearing")
 
 -- Format.
-local lines = Log.Format({ { t = 1.5, msg = "a" }, { t = 12.25, msg = "b" }, { t = 3, msg = "c" } })
-eq(table.concat(lines, "|"), "[1.5] a|[12.2] b|[3.0] c", "formatted, oldest first")
+local lines = Log.Format({ { t = 1.5, msg = "a" }, { t = 12.26, msg = "b" }, { t = 3, msg = "c" } })
+eq(table.concat(lines, "|"), "[1.5] a|[12.3] b|[3.0] c", "formatted, oldest first")
 lines = Log.Format({ { t = 1, msg = "a" }, { t = 2, msg = "b" }, { t = 3, msg = "c" } }, 2)
 eq(table.concat(lines, "|"), "[2.0] b|[3.0] c", "limit keeps the newest")
 eq(#Log.Format({}), 0, "empty")
