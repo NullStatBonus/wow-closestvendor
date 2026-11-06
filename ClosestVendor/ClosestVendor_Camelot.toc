@@ -6,6 +6,8 @@
 ## SavedVariables: ClosestVendorDB
 ## OptionalDeps: TomTom, WaypointUI
 ## Category: Interface Enhancements
+## X-Curse-Project-ID: 1787879
+## X-Wago-ID: v63Q1oGb
 
 Locales\enUS.lua
 
