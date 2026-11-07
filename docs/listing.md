@@ -8,7 +8,7 @@ Copy-ready text and field values for the CurseForge and Wago projects. Create th
 |---|---|
 | Project name | Closest Vendor |
 | Slug / URL name | closest-vendor (use whatever is free) |
-| Summary (one line, keep under 250 characters) | Asks if you want to navigate to the nearest vendor when bags are almost full, gear needs repair or ammo runs low, or to a trainer near a profession's limit. Works with TomTom, WaypointUI or the built-in map waypoint. Classic Era and Forever. |
+| Summary (one line, keep under 250 characters) | Designed for WoW Forever and Classic Era, this World of Warcraft addon directs you to the nearest relevant vendor whenever your gear needs repair or your bags are nearly full. |
 | Main category | Map & Minimap |
 | Additional categories | Bags & Inventory, Miscellaneous |
 | Game versions | Classic Era (1.15.x) and WoW Forever (1.60.x). The packager reads `## Interface` from each TOC: 11509 for `ClosestVendor_Vanilla.toc`, 16001 for `ClosestVendor_Camelot.toc`. |
@@ -27,7 +27,7 @@ Paste this into the description box (CurseForge and Wago both take Markdown or H
 
 ---
 
-**Closest Vendor** points you at the nearest vendor right when you need one, for **WoW Forever** and **Classic Era**.
+Designed for WoW Forever and Classic Era, this World of Warcraft addon directs you to the nearest relevant vendor whenever your gear needs repair or your bags are nearly full.
 
 It watches four things and asks before it sends you anywhere:
 
@@ -49,7 +49,7 @@ If several things are low at once it asks one question at a time: repair first, 
 
 **Learns as you play.** It ships with about 900 vendors and remembers every vendor window you open, including which ones repair and which sell arrows or bullets. That is how WoW Forever's new zones (Mount Hyjal, Riverglades, Zephras Isle, Darkspear Islands, Shen'dralas) get covered.
 
-**Settings.** Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger. The same things are available as commands:
+**Settings.** Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger, plus an ammo-buying switch, an ask-first switch and a grade dropdown for arrows and for bullets. The same things are available as commands:
 
 - `/cvn` shows your settings, `/cvn config` opens the settings page
 - `/cvn bags 4`, `/cvn dur 30`, `/cvn ammo 300`, `/cvn trade 25` change the thresholds; add `on` or `off` to switch a trigger
@@ -79,11 +79,10 @@ Free and open source (MIT). Vendor data generated from the pfQuest database (MIT
 3. The settings page under Options, AddOns.
 4. A TomTom arrow or the map waypoint after answering Yes.
 5. The ammo question for a hunter (`/cvn test arrows`).
+6. The chat line after an ammo purchase.
 
 Use 1920x1080 or larger, UI scale unchanged, with the chat frame showing nothing private.
 
 ## After creating the projects
 
-1. Put both IDs in both TOC files (`## X-Curse-Project-ID`, `## X-Wago-ID`), commit.
-2. Add the repository secrets `CF_API_TOKEN` and `WAGO_API_TOKEN`.
-3. Tag `v0.1.0` (see publishing.md).
+Both IDs are in both TOC files (`## X-Curse-Project-ID`, `## X-Wago-ID`). With the repository secrets `CF_API_TOKEN` and `WAGO_API_TOKEN` set, every `vX.Y.Z` tag publishes to both sites (see publishing.md). Update the pasted description and summary on each site whenever this file changes; the sites do not read it.

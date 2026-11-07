@@ -1,6 +1,6 @@
 ## Interface: 11509
 ## Title: Closest Vendor
-## Notes: Points you at the nearest vendor to sell to or repair at when bags are nearly full or gear is worn.
+## Notes: Designed for WoW Forever and Classic Era, this World of Warcraft addon directs you to the nearest relevant vendor whenever your gear needs repair or your bags are nearly full.
 ## Version: 0.2.0
 ## Author: NullStatBonus
 ## SavedVariables: ClosestVendorDB
