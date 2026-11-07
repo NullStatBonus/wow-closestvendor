@@ -1,6 +1,6 @@
 # Closest Vendor
 
-A World of Warcraft addon for **WoW Forever** and **Classic Era**. When your bags are nearly full or your gear is worn, it points you at the nearest vendor that can help.
+Designed for WoW Forever and Classic Era, this World of Warcraft addon directs you to the nearest relevant vendor whenever your gear needs repair or your bags are nearly full.
 
 - Free bag slots at or below a threshold (default **2**): nearest vendor you can sell to.
 - Any equipped item below a durability threshold (default **20%**): nearest vendor that can repair.
