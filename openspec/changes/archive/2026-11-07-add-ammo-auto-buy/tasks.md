@@ -23,4 +23,4 @@
 
 ## 5. Release
 
-- [ ] 5.1 Update README/docs for the new settings; on archive bump both TOCs to 0.2.0 and add CHANGELOG `## 0.2.0`
+- [x] 5.1 Update README/docs for the new settings; on archive bump both TOCs to 0.2.0 and add CHANGELOG `## 0.2.0`
