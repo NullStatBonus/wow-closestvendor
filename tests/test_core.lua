@@ -115,7 +115,7 @@ local function boot(opts)
     env._G = env
 
     local ns = {}
-    for _, f in ipairs({ "Locales/enUS", "Triggers", "Professions", "Adapter", "Search", "Discovery", "Nav", "Controller", "Commands", "Options", "Log", "Report" }) do
+    for _, f in ipairs({ "Locales/enUS", "Triggers", "Ammo", "Professions", "Adapter", "Search", "Discovery", "Nav", "Controller", "Commands", "Options", "Log", "Report" }) do
         setmetatable(ns, nil)
         local chunk = assert(loadfile("ClosestVendor/" .. f .. ".lua"))
         setfenv(chunk, env)

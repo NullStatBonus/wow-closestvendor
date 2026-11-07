@@ -11,7 +11,7 @@ What the automated tests cannot check: the real game. Run it on WoW Forever (and
 
 ## 1. Settings page and commands
 
-- [ ] Esc, Options, AddOns, **Closest Vendor** exists, with a checkbox and a slider for Bag space, Durability and Ammo.
+- [ ] Esc, Options, AddOns, **Closest Vendor** exists, with a checkbox and a slider for Bag space, Durability and Ammo, plus Buy ammo and Ask before buying ammo checkboxes and Arrows to buy / Bullets to buy dropdowns.
 - [ ] Moving a slider changes the number shown by `/cvn`; `/cvn ammo 500` moves the ammo slider to 500 when the page is reopened.
 - [ ] Clearing a checkbox greys out its slider and stops that trigger asking.
 - [ ] `/cvn config` opens the page.
@@ -78,6 +78,23 @@ What the automated tests cannot check: the real game. Run it on WoW Forever (and
 
 - [ ] On a non-English client the addon's sentences are English and spell/zone names are the game's.
 - [ ] With a translation file installed (docs/localization.md): `/cvn`, the question and the settings page show it.
+
+## 10. Buying ammo
+
+Use a hunter with a bow (or a gun) and a quiver (or ammo pouch). Turn `/cvn debug on` first.
+
+- [ ] With the quiver partly full and `/cvn buy auto` (default): opening an ammo vendor buys until the quiver is full, with no dialog. One chat line gives the count and cost.
+- [ ] Check the count bought matches the room left. Note how many `BuyMerchantItem` calls were needed and the vendor's batch size (the report shows it). This confirms the one-call-per-batch assumption.
+- [ ] Opening the vendor with a full quiver buys nothing.
+- [ ] No quiver or pouch: nothing is bought. Wand or thrown weapon: nothing is bought.
+- [ ] `/cvn buy ask`: a dialog shows the count and price; nothing is bought until **Yes**; **No** buys nothing.
+- [ ] `/cvn buy off`: nothing is bought.
+- [ ] `/cvn arrows best` at a vendor selling several grades buys the highest grade your level allows; `/cvn arrows cheapest` buys the cheapest; `/cvn arrows equipped` buys what is in your ammo slot.
+- [ ] Setting arrows and bullets differently: a bow follows the arrow setting, a gun the bullet setting.
+- [ ] Equipped ammo that this vendor does not sell, with `equipped`: nothing is bought and a chat line says so. A vendor that sells no ammo at all stays silent.
+- [ ] Short on gold: only what you can afford is bought, and the chat line says so. With almost no gold, "You cannot afford any ammo here."
+- [ ] A quiver holding a different grade does not make it overbuy.
+- [ ] The Arrows and Bullets dropdowns on the settings page match `/cvn`.
 
 ## Not covered yet
 

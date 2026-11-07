@@ -2,8 +2,8 @@
 local M = {}
 
 function M.new()
-    local rec = { settings = {}, checkboxes = {}, sliders = {} }
-    local S = { VarType = { Boolean = "boolean", Number = "number" } }
+    local rec = { settings = {}, checkboxes = {}, sliders = {}, dropdowns = {} }
+    local S = { VarType = { Boolean = "boolean", Number = "number", String = "string" } }
 
     function S.RegisterVerticalLayoutCategory(name)
         local c = { name = name, id = 42 }
@@ -33,6 +33,17 @@ function M.new()
         local i = { setting = setting, options = options, tip = tip }
         function i:SetParentInitializer(parent, pred) self.parent, self.pred = parent, pred end
         rec.sliders[#rec.sliders + 1] = i
+        return i
+    end
+    function S.CreateControlTextContainer()
+        local c = { data = {} }
+        function c:Add(value, label) self.data[#self.data + 1] = { value = value, label = label } end
+        function c:GetData() return self.data end
+        return c
+    end
+    function S.CreateDropdown(category, setting, optionsFn, tip)
+        local i = { setting = setting, options = optionsFn(), tip = tip }
+        rec.dropdowns[#rec.dropdowns + 1] = i
         return i
     end
     function S.RegisterAddOnCategory(category) rec.registered = category end

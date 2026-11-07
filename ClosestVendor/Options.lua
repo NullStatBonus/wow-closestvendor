@@ -47,6 +47,31 @@ function O.Register(cfg, defaults, onChange)
         on:SetValueChangedCallback(onChange)
         amount:SetValueChangedCallback(onChange)
     end
+    -- Ammo buying. The grade dropdowns need a newer part of the API; without it use /cvn arrows and /cvn bullets.
+    local buy = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AMMOBUY_ENABLED", "ammoBuyEnabled", cfg,
+        Settings.VarType.Boolean, L["Buy ammo"], defaults.ammoBuyEnabled)
+    Settings.CreateCheckbox(category, buy, L["Fill your quiver or ammo pouch with ammo when a merchant window opens."])
+    local ask = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AMMOBUY_PROMPT", "ammoBuyPrompt", cfg,
+        Settings.VarType.Boolean, L["Ask before buying ammo"], defaults.ammoBuyPrompt)
+    Settings.CreateCheckbox(category, ask, L["Show the count and price and wait for a Yes instead of buying at once."])
+    buy:SetValueChangedCallback(onChange)
+    ask:SetValueChangedCallback(onChange)
+    if Settings.CreateDropdown and Settings.CreateControlTextContainer and Settings.VarType.String then
+        local function choices()
+            local c = Settings.CreateControlTextContainer()
+            c:Add("equipped", L["same as equipped"])
+            c:Add("best", L["best usable"])
+            c:Add("cheapest", L["cheapest"])
+            return c:GetData()
+        end
+        for _, g in ipairs({ { "arrowGrade", "ARROW", L["Arrows to buy"] }, { "bulletGrade", "BULLET", L["Bullets to buy"] } }) do
+            local setting = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_" .. g[2] .. "_GRADE", g[1], cfg,
+                Settings.VarType.String, g[3], defaults[g[1]])
+            Settings.CreateDropdown(category, setting, choices,
+                L["Same as equipped buys what is in your ammo slot. Best usable buys the highest grade you are high enough level for. Cheapest buys the lowest price per piece."])
+            setting:SetValueChangedCallback(onChange)
+        end
+    end
     Settings.RegisterAddOnCategory(category)
     return category
 end
