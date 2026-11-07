@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- Buys ammo for you. At any merchant, with a bow, crossbow or gun equipped, it fills your quiver or ammo pouch, with no clicks. It spends only what you can afford and tells you in chat what it bought.
+- Choose which ammo to buy, separately for arrows and bullets: the same as your equipped ammo (default), the best your level allows, or the cheapest.
+- `/cvn buy ask` shows the count and price and waits for a Yes; `/cvn buy off` turns buying off. New settings page controls match.
+- The debug report lists the ammo-buying settings and what happened at each merchant.
+
 ## 0.1.0
 
 - First release for WoW Forever and Classic Era.

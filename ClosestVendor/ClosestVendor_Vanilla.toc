@@ -1,7 +1,7 @@
 ## Interface: 11509
 ## Title: Closest Vendor
 ## Notes: Points you at the nearest vendor to sell to or repair at when bags are nearly full or gear is worn.
-## Version: 0.1.0
+## Version: 0.2.0
 ## Author: NullStatBonus
 ## SavedVariables: ClosestVendorDB
 ## OptionalDeps: TomTom, WaypointUI
