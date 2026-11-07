@@ -12,6 +12,7 @@
 Locales\enUS.lua
 
 Triggers.lua
+Ammo.lua
 Professions.lua
 Adapter.lua
 Search.lua

@@ -20,16 +20,27 @@ local HELP = {
     L["/cvn dur <percent>  durability threshold (default 20); /cvn dur on, /cvn dur off"],
     L["/cvn ammo <count>  ammo threshold (default 200); /cvn ammo on, /cvn ammo off"],
     L["/cvn trade <points>  profession threshold (default 10); /cvn trade on, /cvn trade off"],
+    L["/cvn buy on, /cvn buy off  buy ammo to fill your quiver or pouch at merchants (default on)"],
+    L["/cvn buy ask, /cvn buy auto  ask first, or buy without asking (default)"],
+    L["/cvn arrows equipped/best/cheapest, /cvn bullets equipped/best/cheapest  which ammo to buy (default equipped)"],
     L["/cvn test sell, /cvn test repair, /cvn test arrows, /cvn test bullets  ask the question now"],
     L["/cvn debug on, /cvn debug off  record what the addon sees, for bug reports"],
     L["/cvn log  show the report to copy; /cvn log clear  empty the log"],
 }
+
+local function gradeName(g)
+    if g == "best" then return L["best usable"] end
+    if g == "cheapest" then return L["cheapest"] end
+    return L["same as equipped"]
+end
 
 local function status(cfg)
     return {
         L["Bags: %s, trigger at %d free slot(s) or fewer"]:format(cfg.bagEnabled and L["on"] or L["off"], cfg.bagThreshold),
         L["Durability: %s, trigger below %d%%"]:format(cfg.durEnabled and L["on"] or L["off"], cfg.durThreshold),
         L["Ammo: %s, trigger at %d or fewer"]:format(cfg.ammoEnabled and L["on"] or L["off"], cfg.ammoThreshold),
+        L["Ammo buying: %s, %s, arrows: %s, bullets: %s"]:format(cfg.ammoBuyEnabled and L["on"] or L["off"],
+            cfg.ammoBuyPrompt and L["asks first"] or L["buys at once"], gradeName(cfg.arrowGrade), gradeName(cfg.bulletGrade)),
         L["Professions: %s, trigger at %d point(s) or fewer from the skill limit"]:format(cfg.tradeEnabled and L["on"] or L["off"], cfg.tradeThreshold),
     }
 end
@@ -69,6 +80,22 @@ function M.Run(cfg, msg)
     if cmd == "test" and (arg == "arrows" or arg == "bullets") then
         local line = arg == "arrows" and L["Asking about the nearest vendor selling arrows..."] or L["Asking about the nearest vendor selling bullets..."]
         return { line }, { "test", (arg:gsub("s$", "")) }
+    end
+    if cmd == "buy" and (arg == "on" or arg == "off") then
+        cfg.ammoBuyEnabled = (arg == "on")
+        return status(cfg)
+    end
+    if cmd == "buy" and (arg == "ask" or arg == "auto") then
+        cfg.ammoBuyPrompt = (arg == "ask")
+        return status(cfg)
+    end
+    if cmd == "arrows" or cmd == "bullets" then
+        local key = cmd == "arrows" and "arrowGrade" or "bulletGrade"
+        if arg == "equipped" or arg == "best" or arg == "cheapest" then
+            cfg[key] = arg
+            return status(cfg)
+        end
+        return { L["Choose equipped, best or cheapest."] }
     end
     if cmd == "ammo" and arg ~= "" then return setting(cfg, "ammo", arg, M.LIMITS.ammo[1], M.LIMITS.ammo[2], L["Ammo threshold"]) end
     if cmd == "trade" and arg ~= "" then return setting(cfg, "trade", arg, M.LIMITS.trade[1], M.LIMITS.trade[2], L["Profession threshold"]) end

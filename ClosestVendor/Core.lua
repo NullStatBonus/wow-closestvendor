@@ -5,7 +5,8 @@ local A = ns.Adapter
 local L = ns.L
 
 local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
-    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true }
+    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true,
+    ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped" }
 local POLL_SECONDS = 5
 
 local POPUP = "CLOSESTVENDOR_CONFIRM"
@@ -30,6 +31,20 @@ local buckets, trainerBuckets = {}, {}
 local function say(text)
     print("|cff33ffccClosestVendor|r " .. (text:gsub("|", "||")))
 end
+
+-- What ns.Ammo needs when a merchant opens: all game reads and the purchase go through the Adapter.
+local AMMO_ENV = {
+    kind = function() return (A.ammoStatus()) end,
+    equippedID = A.equippedAmmoID,
+    level = A.level,
+    offers = A.merchantAmmo,
+    money = A.money,
+    space = A.ammoSpace,
+    buy = A.buyMerchantItem,
+    say = say,
+    log = function(text) if log then log.Add(text) end end,
+    confirm = function(text, accept) A.showPopup(POPUP, text, accept) end,
+}
 
 -- Failures of guarded game calls go to the debug log (once per kind of failure).
 A.onError = function(name, err)
@@ -130,6 +145,8 @@ local function reportText()
         ("settings: bags %s/%d, durability %s/%d, ammo %s/%d, professions %s/%d"):format(c.bagEnabled and "on" or "off", c.bagThreshold,
             c.durEnabled and "on" or "off", c.durThreshold, c.ammoEnabled and "on" or "off", c.ammoThreshold,
             c.tradeEnabled and "on" or "off", c.tradeThreshold),
+        ("ammo buying: %s, %s, arrows %s, bullets %s"):format(c.ammoBuyEnabled and "on" or "off",
+            c.ammoBuyPrompt and "asks first" or "buys at once", tostring(c.arrowGrade), tostring(c.bulletGrade)),
         ("trainers: %d learned, professions seen: %s"):format(trainers, table.concat(professions, ", ")),
     }
     return ns.Log.Report(header, log.Entries(), log.Enabled()), header
@@ -216,6 +233,7 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "MERCHANT_SHOW" then
         if DB then learnMerchant() end
         if controller then controller.OnMerchantShow() end
+        if DB then ns.Ammo.OnMerchant(DB.cfg, AMMO_ENV) end
     elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
         local trades = DB and learnTrainer()
         if trades and controller then controller.OnTrainerShow(trades) end

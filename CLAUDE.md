@@ -9,6 +9,16 @@ Bump the addon's semantic version every time a change's specs are applied to `op
 - Make the bump part of the same commit as the archive, name the new version in the commit message, and add a `## X.Y.Z` section to `CHANGELOG.md` in that commit (`tools/check-version.sh` fails without it).
 - To publish, tag the archive commit `vX.Y.Z` (the version without the `v` must equal the TOC version) and push the tag; see `docs/publishing.md`.
 
+## Documentation
+
+Update the supporting docs in the same change as any user-visible addon behavior, setting or command:
+
+- `README.md`: features, settings page, command list (`tests/test_readme.lua` checks the commands), and "Good to know" limits.
+- `docs/listing.md`: the CurseForge/Wago listing text, including the summary line if the headline behavior changes.
+- `docs/test-plan.md`: manual in-game checks for the new behavior; keep section numbers unique and in order.
+- The debug report header in `Core.lua` (`reportText`) lists any new setting.
+- `CHANGELOG.md` is written at archive (see Releases), not before.
+
 ## Conventions
 
 - **Game calls live in `Adapter.lua` only.** Every function the game provides is read there, guarded and in `pcall`, returning nil when missing; nothing else calls `C_Map`, `C_Container`, unit or inventory functions. Unknown data is nil, never 0 or false.

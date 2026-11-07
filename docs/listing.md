@@ -33,8 +33,10 @@ It watches four things and asks before it sends you anywhere:
 
 - **Bags nearly full:** 2 free slots or fewer (you choose the number) and it offers the nearest vendor you can sell to.
 - **Gear worn:** any equipped item below 20% durability (you choose) and it offers the nearest repair vendor.
-- **Ammo low:** a bow, crossbow or gun equipped and your arrows or bullets at 200 or fewer (you choose) and it offers the nearest vendor that sells that ammo.
+- **Ammo low:** a bow, crossbow or gun equipped and your arrows or bullets at 200 or fewer (you choose) and it offers the nearest vendor that sells that ammo. Once there, it buys the ammo for you (see below).
 - **Professions:** a profession 10 points or fewer from its current skill limit (you choose) and it offers the nearest trainer you have opened before. It asks on every skill-up and every craft.
+
+**Buys your ammo.** At any merchant, with a bow, crossbow or gun equipped, it fills your quiver or ammo pouch for you, no clicks. You can have it ask first instead. Arrows and bullets each have a setting: the same ammo you have equipped (default), the best your level allows, or the cheapest. It only buys what you can afford and says so in chat.
 
 A small Yes / No question shows the vendor's name and zone. Answer Yes and it shows the way with the first of these you have:
 
@@ -51,6 +53,7 @@ If several things are low at once it asks one question at a time: repair first, 
 
 - `/cvn` shows your settings, `/cvn config` opens the settings page
 - `/cvn bags 4`, `/cvn dur 30`, `/cvn ammo 300`, `/cvn trade 25` change the thresholds; add `on` or `off` to switch a trigger
+- `/cvn buy on`, `/cvn buy off`, `/cvn buy ask`, `/cvn buy auto` control ammo buying; `/cvn arrows best` and `/cvn bullets cheapest` pick the grade (`equipped`, `best` or `cheapest`)
 - `/cvn test sell`, `/cvn test repair`, `/cvn test arrows`, `/cvn test bullets` show each question right now so you can see what it does
 
 **Good to know**
@@ -59,6 +62,7 @@ If several things are low at once it asks one question at a time: repair first, 
 - Vendors of the other faction are skipped.
 - The shipped vendor list is Vanilla data. Vendors that exist only in WoW Forever are unknown until you open them once.
 - Ammo is counted for the ammo you have equipped (bags included).
+- Ammo buying fills only quivers and ammo pouches that match your weapon, never ordinary bags. "Best" goes by the level an item requires, because the game does not report ammo damage.
 - Trainers are learned, not shipped: open a profession trainer once and the addon remembers it for all your characters. The trainer's level requirement is not checked.
 - Nothing is shown in dungeons, where the game gives no map position.
 

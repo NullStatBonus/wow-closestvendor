@@ -6,6 +6,7 @@ A World of Warcraft addon for **WoW Forever** and **Classic Era**. When your bag
 - Any equipped item below a durability threshold (default **20%**): nearest vendor that can repair.
 - Equipped ammo at or below a threshold (default **200**), with a bow, crossbow or gun: nearest vendor that sells that ammo (arrows or bullets).
 - A profession within a threshold (default **10**) points of its current skill limit: nearest trainer for that profession that you have opened before. It asks on every skill-up and every craft.
+- At any merchant, with a bow, crossbow or gun equipped, it buys ammo to fill your quiver or ammo pouch (no clicks by default). Grade for arrows and bullets is set separately: the same as your equipped ammo, the best your level allows, or the cheapest. It buys only what you can afford and tells you in chat.
 - Several at once: one question at a time, in the order repair, ammo, sell, trainer. A repair or ammo trip also covers selling.
 
 When that happens it **asks first** (Yes / No). Yes shows the vendor through the first of these that is available:
@@ -28,7 +29,7 @@ The addon ships one TOC per game (`ClosestVendor_Vanilla.toc` for Era, `ClosestV
 
 ## Settings page
 
-Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger (bags, durability, ammo, professions). It changes the same settings as the commands below, and `/cvn config` opens it.
+Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger (bags, durability, ammo, professions), plus ammo buying: two checkboxes (buy ammo, ask before buying) and a dropdown for arrows and one for bullets. It changes the same settings as the commands below, and `/cvn config` opens it.
 
 ## Commands
 
@@ -55,6 +56,10 @@ Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger
 /cvn debug off
 /cvn log
 /cvn log clear
+/cvn buy off
+/cvn buy ask
+/cvn arrows best
+/cvn bullets cheapest
 ```
 
 - `/cvn` shows the current settings. `/cvn config` opens the settings page.
@@ -62,6 +67,8 @@ Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger
 - `/cvn dur <percent>` sets the durability threshold (1 to 100). `on` / `off` turns the durability trigger on or off.
 - `/cvn ammo <count>` sets the ammo threshold (0 to 2000). `on` / `off` turns the ammo trigger on or off.
 - `/cvn trade <points>` sets the profession threshold (0 to 300). `on` / `off` turns the profession trigger on or off.
+- `/cvn buy on` / `/cvn buy off` switch ammo buying on or off. `/cvn buy ask` shows the count and price and waits for a Yes; `/cvn buy auto` (the default) buys at once.
+- `/cvn arrows <mode>` and `/cvn bullets <mode>` choose which ammo to buy: `equipped` (the default), `best` or `cheapest`.
 - `/cvn test sell`, `/cvn test repair`, `/cvn test arrows` and `/cvn test bullets` ask the same question right now for that kind of vendor, whatever your bags, gear and ammo look like. Yes sets the pin. Opening any vendor window clears it.
 - `/cvn debug on` and `/cvn debug off` switch the debug log on and off. `/cvn log` shows a report you can copy, `/cvn log clear` empties the log.
 - `/closestvendor` works the same as `/cvn`.
@@ -79,6 +86,7 @@ Vendors you open in WoW Forever's new zones (Mount Hyjal, Riverglades, Zephras I
 ## Limitations
 
 - **Forever-only vendors are unknown until you open them.** The shipped list is Vanilla data. Forever's new zones have no shipped vendors, and vendors in zones Forever reshaped may be slightly off.
+- **Ammo buying fills only quivers and ammo pouches** that match your weapon, never ordinary bags, and ignores the stack in your ammo slot. "Best" ranks by the level an item requires, since the game does not report ammo damage.
 - **Ammo is counted for the ammo you have equipped** (bags included). If the equipped ammo is the wrong kind for your weapon, or none is equipped, the count is 0. Thrown weapons and wands are not monitored.
 - **Trainers are learned, not shipped.** Until you have opened a trainer for a profession, the addon cannot send you to one; it says so once per profession per session in chat. It only watches professions it has seen at a trainer or in a crafting window.
 - **The last skill tier is taken to end at 300.** A profession whose limit is already 300 is never asked about. Whether WoW Forever has tiers above 300 is not verified. The trainer's level requirement is not checked, so a character that is too low may be sent to a trainer who cannot teach the next tier yet.

@@ -131,7 +131,7 @@ for _, m in ipairs({ "bags", "dur", "trade", "nonsense", "help" }) do
 end
 
 -- Chat treats "|" as an escape code: no line the parser returns may contain one.
-local msgs = { "", "help", "nonsense", "bags", "dur", "ammo", "test", "test x", "bags 5", "bags x", "dur 30", "dur 0",
+local msgs = { "buy on", "buy ask", "arrows best", "arrows x", "bullets cheapest", "", "help", "nonsense", "bags", "dur", "ammo", "test", "test x", "bags 5", "bags x", "dur 30", "dur 0",
                "ammo 300", "ammo x", "trade", "trade 20", "trade x", "trade off", "bags off", "dur off", "ammo off", "test sell", "test repair", "test arrows", "test bullets",
                "debug on", "debug off", "debug", "log", "log clear", "log x" }
 for _, m in ipairs(msgs) do
@@ -139,5 +139,26 @@ for _, m in ipairs(msgs) do
         eq(line:find("|", 1, true), nil, "no pipe in output of '" .. m .. "': " .. line)
     end
 end
+
+-- Ammo buying.
+c = fresh()
+c.ammoBuyEnabled, c.ammoBuyPrompt, c.arrowGrade, c.bulletGrade = true, false, "equipped", "equipped"
+M.Run(c, "buy off")
+eq(c.ammoBuyEnabled, false, "buy off")
+M.Run(c, "buy on")
+eq(c.ammoBuyEnabled, true, "buy on")
+M.Run(c, "buy ask")
+eq(c.ammoBuyPrompt, true, "buy ask")
+M.Run(c, "buy auto")
+eq(c.ammoBuyPrompt, false, "buy auto")
+out = M.Run(c, "arrows best")
+eq(c.arrowGrade, "best", "arrow grade set")
+eq(c.bulletGrade, "equipped", "bullet grade untouched")
+eq(has(out, "arrows: best usable"), true, "status shows arrow grade")
+M.Run(c, "bullets cheapest")
+eq(c.bulletGrade, "cheapest", "bullet grade set")
+out = M.Run(c, "arrows nonsense")
+eq(c.arrowGrade, "best", "bad grade ignored")
+eq(has(out, "Choose equipped, best or cheapest."), true, "bad grade explained")
 
 H.done()

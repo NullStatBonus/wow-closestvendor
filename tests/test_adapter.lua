@@ -8,7 +8,7 @@ local function boot(game)
     local errors = {}
     local env = setmetatable(game or {}, { __index = _G })
     local ns = {}
-    for _, f in ipairs({ "Triggers", "Adapter" }) do
+    for _, f in ipairs({ "Triggers", "Ammo", "Adapter" }) do
         local chunk = assert(loadfile("ClosestVendor/" .. f .. ".lua"))
         setfenv(chunk, env)
         chunk("ClosestVendor", ns)
@@ -279,5 +279,55 @@ eq(boot({ StaticPopup_Visible = function(w) return w == "W" and "StaticPopup1" o
 eq(boot({ StaticPopup_Visible = function() return nil end }).popupShown("W"), false, "not shown")
 eq(boot({ StaticPopup_Visible = boom }).popupShown("W"), false, "throws: not shown")
 eq(boot({}).popupShown("W"), false, "missing: not shown")
+
+-- Ammo buying on both API shapes: Classic Era (global functions, positional returns) and the newer
+-- client (C_Container / C_MerchantFrame tables).
+local ARROW, OTHER = 2515, 3030 -- item ids; class 6, subclass 2
+local merchantLines = { { "Rough Arrow", 100, 200, -1, false, ARROW }, { "Gold Thing", 5, 1, -1, true, 9 } }
+local function ammoGame(modern)
+    local g = {
+        NUM_BAG_SLOTS = 4,
+        GetMerchantNumItems = function() return #merchantLines end,
+        GetMerchantItemLink = function(i) return "|cff|Hitem:" .. merchantLines[i][6] .. "::|h[x]|h|r" end,
+        GetItemInfoInstant = function(id) return id, "", "", "", "", id == 9 and 2 or 6, 2 end,
+        BuyMerchantItem = function() end,
+    }
+    local bag1 = { { ARROW, 50 }, nil, { OTHER, 10 } } -- slot 2 empty
+    local function numSlots(b) return b == 1 and 3 or 0 end
+    local function free(b) if b == 1 then return 1, 1 end return 0, 0 end -- bag 1 is a quiver
+    local function info(b, slot) local x = b == 1 and bag1[slot]; return x end
+    local function itemInfo() return "n", "l", 1, 1, 5, "", "", 200 end -- min level 5, stack 200
+    if modern then
+        g.C_Container = { GetContainerNumSlots = numSlots, GetContainerNumFreeSlots = free,
+            GetContainerItemInfo = function(b, slot) local x = info(b, slot); return x and { itemID = x[1], stackCount = x[2] } end }
+        g.C_Item = { GetItemInfo = itemInfo }
+        g.C_MerchantFrame = { GetItemInfo = function(i)
+            local m = merchantLines[i]
+            return { name = m[1], price = m[2], stackCount = m[3], numAvailable = m[4], hasExtendedCost = m[5] }
+        end }
+    else
+        g.GetContainerNumSlots, g.GetContainerNumFreeSlots, g.GetItemInfo = numSlots, free, itemInfo
+        g.GetContainerItemInfo = function(b, slot) local x = info(b, slot); if x then return "tex", x[2] end end
+        g.GetContainerItemID = function(b, slot) local x = info(b, slot); return x and x[1] end
+        g.GetMerchantItemInfo = function(i)
+            local m = merchantLines[i]
+            return m[1], "tex", m[2], m[3], m[4], true, m[5]
+        end
+    end
+    return g
+end
+for _, modern in ipairs({ false, true }) do
+    local label = modern and "newer client: " or "Classic Era: "
+    local A = boot(ammoGame(modern))
+    local offers = A.merchantAmmo()
+    eq(#offers, 1, label .. "gold-only ammo listed, extended-cost line skipped")
+    local o = offers[1]
+    eq(o.id .. "/" .. o.price .. "/" .. o.batch .. "/" .. o.minLevel .. "/" .. o.kind .. "/" .. o.index, ARROW .. "/100/200/5/arrow/1", label .. "offer fields")
+    -- slots: 50 of the arrow (150 room), one empty (200), one other ammo (0)
+    eq(A.ammoSpace(ARROW, "arrow"), 350, label .. "room in the quiver")
+    eq(A.ammoSpace(ARROW, "bullet"), 0, label .. "bags readable but no pouch: no room")
+end
+eq(boot({}).merchantAmmo(), nil, "no merchant API: unknown")
+eq(boot(ammoGame(false)).level(), nil, "no UnitLevel: unknown")
 
 H.done()

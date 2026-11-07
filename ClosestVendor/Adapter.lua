@@ -242,6 +242,91 @@ function A.merchant()
              repair = call("CanMerchantRepair", CanMerchantRepair) and true or false, ammo = merchantAmmoCode() }
 end
 
+-- Buying ammo -----------------------------------------------------------------------------------
+
+local AMMO_FAMILY = { arrow = 1, bullet = 2 } -- bag family bits of a quiver and an ammo pouch
+
+local function itemInfo(item)
+    return call("GetItemInfo", (C_Item and C_Item.GetItemInfo) or GetItemInfo, item)
+end
+
+-- One merchant line: name, price per purchase, items per purchase, stock (-1 unlimited), paid with
+-- more than gold. Newer clients return a table from C_MerchantFrame.GetItemInfo, Classic Era
+-- returns values from GetMerchantItemInfo.
+local function merchantItem(i)
+    if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
+        local t = call("C_MerchantFrame.GetItemInfo", C_MerchantFrame.GetItemInfo, i)
+        if type(t) == "table" then
+            return t.name, t.price, t.stackCount, t.numAvailable, t.hasExtendedCost
+        end
+    end
+    local name, _, price, batch, stock, _, extended = call("GetMerchantItemInfo", GetMerchantItemInfo, i)
+    return name, price, batch, stock, extended
+end
+
+-- The open merchant's arrows and bullets: list of { index, id, name, price, batch, minLevel, kind, stock }.
+-- Price is per purchase of `batch` items. Items paid for with anything but gold are left out.
+function A.merchantAmmo()
+    local count = call("GetMerchantNumItems", GetMerchantNumItems)
+    if not count then return end
+    local list = {}
+    for i = 1, count do
+        local name, price, batch, stock, extended = merchantItem(i)
+        local link = call("GetMerchantItemLink", GetMerchantItemLink, i)
+        local id = type(link) == "string" and tonumber(link:match("item:(%d+)"))
+        if id and price and not extended then
+            local c, sc = A.itemClass(id)
+            if c == 6 and (sc == 2 or sc == 3) then
+                local _, _, _, _, minLevel = itemInfo(link)
+                list[#list + 1] = { index = i, id = id, name = name or tostring(id), price = price, batch = batch or 1,
+                    minLevel = minLevel, kind = sc == 2 and "arrow" or "bullet", stock = stock }
+            end
+        end
+    end
+    return list
+end
+
+function A.equippedAmmoID() return inventoryItemID(AMMO_SLOT) end
+
+function A.level() return call("UnitLevel", UnitLevel, "player") end
+
+function A.money() return call("GetMoney", GetMoney) end
+
+-- One slot of a bag: false if empty, { id, count } if filled; nil if it cannot be read.
+local function bagSlot(bag, slot)
+    local f = (C_Container and C_Container.GetContainerItemInfo) or GetContainerItemInfo
+    local a, b = call("GetContainerItemInfo", f, bag, slot)
+    if type(a) == "table" then return a.itemID and { a.itemID, a.stackCount or 1 } or false end
+    if a == nil then return false end
+    local id = call("GetContainerItemID", (C_Container and C_Container.GetContainerItemID) or GetContainerItemID, bag, slot)
+    return id and { id, b or 1 } or nil
+end
+
+-- Room, in items, in the carried quivers or ammo pouches of this kind for item `id`; nil if unknown.
+function A.ammoSpace(id, kind)
+    local stack = select(8, itemInfo(id))
+    local slots, readable = {}, false
+    for bag = 1, NUM_BAG_SLOTS or 4 do
+        local _, family = bagFree(bag)
+        if family and family == AMMO_FAMILY[kind] then
+            local n = call("GetContainerNumSlots", (C_Container and C_Container.GetContainerNumSlots) or GetContainerNumSlots, bag)
+            if not n then return end
+            for slot = 1, n do
+                local s = bagSlot(bag, slot)
+                if s == nil then return end
+                slots[#slots + 1] = s
+            end
+        end
+        if family then readable = true end
+    end
+    if readable then return ns.Ammo.Space(slots, stack, id) end
+end
+
+-- Buy one purchase (one batch) of merchant item `index`.
+function A.buyMerchantItem(index)
+    call("BuyMerchantItem", BuyMerchantItem, index)
+end
+
 -- Misc -------------------------------------------------------------------------------------------
 
 -- Seconds since the game started, for timestamping log entries.
