@@ -1,5 +1,6 @@
 """The check scripts must pass on a good copy of the addon and fail, with a clear message, on each kind of damage."""
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -8,6 +9,11 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VANILLA = "ClosestVendor/ClosestVendor_Vanilla.toc"
 CAMELOT = "ClosestVendor/ClosestVendor_Camelot.toc"
+
+# The tests follow the real version, so a release bump never breaks them.
+with open(os.path.join(ROOT, VANILLA)) as _f:
+    VERSION = re.search(r"^## Version: (\S+)", _f.read(), re.M).group(1)
+OTHER = "9.9.9"  # any version that is not VERSION
 
 
 class Checks(unittest.TestCase):
@@ -74,20 +80,20 @@ class Checks(unittest.TestCase):
         self.assertEqual(code, 0)
 
     def test_tocs_with_different_versions_fail(self):
-        self.edit(VANILLA, "## Version: 0.1.0", "## Version: 0.1.1")
+        self.edit(VANILLA, "## Version: " + VERSION, "## Version: " + OTHER)
         code, out = self.run_script("check-version.sh")
         self.assertNotEqual(code, 0)
         self.assertIn("VERSION", out)
 
     def test_tag_must_equal_the_version(self):
-        self.assertEqual(self.run_script("check-version.sh", "v0.1.0")[0], 0)
-        self.assertEqual(self.run_script("check-version.sh", "0.1.0")[0], 0)
-        code, out = self.run_script("check-version.sh", "v0.2.0")
+        self.assertEqual(self.run_script("check-version.sh", "v" + VERSION)[0], 0)
+        self.assertEqual(self.run_script("check-version.sh", VERSION)[0], 0)
+        code, out = self.run_script("check-version.sh", "v" + OTHER)
         self.assertNotEqual(code, 0)
         self.assertIn("TAG", out)
 
     def test_changelog_must_have_the_version(self):
-        self.edit("CHANGELOG.md", "## 0.1.0", "## 0.0.9")
+        self.edit("CHANGELOG.md", "## " + VERSION, "## 0.0.9")
         code, out = self.run_script("check-version.sh")
         self.assertNotEqual(code, 0)
         self.assertIn("CHANGELOG", out)
