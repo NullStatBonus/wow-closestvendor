@@ -25,6 +25,7 @@ local HELP = {
     L["/cvn arrows equipped/best/cheapest, /cvn bullets equipped/best/cheapest  which ammo to buy (default equipped)"],
     L["/cvn choice ask, /cvn choice auto  when the closest target is on another map: ask which one (default), or navigate without asking"],
     L["/cvn prefer map, /cvn prefer distance  which target to prefer: the one on your map (default) or the closest"],
+    L["/cvn notice on, /cvn notice off  show a message on screen when a target is chosen without asking (default on)"],
     L["/cvn test sell, /cvn test repair, /cvn test arrows, /cvn test bullets  ask the question now"],
     L["/cvn debug on, /cvn debug off  record what the addon sees, for bug reports"],
     L["/cvn log  show the report to copy; /cvn log clear  empty the log"],
@@ -46,6 +47,7 @@ local function status(cfg)
         L["Professions: %s, trigger at %d point(s) or fewer from the skill limit"]:format(cfg.tradeEnabled and L["on"] or L["off"], cfg.tradeThreshold),
         L["Target choice: %s, prefers the target %s"]:format(cfg.vendorMode == "auto" and L["navigates without asking"] or L["asks which one"],
             cfg.vendorPrefer == "distance" and L["that is closest"] or L["on your map"]),
+        L["On-screen notice when choosing without asking: %s"]:format(cfg.autoNotice ~= false and L["on"] or L["off"]),
     }
 end
 
@@ -99,6 +101,13 @@ function M.Run(cfg, msg)
             return status(cfg)
         end
         return { L["Choose ask or auto."] }
+    end
+    if cmd == "notice" then
+        if arg == "on" or arg == "off" then
+            cfg.autoNotice = (arg == "on")
+            return status(cfg)
+        end
+        return { L["Choose on or off."] }
     end
     if cmd == "prefer" then
         if arg == "map" or arg == "distance" then

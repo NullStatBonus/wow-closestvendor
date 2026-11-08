@@ -38,7 +38,7 @@ It watches four things and asks before it sends you anywhere:
 
 **Buys your ammo.** At any merchant, with a bow, crossbow or gun equipped, it fills your quiver or ammo pouch for you, no clicks. You can have it ask first instead. Arrows and bullets each have a setting: the same ammo you have equipped (default), the best your level allows, or the cheapest. It only buys what you can afford and says so in chat.
 
-A small Yes / No question shows the vendor's name and zone. If the closest vendor is on another map and one on your own map is farther, you get both to choose from, with zone and distance, or you can set it to pick for you without asking. Answer Yes (or pick one) and it shows the way with the first of these you have:
+A small Yes / No question shows the vendor's name and zone. If the closest vendor is on another map and one on your own map is farther, you get both to choose from, with zone and distance, or you can set it to pick for you without asking, in which case it tells you what it picked in chat and with a silent message on screen (which can be switched off). Answer Yes (or pick one) and it shows the way with the first of these you have:
 
 1. **TomTom**
 2. **WaypointUI** (WoW Forever)
@@ -54,7 +54,7 @@ If several things are low at once it asks one question at a time: repair first, 
 - `/cvn` shows your settings, `/cvn config` opens the settings page
 - `/cvn bags 4`, `/cvn dur 30`, `/cvn ammo 300`, `/cvn trade 25` change the thresholds; add `on` or `off` to switch a trigger
 - `/cvn buy on`, `/cvn buy off`, `/cvn buy ask`, `/cvn buy auto` control ammo buying; `/cvn arrows best` and `/cvn bullets cheapest` pick the grade (`equipped`, `best` or `cheapest`)
-- `/cvn choice ask` or `/cvn choice auto`, and `/cvn prefer map` or `/cvn prefer distance`, decide what happens when the closest vendor or trainer is on another map
+- `/cvn choice ask` or `/cvn choice auto`, and `/cvn prefer map` or `/cvn prefer distance`, decide what happens when the closest vendor or trainer is on another map; `/cvn notice off` hides the on-screen message that goes with automatic pins
 - `/cvn test sell`, `/cvn test repair`, `/cvn test arrows`, `/cvn test bullets` show each question right now so you can see what it does
 
 **Good to know**

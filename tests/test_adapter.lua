@@ -331,4 +331,18 @@ end
 eq(boot({}).merchantAmmo(), nil, "no merchant API: unknown")
 eq(boot(ammoGame(false)).level(), nil, "no UnitLevel: unknown")
 
+-- screenMessage: silent on-screen text through the error frame; "|" doubled; missing or throwing frames are harmless.
+local shown = {}
+local aS, eS = boot({ UIErrorsFrame = { AddMessage = function(_, t, r, g, b) shown[#shown + 1] = { t, r, g, b } end } })
+aS.screenMessage("Go to Old|Name")
+eq(shown[1][1], "Go to Old||Name", "text drawn with the pipe doubled")
+eq(type(shown[1][2]), "number", "a colour is given")
+eq(#eS, 0, "no error reported")
+local aN, eN = boot({})
+eq(aN.screenMessage("x"), nil, "no error frame: nothing, no error raised")
+eq(#eN, 1, "the missing frame is reported once")
+local aT, eT = boot({ UIErrorsFrame = { AddMessage = boom } })
+eq(aT.screenMessage("x"), nil, "throwing frame: nothing, no error raised")
+eq(#eT, 1, "the failure is reported")
+
 H.done()

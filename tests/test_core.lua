@@ -49,6 +49,7 @@ local function boot(opts)
             g.frames[#g.frames + 1] = f
             return f
         end,
+        UIErrorsFrame = { AddMessage = function(_, t, r, gr, b) g.screen = g.screen or {}; g.screen[#g.screen + 1] = { t, r, gr, b } end },
         UIParent = {}, UISpecialFrames = {}, tinsert = table.insert, ChatFontNormal = {},
         GetTime = function() return g.time end,
         GetBuildInfo = function() return "1.60.1", "70790", "Nov 4 2026", 16001 end,
@@ -714,7 +715,7 @@ eq(win ~= nil and win.shown, true, "the report window is shown")
 local report = win.box.text
 eq(report:find("^Closest Vendor report\n") ~= nil, true, "starts with a title")
 for _, part in ipairs({ "addon version: 0.1.0", "game: 1.60.1 build 70790, interface 16001", "locale: enUS", "navigation: chat",
-                        "vendors: 7 shipped, 0 learned, per continent: 1:6", "settings: bags on/2, durability on/20, ammo on/200", "target choice: ask, prefers map",
+                        "vendors: 7 shipped, 0 learned, per continent: 1:6", "settings: bags on/2, durability on/20, ammo on/200", "target choice: ask, prefers map, on-screen notice on",
                         "Debug log: on", "event BAG_UPDATE_DELAYED" }) do
     eq(has(report, part), true, "report contains '" .. part .. "'")
 end
@@ -982,6 +983,14 @@ g.free = 1
 g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "auto: no question")
 eq(g.tomtom[1], "Home Shop", "auto: pinned the map target")
-eq(lastPrinted(g):find("Navigating to Home Shop.", 1, true) ~= nil, true, "auto: says where")
+local note = "Navigating to Home Shop (Test Zone, 566 yards). The other choice was Other Shop (Test Zone, 50 yards)."
+eq(lastPrinted(g):find(note, 1, true) ~= nil, true, "auto: chat names both targets with zone and distance: " .. lastPrinted(g))
+eq(g.screen and g.screen[1] and g.screen[1][1], note, "auto: the same text is shown on screen")
+g.env.SlashCmdList.CLOSESTVENDOR("notice off")
+g.free = 20
+g.onEvent("BAG_UPDATE_DELAYED")
+g.free = 1
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(#g.screen, 1, "notice off: nothing more on screen")
 
 H.done()

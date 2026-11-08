@@ -7,7 +7,7 @@ local L = ns.L
 local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
     bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true,
     ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped",
-    vendorMode = "ask", vendorPrefer = "map" }
+    vendorMode = "ask", vendorPrefer = "map", autoNotice = true }
 local POLL_SECONDS = 5
 
 local POPUP = "CLOSESTVENDOR_CONFIRM"
@@ -174,7 +174,7 @@ local function reportText()
             c.tradeEnabled and "on" or "off", c.tradeThreshold),
         ("ammo buying: %s, %s, arrows %s, bullets %s"):format(c.ammoBuyEnabled and "on" or "off",
             c.ammoBuyPrompt and "asks first" or "buys at once", tostring(c.arrowGrade), tostring(c.bulletGrade)),
-        ("target choice: %s, prefers %s"):format(tostring(c.vendorMode), tostring(c.vendorPrefer)),
+        ("target choice: %s, prefers %s, on-screen notice %s"):format(tostring(c.vendorMode), tostring(c.vendorPrefer), c.autoNotice and "on" or "off"),
         ("trainers: %d learned, professions seen: %s"):format(trainers, table.concat(professions, ", ")),
     }
     return ns.Log.Report(header, log.Entries(), log.Enabled()), header
@@ -220,6 +220,8 @@ local function start()
         known = DB.professions,
         trainerBuckets = trainerBuckets,
         say = say,
+        notify = A.screenMessage,
+        zoneName = A.mapName,
     })
     -- The settings page is optional: if the client's settings API differs, only the page is lost.
     local ok, category = pcall(ns.Options.Register, DB.cfg, DEFAULTS, evaluate)

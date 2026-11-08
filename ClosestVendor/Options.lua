@@ -72,6 +72,10 @@ function O.Register(cfg, defaults, onChange)
             setting:SetValueChangedCallback(onChange)
         end
     end
+    local notice = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AUTO_NOTICE", "autoNotice", cfg,
+        Settings.VarType.Boolean, L["On-screen notice"], defaults.autoNotice)
+    Settings.CreateCheckbox(category, notice, L["Show a message on screen when a target is chosen without asking."])
+    notice:SetValueChangedCallback(onChange)
     -- Which target to take when the closest is on another map; like the grades, needs the dropdown API.
     if Settings.CreateDropdown and Settings.CreateControlTextContainer and Settings.VarType.String then
         local rows = {
