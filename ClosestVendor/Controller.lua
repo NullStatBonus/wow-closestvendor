@@ -19,6 +19,8 @@
 --   env.known                       set of profession names the addon has seen (live table)
 --   env.trainerBuckets              { [continentId] = { trainer records, see Search.NearestTrainer } }
 --   env.say(text)                   optional: print a line to chat
+--   env.notify(text)                optional: show text on screen, silently (used by "auto" pins)
+--   env.zoneName(mapId)             optional: the name of a map, or nil
 --   env.log(text)                   optional: record a decision in the debug log
 local _, ns = ...
 
@@ -149,7 +151,15 @@ function C.New(env)
             log(("auto: %s (npc %s)%s"):format(pick[2], tostring(pick[1]), onMap and " chosen from two candidates" or ""))
             lastKind, lastTrade = kind, trade
             pin(pick, trade)
-            say(L["Navigating to %s."]:format(pick[2]))
+            local function describe(t) return target(t, env.zoneName and env.zoneName(t[3]), yards(t, i, x, y)) end
+            local text
+            if onMap then
+                text = L["Navigating to %s. The other choice was %s."]:format(describe(pick), describe(pick == v and onMap or v))
+            else
+                text = L["Navigating to %s."]:format(describe(pick))
+            end
+            say(text)
+            if env.notify and cfg.autoNotice ~= false then env.notify(text) end
             return
         end
         promptId = promptId + 1

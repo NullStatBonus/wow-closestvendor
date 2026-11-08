@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+- When the closest target is chosen without asking (`/cvn choice auto`), the chat line now names it with its zone and distance, and names the other choice when there was one.
+- The same text is also shown on screen, silently (the map pin already makes a sound). `/cvn notice off` turns the on-screen text off; a settings page checkbox matches. On by default.
+- The debug report lists the on-screen notice setting.
+
 ## 0.3.0
 
 - Tells you when a profession is close to its current skill cap (10 points by default, or already at it) and offers to navigate to the closest trainer you have used for it. It checks on every skill-up and every craft.

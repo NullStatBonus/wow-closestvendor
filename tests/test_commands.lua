@@ -131,7 +131,7 @@ for _, m in ipairs({ "bags", "dur", "trade", "nonsense", "help" }) do
 end
 
 -- Chat treats "|" as an escape code: no line the parser returns may contain one.
-local msgs = { "choice auto", "choice x", "prefer distance", "prefer", "buy on", "buy ask", "arrows best", "arrows x", "bullets cheapest", "", "help", "nonsense", "bags", "dur", "ammo", "test", "test x", "bags 5", "bags x", "dur 30", "dur 0",
+local msgs = { "notice off", "notice x", "choice auto", "choice x", "prefer distance", "prefer", "buy on", "buy ask", "arrows best", "arrows x", "bullets cheapest", "", "help", "nonsense", "bags", "dur", "ammo", "test", "test x", "bags 5", "bags x", "dur 30", "dur 0",
                "ammo 300", "ammo x", "trade", "trade 20", "trade x", "trade off", "bags off", "dur off", "ammo off", "test sell", "test repair", "test arrows", "test bullets",
                "debug on", "debug off", "debug", "log", "log clear", "log x" }
 for _, m in ipairs(msgs) do
@@ -182,5 +182,19 @@ eq(c.vendorPrefer, "distance", "missing value leaves the setting")
 eq(has(out, "Choose map or distance."), true, "missing value names the choices")
 eq(has(M.Run(c, "help"), "/cvn choice"), true, "help lists choice")
 eq(has(M.Run(c, "help"), "/cvn prefer"), true, "help lists prefer")
+
+-- On-screen notice switch.
+c = fresh()
+eq(has(M.Run(c, ""), "On-screen notice when choosing without asking: on"), true, "status: notice on when unset")
+M.Run(c, "notice off")
+eq(c.autoNotice, false, "notice off")
+eq(has(M.Run(c, ""), "without asking: off"), true, "status shows off")
+M.Run(c, " NOTICE  ON ")
+eq(c.autoNotice, true, "notice back on, case and spacing tolerated")
+out = M.Run(c, "notice maybe")
+eq(c.autoNotice, true, "bad value leaves the setting")
+eq(has(out, "Choose on or off."), true, "bad value names the choices")
+eq(has(M.Run(c, "notice"), "Choose on or off."), true, "missing value names the choices")
+eq(has(M.Run(c, "help"), "/cvn notice"), true, "help lists notice")
 
 H.done()

@@ -106,6 +106,8 @@ Stand near a zone edge, or in a zone where the nearest vendor is across the bord
 - [ ] Stand where the nearest vendor is on your own map: the plain Yes / No question appears, with that vendor.
 - [ ] Stand on a map with no known vendor: the plain question names the nearest vendor on another map.
 - [ ] `/cvn choice auto`: no question. The pin is set at once, at the vendor on your map with `prefer map`, at the closer one with `prefer distance`, and one chat line names it.
+- [ ] `/cvn choice auto`: one chat line and the same text on screen, naming the pinned target with zone and distance in yards and, when there were two, the other choice. No sound beyond the map pin's own.
+- [ ] `/cvn notice off`: the on-screen text stops, the chat line stays. `/cvn notice on` brings it back. The settings page checkbox matches.
 - [ ] `/cvn choice auto` with only one candidate: pinned at once too. In combat, nothing is pinned.
 - [ ] Repeat with a profession near its cap: the trainer question and `auto` behave the same.
 - [ ] In a city, "your map" is the city. Note which vendors are offered.

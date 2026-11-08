@@ -128,6 +128,13 @@ function A.playerWorldPos()
     if continent then return continent, wx, wy, map end
 end
 
+-- Show text on screen without a sound (the error frame only draws it); nil where the client has none.
+-- "|" starts an escape code, so it is doubled.
+function A.screenMessage(text)
+    local f = UIErrorsFrame
+    call("UIErrorsFrame.AddMessage", f and f.AddMessage, f, (text:gsub("|", "||")), 1, 0.82, 0)
+end
+
 function A.mapName(id)
     local info = call("GetMapInfo", C_Map and C_Map.GetMapInfo, id)
     return info and info.name

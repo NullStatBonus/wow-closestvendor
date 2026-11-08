@@ -18,7 +18,7 @@ When that happens it **asks first** (Yes / No). Yes shows the vendor through the
 
 Era has no built-in waypoint API, so on Era you need TomTom to get an arrow.
 
-**When the closest vendor is on another map,** and a vendor on your own map is farther away, the question lists both with their zone and distance and has three buttons: the one on your map, the closest, and Cancel. Your preference (default: the one on your map) is the first button. If you would rather not be asked, `/cvn choice auto` sets the waypoint straight away using the same preference. The same applies to trainers.
+**When the closest vendor is on another map,** and a vendor on your own map is farther away, the question lists both with their zone and distance and has three buttons: the one on your map, the closest, and Cancel. Your preference (default: the one on your map) is the first button. If you would rather not be asked, `/cvn choice auto` sets the waypoint straight away using the same preference, prints one chat line and shows the same text on screen (silently, since the map pin already makes a sound). The line names the target with its zone and distance, and the other choice when there was one. `/cvn notice off` turns the on-screen text off. The same applies to trainers.
 
 ## Install
 
@@ -31,7 +31,7 @@ The addon ships one TOC per game (`ClosestVendor_Vanilla.toc` for Era, `ClosestV
 
 ## Settings page
 
-Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger (bags, durability, ammo, professions), plus ammo buying: two checkboxes (buy ammo, ask before buying) and a dropdown for arrows and one for bullets. Two more dropdowns choose what happens when the closest target is on another map: ask which one or navigate without asking, and prefer the target on your map or the closest. It changes the same settings as the commands below, and `/cvn config` opens it.
+Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger (bags, durability, ammo, professions), plus ammo buying: two checkboxes (buy ammo, ask before buying) and a dropdown for arrows and one for bullets. A checkbox switches the on-screen notice. Two more dropdowns choose what happens when the closest target is on another map: ask which one or navigate without asking, and prefer the target on your map or the closest. It changes the same settings as the commands below, and `/cvn config` opens it.
 
 ## Commands
 
@@ -62,6 +62,8 @@ Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger
 /cvn choice ask
 /cvn prefer distance
 /cvn prefer map
+/cvn notice off
+/cvn notice on
 /cvn buy off
 /cvn buy ask
 /cvn arrows best
@@ -75,6 +77,7 @@ Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger
 - `/cvn trade <points>` sets the profession threshold (0 to 300). `on` / `off` turns the profession trigger on or off.
 - `/cvn choice ask` (the default) lists both targets when the closest is on another map and waits for your pick; `/cvn choice auto` sets the waypoint at once, with no question.
 - `/cvn prefer map` (the default) prefers the nearest target on your current map; `/cvn prefer distance` prefers the nearest by distance. It decides the first button, and what `auto` picks.
+- `/cvn notice on` (the default) / `/cvn notice off` show or hide the on-screen text when a target is chosen without asking. The chat line is always printed.
 - `/cvn buy on` / `/cvn buy off` switch ammo buying on or off. `/cvn buy ask` shows the count and price and waits for a Yes; `/cvn buy auto` (the default) buys at once.
 - `/cvn arrows <mode>` and `/cvn bullets <mode>` choose which ammo to buy: `equipped` (the default), `best` or `cheapest`.
 - `/cvn test sell`, `/cvn test repair`, `/cvn test arrows` and `/cvn test bullets` ask the same question right now for that kind of vendor, whatever your bags, gear and ammo look like. Yes sets the pin. Opening any vendor window clears it.

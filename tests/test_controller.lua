@@ -19,7 +19,7 @@ local VENDORS = {
 
 local function world(over)
     local w = { free = 10, dur = nil, combat = false, pos = { 1, 0, 0 }, calls = {}, setCount = 0, clearCount = 0,
-                prompts = {}, cancelCount = 0, ammoKind = nil, ammoCount = 0, logs = {}, says = {}, known = {}, open = false }
+                prompts = {}, notes = {}, cancelCount = 0, ammoKind = nil, ammoCount = 0, logs = {}, says = {}, known = {}, open = false }
     for k, v in pairs(over or {}) do w[k] = v end
     local env = {
         cfg = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true,
@@ -28,6 +28,8 @@ local function world(over)
         known = w.known,
         trainerBuckets = w.trainers or {},
         say = function(t) w.says[#w.says + 1] = t end,
+        notify = (not w.noNotify) and function(t) w.notes[#w.notes + 1] = t end or nil,
+        zoneName = function(id) return w.zones and w.zones[id] end,
         questionOpen = function() return w.open end,
         freeSlots = function() return w.free end,
         lowestDurability = function() return w.dur end,
@@ -652,7 +654,9 @@ w.c.Evaluate()
 eq(#w.prompts, 0, "auto: no question")
 eq(w.setCount, 1, "auto: pinned")
 eq(w.last[2], "Home Seller", "auto, prefer map")
-eq(table.concat(w.says, "\n"):find("Navigating to Home Seller.", 1, true) ~= nil, true, "auto: one chat line names the target")
+eq(#w.says, 1, "auto: one chat line")
+eq(w.says[1], "Navigating to Home Seller (50 yards). The other choice was Other Seller (10 yards).", "auto: names both targets, no zones known")
+eq(w.notes[1], w.says[1], "auto: the on-screen message is the same text")
 w = mapped({ cfg = { vendorMode = "auto", vendorPrefer = "distance" } })
 w.c.Evaluate()
 eq(w.last[2], "Other Seller", "auto, prefer distance")
@@ -706,5 +710,32 @@ eq(txt:find("Other Seller (Westfall, 10 yards)", 1, true) ~= nil, true, "second 
 txt = T("sell", MAPV[2], nil, nil, nil, { other = MAPV[1], dist = 50, otherDist = 10 }, nil)
 eq(txt:find("Home Seller (50 yards)", 1, true) ~= nil, true, "no zone: name and distance")
 eq(T("trainer", MTR[2], "A", 5, "Mining", { other = MTR[1], dist = 1, otherDist = 2 }, "B"):find("Mining", 1, true) ~= nil, true, "trainer text names the profession")
+
+-- Auto notice: zones, one candidate, the other candidate, the switch, no notify function, trainers.
+w = mapped({ cfg = { vendorMode = "auto" }, zones = { [100] = "Elwynn", [200] = "Westfall" } })
+w.c.Evaluate()
+eq(w.says[1], "Navigating to Home Seller (Elwynn, 50 yards). The other choice was Other Seller (Westfall, 10 yards).", "notice has zones and distances for both")
+eq(#w.notes, 1, "one on-screen message")
+w = mapped({ cfg = { vendorMode = "auto", vendorPrefer = "distance" }, zones = { [100] = "Elwynn", [200] = "Westfall" } })
+w.c.Evaluate()
+eq(w.says[1], "Navigating to Other Seller (Westfall, 10 yards). The other choice was Home Seller (Elwynn, 50 yards).", "distance preference names the pinned one first")
+w = mapped({ pos = { 1, 60, 0, 100 }, cfg = { vendorMode = "auto" }, zones = { [100] = "Elwynn" } })
+w.c.Evaluate()
+eq(w.says[1], "Navigating to Home Seller (Elwynn, 10 yards).", "single candidate: no other choice")
+w = mapped({ cfg = { vendorMode = "auto", autoNotice = false } })
+w.c.Evaluate()
+eq(#w.notes, 0, "notice off: no on-screen message")
+eq(#w.says, 1, "notice off: the chat line still prints")
+eq(w.setCount, 1, "notice off: still pinned")
+w = mapped({ cfg = { vendorMode = "auto" }, noNotify = true })
+w.c.Evaluate()
+eq(#w.says, 1, "no notify function: chat only, no error")
+w = mtrade({ cfg = { vendorMode = "auto" }, zones = { [100] = "Elwynn", [200] = "Westfall" } })
+w.c.OnCraft()
+eq(w.says[1], "Navigating to Home Miner (Elwynn, 50 yards). The other choice was Other Miner (Westfall, 10 yards).", "trainer notice")
+eq(w.notes[1], w.says[1], "trainer on-screen message")
+w = mapped({ autoAccept = false })
+w.c.Evaluate()
+eq(#w.notes, 0, "ask mode: no on-screen message")
 
 H.done()

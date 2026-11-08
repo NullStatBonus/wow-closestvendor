@@ -7,7 +7,7 @@ local eq = H.eq
 local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
     bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true,
     ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped",
-    vendorMode = "ask", vendorPrefer = "map" }
+    vendorMode = "ask", vendorPrefer = "map", autoNotice = true }
 
 -- Load Commands and Options with the fake globals in their environment.
 local function load(settings)
@@ -32,8 +32,8 @@ local category = ns.Options.Register(cfg, DEFAULTS, function() changes = changes
 eq(category, rec.category, "returns the category")
 eq(category.name, "Closest Vendor", "page name")
 eq(rec.registered, category, "category registered under AddOns")
-eq(#rec.settings, 14, "two settings per trigger, four for ammo buying, two for the target choice")
-eq(#rec.checkboxes, 6, "a checkbox per trigger, plus two for ammo buying")
+eq(#rec.settings, 15, "two per trigger, four for ammo buying, three for the target choice and notice")
+eq(#rec.checkboxes, 7, "a checkbox per trigger, plus two for ammo buying and one for the notice")
 eq(#rec.sliders, 4, "a slider per trigger")
 
 -- Settings are bound to the saved table and the right keys, with unique names and defaults.
@@ -45,7 +45,7 @@ for _, s in ipairs(rec.settings) do
     vars[s.variable] = true
     keys[s.key] = s
     eq(s.default, DEFAULTS[s.key], "default for " .. s.key)
-    eq(s.vtype, (s.key:find("Enabled") or s.key == "ammoBuyPrompt") and "boolean" or (s.key:find("Grade") or s.key:find("^vendor")) and "string" or "number", "type of " .. s.key)
+    eq(s.vtype, (s.key:find("Enabled") or s.key == "ammoBuyPrompt" or s.key == "autoNotice") and "boolean" or (s.key:find("Grade") or s.key:find("^vendor")) and "string" or "number", "type of " .. s.key)
 end
 for _, k in ipairs({ "bagEnabled", "bagThreshold", "durEnabled", "durThreshold", "ammoEnabled", "ammoThreshold", "tradeEnabled", "tradeThreshold" }) do
     eq(keys[k] ~= nil, true, "registered " .. k)
@@ -86,6 +86,16 @@ keys.vendorMode:SetValue("ask")
 changes = savedChanges
 eq(cfg.vendorMode, "ask", "page writes the mode")
 cfg.vendorPrefer = "map"
+
+-- On-screen notice: a checkbox on the same key as the command.
+eq(rec.checkboxes[7].setting.key, "autoNotice", "notice checkbox")
+eq(keys.autoNotice:GetValue(), true, "notice defaults to on")
+ns.Commands.Run(cfg, "notice off")
+eq(keys.autoNotice:GetValue(), false, "page reads what the command set")
+local savedN = changes
+keys.autoNotice:SetValue(true)
+changes = savedN
+eq(cfg.autoNotice, true, "page writes the notice setting")
 
 -- Sliders use the same limits as the commands, in the same order as the checkboxes.
 local expect = { bag = { 0, 200, 1 }, dur = { 1, 100, 1 }, ammo = { 0, 2000, 50 }, trade = { 0, 300, 1 } }
