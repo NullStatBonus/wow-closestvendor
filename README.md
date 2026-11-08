@@ -18,7 +18,7 @@ When that happens it **asks first** (Yes / No). Yes shows the vendor through the
 
 Era has no built-in waypoint API, so on Era you need TomTom to get an arrow.
 
-**When the closest vendor is on another map,** and a vendor on your own map is farther away, the question lists both with their zone and distance and has three buttons: the one on your map, the closest, and Cancel. Your preference (default: the one on your map) is the first button. If you would rather not be asked, `/cvn choice auto` sets the waypoint straight away using the same preference, prints one chat line and shows the same text on screen (silently, since the map pin already makes a sound). The line names the target with its zone and distance, and the other choice when there was one. `/cvn notice off` turns the on-screen text off. The same applies to trainers.
+**When the closest vendor is on another map,** and a vendor on your own map is farther away, the question lists both with their zone and distance and has three buttons: the one on your map, the closest, and Cancel. Your preference (default: the one on your map) is the first button. If you would rather not be asked, `/cvn choice auto` sets the waypoint straight away using the same preference, prints one chat line and shows the same text on screen for about five seconds (silently, since the map pin already makes a sound). The line names the target with its zone and distance, and the other choice when there was one. `/cvn notice off` turns the on-screen text off. The same applies to trainers.
 
 ## Install
 

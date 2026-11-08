@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- The on-screen message shown when a target is chosen without asking now stays for about five seconds instead of fading after about three. It uses its own frame, so the game's own error messages are unchanged. A newer message replaces the one showing.
+
 ## 0.4.0
 
 - When the closest target is chosen without asking (`/cvn choice auto`), the chat line now names it with its zone and distance, and names the other choice when there was one.

@@ -102,7 +102,7 @@ For every vendor or trainer search the addon SHALL find, among targets eligible 
 - **THEN** the nearest trainer on the player's map, if any, is the other candidate
 
 ### Requirement: Automatic pin
-When the map choice mode is `auto`, the addon SHALL set the waypoint without asking: with two candidates, the current-map one if the preference is `map` and the closer one if it is `distance`; with one, that one. It SHALL announce the chosen target in chat and as a silent on-screen message, naming it with its zone and distance, and also the other candidate when there were two.
+When the map choice mode is `auto`, the addon SHALL set the waypoint without asking: with two candidates, the current-map one if the preference is `map` and the closer one if it is `distance`; with one, that one. It SHALL announce the target in chat and as a silent on-screen message shown for about five seconds, naming it with its zone and distance, and the other candidate when there were two.
 
 #### Scenario: Auto with map preference
 - **WHEN** the mode is `auto`, the preference is `map`, and both candidates exist
@@ -131,6 +131,18 @@ When the map choice mode is `auto`, the addon SHALL set the waypoint without ask
 #### Scenario: Silent on screen
 - **WHEN** the on-screen message is shown
 - **THEN** the addon plays no sound of its own
+
+#### Scenario: Stays about five seconds
+- **WHEN** the on-screen message is shown
+- **THEN** it remains visible for about five seconds and then disappears
+
+#### Scenario: Newer message replaces the older
+- **WHEN** a second message is shown while the first is still visible
+- **THEN** the second replaces it and stays for its own full time
+
+#### Scenario: Game errors unaffected
+- **WHEN** the game shows one of its own error messages
+- **THEN** it keeps its usual appearance and duration
 
 #### Scenario: No on-screen message available
 - **WHEN** the client cannot show an on-screen message

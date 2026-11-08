@@ -128,11 +128,37 @@ function A.playerWorldPos()
     if continent then return continent, wx, wy, map end
 end
 
--- Show text on screen without a sound (the error frame only draws it); nil where the client has none.
+-- Show text on screen for about NOTICE_SECONDS, silently, in a frame of our own (the game's error
+-- frame fades too soon and is shared with real errors). A newer message replaces the one showing and
+-- restarts the time. Nothing happens, and one failure is reported, where the client has no frames.
+local NOTICE_SECONDS = 5
+local notice
+
+local function buildNotice()
+    local f = CreateFrame("Frame", nil, UIParent)
+    f:SetSize(800, 40)
+    f:SetPoint("TOP", 0, -200)
+    f:SetFrameStrata("HIGH")
+    f:EnableMouse(false)
+    f.text = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    f.text:SetPoint("CENTER")
+    -- A hidden frame gets no OnUpdate, so this costs nothing while no message shows.
+    f:SetScript("OnUpdate", function(self, elapsed)
+        self.left = (self.left or 0) - elapsed
+        if self.left <= 0 then self:Hide() end
+    end)
+    return f
+end
+
 -- "|" starts an escape code, so it is doubled.
 function A.screenMessage(text)
-    local f = UIErrorsFrame
-    call("UIErrorsFrame.AddMessage", f and f.AddMessage, f, (text:gsub("|", "||")), 1, 0.82, 0)
+    if not notice then notice = call("screenMessage frame", buildNotice) end
+    if not notice then return end
+    call("screenMessage show", function()
+        notice.text:SetText((text:gsub("|", "||")))
+        notice.left = NOTICE_SECONDS
+        notice:Show()
+    end)
 end
 
 function A.mapName(id)
