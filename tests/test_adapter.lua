@@ -331,18 +331,60 @@ end
 eq(boot({}).merchantAmmo(), nil, "no merchant API: unknown")
 eq(boot(ammoGame(false)).level(), nil, "no UnitLevel: unknown")
 
--- screenMessage: silent on-screen text through the error frame; "|" doubled; missing or throwing frames are harmless.
-local shown = {}
-local aS, eS = boot({ UIErrorsFrame = { AddMessage = function(_, t, r, g, b) shown[#shown + 1] = { t, r, g, b } end } })
+-- screenMessage: silent text in a frame of our own, about five seconds, replaced by a newer message.
+local function noticeGame()
+    local made = { frames = 0 }
+    local function frame()
+        local f = { shown = false, strata = nil }
+        function f:SetSize() end
+        function f:SetPoint() end
+        function f:SetFrameStrata(s) self.strata = s end
+        function f:EnableMouse(on) self.mouse = on end
+        function f:CreateFontString() self.fontString = frame(); return self.fontString end
+        function f:SetText(t) self.shownText = t end
+        function f:SetScript(ev, fn) self.scripts = self.scripts or {}; self.scripts[ev] = fn end
+        function f:Show() self.shown = true end
+        function f:Hide() self.shown = false end
+        return f
+    end
+    made.game = { UIParent = {}, CreateFrame = function() made.frames = made.frames + 1; made.frame = frame(); return made.frame end }
+    return made
+end
+local function tick(f, seconds) if f.shown then f.scripts.OnUpdate(f, seconds) end end
+
+local m = noticeGame()
+local aS, eS = boot(m.game)
 aS.screenMessage("Go to Old|Name")
-eq(shown[1][1], "Go to Old||Name", "text drawn with the pipe doubled")
-eq(type(shown[1][2]), "number", "a colour is given")
+eq(m.frame.fontString.shownText, "Go to Old||Name", "text drawn with the pipe doubled")
+eq(m.frame.shown, true, "visible")
+eq(m.frame.mouse, false, "never takes the mouse")
+tick(m.frame, 4.9)
+eq(m.frame.shown, true, "still visible just under five seconds")
+tick(m.frame, 0.2)
+eq(m.frame.shown, false, "gone after about five seconds")
+aS.screenMessage("again")
+eq(m.frame.shown, true, "a later message shows again")
+eq(m.frames, 1, "one frame, reused")
+tick(m.frame, 3)
+aS.screenMessage("newer")
+eq(m.frame.fontString.shownText, "newer", "a newer message replaces the text")
+tick(m.frame, 3)
+eq(m.frame.shown, true, "the newer message has its own full time")
+tick(m.frame, 2.1)
+eq(m.frame.shown, false, "and then goes")
 eq(#eS, 0, "no error reported")
+
+local aU, eU = boot({ UIErrorsFrame = { AddMessage = function() error("not this frame") end }, UIParent = m.game.UIParent, CreateFrame = m.game.CreateFrame })
+aU.screenMessage("x")
+eq(#eU, 0, "the game's error frame is never used")
+
 local aN, eN = boot({})
-eq(aN.screenMessage("x"), nil, "no error frame: nothing, no error raised")
+eq(aN.screenMessage("x"), nil, "no CreateFrame: nothing, no error raised")
 eq(#eN, 1, "the missing frame is reported once")
-local aT, eT = boot({ UIErrorsFrame = { AddMessage = boom } })
-eq(aT.screenMessage("x"), nil, "throwing frame: nothing, no error raised")
+aN.screenMessage("y")
+eq(#eN, 1, "and not again")
+local aT, eT = boot({ UIParent = {}, CreateFrame = boom })
+eq(aT.screenMessage("x"), nil, "throwing CreateFrame: nothing, no error raised")
 eq(#eT, 1, "the failure is reported")
 
 H.done()

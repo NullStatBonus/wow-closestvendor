@@ -38,6 +38,7 @@ local function boot(opts)
         function f:HighlightText() self.highlighted = true end
         function f:SetFocus() self.focused = true end
         function f:CreateTexture() return g.newFrame("Texture") end
+        function f:CreateFontString() self.fontString = g.newFrame("FontString"); return self.fontString end
         -- Unrecorded API calls (CapitalizedMethods) do nothing; other missing fields stay nil.
         return setmetatable(f, { __index = function(_, k) if k:match("^%u") then return function() end end end })
     end
@@ -49,7 +50,6 @@ local function boot(opts)
             g.frames[#g.frames + 1] = f
             return f
         end,
-        UIErrorsFrame = { AddMessage = function(_, t, r, gr, b) g.screen = g.screen or {}; g.screen[#g.screen + 1] = { t, r, gr, b } end },
         UIParent = {}, UISpecialFrames = {}, tinsert = table.insert, ChatFontNormal = {},
         GetTime = function() return g.time end,
         GetBuildInfo = function() return "1.60.1", "70790", "Nov 4 2026", 16001 end,
@@ -985,12 +985,17 @@ eq(g.popup, nil, "auto: no question")
 eq(g.tomtom[1], "Home Shop", "auto: pinned the map target")
 local note = "Navigating to Home Shop (Test Zone, 566 yards). The other choice was Other Shop (Test Zone, 50 yards)."
 eq(lastPrinted(g):find(note, 1, true) ~= nil, true, "auto: chat names both targets with zone and distance: " .. lastPrinted(g))
-eq(g.screen and g.screen[1] and g.screen[1][1], note, "auto: the same text is shown on screen")
+local box
+for _, f in ipairs(g.frames) do if f.fontString and f.name == nil and f.scripts.OnUpdate then box = f end end
+eq(box ~= nil and box.fontString.text, note, "auto: the same text is shown on screen")
+eq(box.shown, true, "auto: the message is visible")
+box.scripts.OnUpdate(box, 5.1)
+eq(box.shown, false, "auto: and gone after about five seconds")
 g.env.SlashCmdList.CLOSESTVENDOR("notice off")
 g.free = 20
 g.onEvent("BAG_UPDATE_DELAYED")
 g.free = 1
 g.onEvent("BAG_UPDATE_DELAYED")
-eq(#g.screen, 1, "notice off: nothing more on screen")
+eq(box.shown, false, "notice off: nothing more on screen")
 
 H.done()
