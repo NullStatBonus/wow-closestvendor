@@ -38,7 +38,7 @@ It watches four things and asks before it sends you anywhere:
 
 **Buys your ammo.** At any merchant, with a bow, crossbow or gun equipped, it fills your quiver or ammo pouch for you, no clicks. You can have it ask first instead. Arrows and bullets each have a setting: the same ammo you have equipped (default), the best your level allows, or the cheapest. It only buys what you can afford and says so in chat.
 
-A small Yes / No question shows the vendor's name and zone. Answer Yes and it shows the way with the first of these you have:
+A small Yes / No question shows the vendor's name and zone. If the closest vendor is on another map and one on your own map is farther, you get both to choose from, with zone and distance, or you can set it to pick for you without asking. Answer Yes (or pick one) and it shows the way with the first of these you have:
 
 1. **TomTom**
 2. **WaypointUI** (WoW Forever)
@@ -49,16 +49,18 @@ If several things are low at once it asks one question at a time: repair first, 
 
 **Learns as you play.** It ships with about 900 vendors and remembers every vendor window you open, including which ones repair and which sell arrows or bullets. That is how WoW Forever's new zones (Mount Hyjal, Riverglades, Zephras Isle, Darkspear Islands, Shen'dralas) get covered.
 
-**Settings.** Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger, plus an ammo-buying switch, an ask-first switch and a grade dropdown for arrows and for bullets. The same things are available as commands:
+**Settings.** Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger, plus an ammo-buying switch, an ask-first switch and a grade dropdown for arrows and for bullets, and two dropdowns for when the closest target is on another map (ask or navigate without asking; prefer your map or the closest). The same things are available as commands:
 
 - `/cvn` shows your settings, `/cvn config` opens the settings page
 - `/cvn bags 4`, `/cvn dur 30`, `/cvn ammo 300`, `/cvn trade 25` change the thresholds; add `on` or `off` to switch a trigger
 - `/cvn buy on`, `/cvn buy off`, `/cvn buy ask`, `/cvn buy auto` control ammo buying; `/cvn arrows best` and `/cvn bullets cheapest` pick the grade (`equipped`, `best` or `cheapest`)
+- `/cvn choice ask` or `/cvn choice auto`, and `/cvn prefer map` or `/cvn prefer distance`, decide what happens when the closest vendor or trainer is on another map
 - `/cvn test sell`, `/cvn test repair`, `/cvn test arrows`, `/cvn test bullets` show each question right now so you can see what it does
 
 **Good to know**
 
 - Distance is a straight line, not a walking route, and only vendors on your current continent are considered.
+- "Your map" is the exact map you stand in. A city is its own map, separate from the zone around it.
 - Vendors of the other faction are skipped.
 - The shipped vendor list is Vanilla data. Vendors that exist only in WoW Forever are unknown until you open them once.
 - Ammo is counted for the ammo you have equipped (bags included).

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Tells you when a profession is close to its current skill cap (10 points by default, or already at it) and offers to navigate to the closest trainer you have used for it. It checks on every skill-up and every craft.
+- Trainers are learned as you open profession trainer windows; none are shipped yet. If none is known for the profession, it says so once per session.
+- `/cvn trade <points>`, `/cvn trade on` and `/cvn trade off` change it, with matching settings page controls.
+- When the closest vendor or trainer is on another map and one on your own map is farther, the question now lists both, with zone and distance, and has three buttons: the one on your map, the closest, and Cancel. Otherwise nothing changes.
+- `/cvn choice ask` (default) asks; `/cvn choice auto` sets the waypoint without asking. `/cvn prefer map` (default) or `/cvn prefer distance` sets which target comes first, and what `auto` picks. Matching settings page dropdowns.
+- The debug report lists the profession and target-choice settings.
+
 ## 0.2.0
 
 - Buys ammo for you. At any merchant, with a bow, crossbow or gun equipped, it fills your quiver or ammo pouch, with no clicks. It spends only what you can afford and tells you in chat what it bought.

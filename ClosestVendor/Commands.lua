@@ -23,6 +23,8 @@ local HELP = {
     L["/cvn buy on, /cvn buy off  buy ammo to fill your quiver or pouch at merchants (default on)"],
     L["/cvn buy ask, /cvn buy auto  ask first, or buy without asking (default)"],
     L["/cvn arrows equipped/best/cheapest, /cvn bullets equipped/best/cheapest  which ammo to buy (default equipped)"],
+    L["/cvn choice ask, /cvn choice auto  when the closest target is on another map: ask which one (default), or navigate without asking"],
+    L["/cvn prefer map, /cvn prefer distance  which target to prefer: the one on your map (default) or the closest"],
     L["/cvn test sell, /cvn test repair, /cvn test arrows, /cvn test bullets  ask the question now"],
     L["/cvn debug on, /cvn debug off  record what the addon sees, for bug reports"],
     L["/cvn log  show the report to copy; /cvn log clear  empty the log"],
@@ -42,6 +44,8 @@ local function status(cfg)
         L["Ammo buying: %s, %s, arrows: %s, bullets: %s"]:format(cfg.ammoBuyEnabled and L["on"] or L["off"],
             cfg.ammoBuyPrompt and L["asks first"] or L["buys at once"], gradeName(cfg.arrowGrade), gradeName(cfg.bulletGrade)),
         L["Professions: %s, trigger at %d point(s) or fewer from the skill limit"]:format(cfg.tradeEnabled and L["on"] or L["off"], cfg.tradeThreshold),
+        L["Target choice: %s, prefers the target %s"]:format(cfg.vendorMode == "auto" and L["navigates without asking"] or L["asks which one"],
+            cfg.vendorPrefer == "distance" and L["that is closest"] or L["on your map"]),
     }
 end
 
@@ -88,6 +92,20 @@ function M.Run(cfg, msg)
     if cmd == "buy" and (arg == "ask" or arg == "auto") then
         cfg.ammoBuyPrompt = (arg == "ask")
         return status(cfg)
+    end
+    if cmd == "choice" then
+        if arg == "ask" or arg == "auto" then
+            cfg.vendorMode = arg
+            return status(cfg)
+        end
+        return { L["Choose ask or auto."] }
+    end
+    if cmd == "prefer" then
+        if arg == "map" or arg == "distance" then
+            cfg.vendorPrefer = arg
+            return status(cfg)
+        end
+        return { L["Choose map or distance."] }
     end
     if cmd == "arrows" or cmd == "bullets" then
         local key = cmd == "arrows" and "arrowGrade" or "bulletGrade"

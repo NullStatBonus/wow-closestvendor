@@ -18,9 +18,10 @@ local function eligible(v, need)
 end
 
 -- bucket: list of records on the player's continent. Returns the nearest eligible record or
--- nil. Squared distance only; nothing is converted for non-winners.
-function S.Nearest(bucket, px, py, need, playerFaction)
-    local best, bestD
+-- nil. Squared distance only; nothing is converted for non-winners. With mapId, also returns the
+-- nearest eligible record on that map (the same record when it is the overall nearest).
+function S.Nearest(bucket, px, py, need, playerFaction, mapId)
+    local best, bestD, onMap, onMapD
     for i = 1, #bucket do
         local v = bucket[i]
         local fac = v[6]
@@ -28,15 +29,17 @@ function S.Nearest(bucket, px, py, need, playerFaction)
             local dx, dy = v[9] - px, v[10] - py
             local d = dx * dx + dy * dy
             if not bestD or d < bestD then best, bestD = v, d end
+            if mapId and v[3] == mapId and (not onMapD or d < onMapD) then onMap, onMapD = v, d end
         end
     end
-    return best
+    return best, onMap
 end
 
 -- Trainer record: { npcId, name, uiMapID, mx, my, faction, trades (set of profession names), wx, wy }.
--- Returns the nearest trainer that teaches trade for the player's faction, or nil.
-function S.NearestTrainer(bucket, px, py, trade, playerFaction)
-    local best, bestD
+-- Returns the nearest trainer that teaches trade for the player's faction, or nil; with mapId,
+-- also the nearest one on that map, as Nearest does.
+function S.NearestTrainer(bucket, px, py, trade, playerFaction, mapId)
+    local best, bestD, onMap, onMapD
     for i = 1, #bucket do
         local v = bucket[i]
         local fac = v[6]
@@ -44,7 +47,8 @@ function S.NearestTrainer(bucket, px, py, trade, playerFaction)
             local dx, dy = v[8] - px, v[9] - py
             local d = dx * dx + dy * dy
             if not bestD or d < bestD then best, bestD = v, d end
+            if mapId and v[3] == mapId and (not onMapD or d < onMapD) then onMap, onMapD = v, d end
         end
     end
-    return best
+    return best, onMap
 end

@@ -96,6 +96,22 @@ Use a hunter with a bow (or a gun) and a quiver (or ammo pouch). Turn `/cvn debu
 - [ ] A quiver holding a different grade does not make it overbuy.
 - [ ] The Arrows and Bullets dropdowns on the settings page match `/cvn`.
 
+## 11. Targets on another map
+
+Stand near a zone edge, or in a zone where the nearest vendor is across the border. Use `/cvn test sell` (and `/cvn test repair`) so you can repeat it. Turn `/cvn debug on` first.
+
+- [ ] With a vendor on your map that is farther than one on another map: the question lists both, each with its zone and a distance in yards, and has three buttons. The first is the one on your map (`/cvn prefer map`, the default).
+- [ ] The first button sets the pin at the vendor on your map; the second at the closer one; Cancel and Esc set nothing.
+- [ ] `/cvn prefer distance`: the closer vendor is now the first button.
+- [ ] Stand where the nearest vendor is on your own map: the plain Yes / No question appears, with that vendor.
+- [ ] Stand on a map with no known vendor: the plain question names the nearest vendor on another map.
+- [ ] `/cvn choice auto`: no question. The pin is set at once, at the vendor on your map with `prefer map`, at the closer one with `prefer distance`, and one chat line names it.
+- [ ] `/cvn choice auto` with only one candidate: pinned at once too. In combat, nothing is pinned.
+- [ ] Repeat with a profession near its cap: the trainer question and `auto` behave the same.
+- [ ] In a city, "your map" is the city. Note which vendors are offered.
+- [ ] The settings page dropdowns match `/cvn choice` and `/cvn prefer`, and `/cvn` shows both.
+- [ ] `/cvn log` lists the settings (target choice) and, with debug on, which target was shown or pinned.
+
 ## Not covered yet
 
 - Walking distance (vendors are chosen by straight-line distance).

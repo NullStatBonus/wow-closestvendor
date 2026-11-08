@@ -35,6 +35,29 @@ eq(name(S.Nearest(bucket, 60, 0, "arrow", ALLIANCE)), "Arrow Seller", "bullet-on
 eq(S.Nearest({ bucket[2] }, 0, 0, "arrow", ALLIANCE), nil, "no ammo seller: nothing")
 eq(S.Nearest({ { 1, "Old", 1, 0, 0, 0, false } }, 0, 0, "arrow", ALLIANCE), nil, "record without ammo field is not an ammo seller")
 
+-- Map-aware: the nearest overall plus the nearest on a given map.
+local mv = {
+    { 1, "Border Other", 20, 0, 0, 0, false, 0, 10, 0 },   -- nearest, other map
+    { 2, "Home Far",     10, 0, 0, 0, false, 0, 50, 0 },   -- nearest on map 10
+    { 3, "Home Farther", 10, 0, 0, 0, false, 0, 90, 0 },
+    { 4, "Horde Home",   10, 0, 0, 2, false, 0, 5, 0 },
+}
+local o, m = S.Nearest(mv, 0, 0, nil, ALLIANCE, 10)
+eq(name(o), "Border Other", "overall nearest is on another map")
+eq(name(m), "Home Far", "nearest on the player's map, hostile skipped")
+o, m = S.Nearest(mv, 60, 0, nil, ALLIANCE, 10)
+eq(name(o), "Home Far", "overall nearest")
+eq(o == m, true, "same record when the nearest is on the map")
+o, m = S.Nearest(mv, 0, 0, nil, ALLIANCE, 99)
+eq(name(o), "Border Other", "overall unaffected by an empty map")
+eq(m, nil, "nothing on that map")
+o, m = S.Nearest(mv, 0, 0, nil, ALLIANCE)
+eq(m, nil, "no map id: no map result")
+eq(name(o), "Border Other", "no map id: same overall result")
+o, m = S.Nearest(mv, 0, 0, "repair", ALLIANCE, 10)
+eq(o, nil, "need filter applies to both")
+eq(m, nil, "need filter applies to the map result")
+
 -- Nothing eligible / empty bucket.
 eq(S.Nearest({}, 0, 0, nil, ALLIANCE), nil, "empty bucket")
 eq(S.Nearest({ bucket[1] }, 0, 0, nil, ALLIANCE), nil, "only hostile vendors")
@@ -56,5 +79,17 @@ eq(S.NearestTrainer(trainers, 0, 0, "Alchemy", ALLIANCE), nil, "nobody teaches i
 eq(S.NearestTrainer({}, 0, 0, "Mining", ALLIANCE), nil, "empty bucket")
 eq(name(S.NearestTrainer({ { 9, "Y Far", 1, 0, 0, 0, { Mining = true }, 0, 50 }, { 8, "X Near", 1, 0, 0, 0, { Mining = true }, 40, 0 } }, 0, 0, "Mining", ALLIANCE)), "X Near", "y distance counts")
 eq(name(S.NearestTrainer({ { 9, "X Far", 1, 0, 0, 0, { Mining = true }, 50, 0 }, { 8, "Y Near", 1, 0, 0, 0, { Mining = true }, 0, 40 } }, 0, 0, "Mining", ALLIANCE)), "Y Near", "x distance counts")
+
+-- Trainers by map.
+local tm = {
+    { 1, "Other Miner", 20, 0, 0, 0, { Mining = true }, 10, 0 },
+    { 2, "Home Miner",  10, 0, 0, 0, { Mining = true }, 50, 0 },
+    { 3, "Home Herb",   10, 0, 0, 0, { Herbalism = true }, 20, 0 },
+}
+o, m = S.NearestTrainer(tm, 0, 0, "Mining", ALLIANCE, 10)
+eq(name(o), "Other Miner", "overall nearest trainer")
+eq(name(m), "Home Miner", "nearest trainer for the profession on the map")
+o, m = S.NearestTrainer(tm, 0, 0, "Mining", ALLIANCE)
+eq(m, nil, "no map id: no map result")
 
 H.done()
