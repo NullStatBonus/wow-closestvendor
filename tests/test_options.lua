@@ -6,7 +6,8 @@ local eq = H.eq
 
 local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
     bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true,
-    ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped" }
+    ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped",
+    vendorMode = "ask", vendorPrefer = "map" }
 
 -- Load Commands and Options with the fake globals in their environment.
 local function load(settings)
@@ -31,7 +32,7 @@ local category = ns.Options.Register(cfg, DEFAULTS, function() changes = changes
 eq(category, rec.category, "returns the category")
 eq(category.name, "Closest Vendor", "page name")
 eq(rec.registered, category, "category registered under AddOns")
-eq(#rec.settings, 12, "two settings per trigger, plus four for ammo buying")
+eq(#rec.settings, 14, "two settings per trigger, four for ammo buying, two for the target choice")
 eq(#rec.checkboxes, 6, "a checkbox per trigger, plus two for ammo buying")
 eq(#rec.sliders, 4, "a slider per trigger")
 
@@ -44,7 +45,7 @@ for _, s in ipairs(rec.settings) do
     vars[s.variable] = true
     keys[s.key] = s
     eq(s.default, DEFAULTS[s.key], "default for " .. s.key)
-    eq(s.vtype, (s.key:find("Enabled") or s.key == "ammoBuyPrompt") and "boolean" or s.key:find("Grade") and "string" or "number", "type of " .. s.key)
+    eq(s.vtype, (s.key:find("Enabled") or s.key == "ammoBuyPrompt") and "boolean" or (s.key:find("Grade") or s.key:find("^vendor")) and "string" or "number", "type of " .. s.key)
 end
 for _, k in ipairs({ "bagEnabled", "bagThreshold", "durEnabled", "durThreshold", "ammoEnabled", "ammoThreshold", "tradeEnabled", "tradeThreshold" }) do
     eq(keys[k] ~= nil, true, "registered " .. k)
@@ -56,7 +57,7 @@ for _, k in ipairs({ "ammoBuyEnabled", "ammoBuyPrompt", "arrowGrade", "bulletGra
 end
 eq(rec.checkboxes[5].setting.key, "ammoBuyEnabled", "buy switch")
 eq(rec.checkboxes[6].setting.key, "ammoBuyPrompt", "ask-first switch")
-eq(#rec.dropdowns, 2, "a dropdown per ammo kind")
+eq(#rec.dropdowns, 4, "a dropdown per ammo kind, plus the two target choices")
 eq(rec.dropdowns[1].setting.key, "arrowGrade", "arrow dropdown")
 eq(rec.dropdowns[2].setting.key, "bulletGrade", "bullet dropdown")
 local vals = {}
@@ -64,6 +65,27 @@ for _, o in ipairs(rec.dropdowns[1].options) do vals[#vals + 1] = o.value end
 eq(table.concat(vals, ","), table.concat(ns.Ammo and ns.Ammo.GRADES or { "equipped", "best", "cheapest" }, ","), "dropdown offers every grade")
 ns.Commands.Run(cfg, "arrows cheapest")
 eq(keys.arrowGrade:GetValue(), "cheapest", "page reads what the command set")
+
+-- Target choice: mode and preference dropdowns bound to the same keys the commands edit.
+eq(rec.dropdowns[3].setting.key, "vendorMode", "mode dropdown")
+eq(rec.dropdowns[4].setting.key, "vendorPrefer", "preference dropdown")
+vals = {}
+for _, o in ipairs(rec.dropdowns[3].options) do vals[#vals + 1] = o.value end
+eq(table.concat(vals, ","), "ask,auto", "mode choices")
+vals = {}
+for _, o in ipairs(rec.dropdowns[4].options) do vals[#vals + 1] = o.value end
+eq(table.concat(vals, ","), "map,distance", "preference choices")
+eq(keys.vendorMode:GetValue(), "ask", "mode defaults to ask")
+eq(keys.vendorPrefer:GetValue(), "map", "preference defaults to map")
+ns.Commands.Run(cfg, "prefer distance")
+eq(keys.vendorPrefer:GetValue(), "distance", "page reads the preference the command set")
+ns.Commands.Run(cfg, "choice auto")
+eq(keys.vendorMode:GetValue(), "auto", "page reads the mode the command set")
+local savedChanges = changes
+keys.vendorMode:SetValue("ask")
+changes = savedChanges
+eq(cfg.vendorMode, "ask", "page writes the mode")
+cfg.vendorPrefer = "map"
 
 -- Sliders use the same limits as the commands, in the same order as the checkboxes.
 local expect = { bag = { 0, 200, 1 }, dur = { 1, 100, 1 }, ammo = { 0, 2000, 50 }, trade = { 0, 300, 1 } }

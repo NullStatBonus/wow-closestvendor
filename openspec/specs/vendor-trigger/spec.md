@@ -47,7 +47,7 @@ When a bow, crossbow or gun is equipped, the addon SHALL request navigation to a
 - **THEN** no ammo navigation is requested
 
 ### Requirement: Repair takes priority
-When several triggers are active, the addon SHALL handle them one at a time in the order repair, ammo, sell. A repair or ammo trip also covers selling, and a lower-priority request SHALL NOT replace a higher-priority one that is still open or active.
+When several triggers are active, the addon SHALL handle them one at a time in the order repair, ammo, sell, profession trainer. A repair or ammo trip also covers selling, and a lower-priority request SHALL NOT replace a higher-priority one that is still open or active. A trainer trip does not cover selling.
 
 #### Scenario: Both conditions active
 - **WHEN** bags are at threshold and durability is below threshold
@@ -61,8 +61,16 @@ When several triggers are active, the addon SHALL handle them one at a time in t
 - **WHEN** a repair question is open and the sell condition becomes true
 - **THEN** the repair question stays
 
+#### Scenario: Trainer is lowest
+- **WHEN** a sell question is open and a profession comes within its threshold
+- **THEN** the sell question stays
+
+#### Scenario: Trainer yields
+- **WHEN** a trainer question is open and the sell condition becomes true
+- **THEN** the sell question replaces it
+
 ### Requirement: Quiet behavior
-The addon SHALL NOT start navigation while the player is in combat, and SHALL NOT re-request navigation for a condition until that condition has cleared and recurred.
+The addon SHALL NOT start navigation while the player is in combat, and SHALL NOT re-request navigation for a vendor condition (sell, repair, ammo) until that condition has cleared and recurred. Profession trainer questions are the exception: they are asked again on each skill change or craft, as set out in `profession-trainer`.
 
 #### Scenario: Condition crossed in combat
 - **WHEN** a threshold is crossed during combat
@@ -71,6 +79,10 @@ The addon SHALL NOT start navigation while the player is in combat, and SHALL NO
 #### Scenario: No repeat after dismissal
 - **WHEN** navigation was started and the condition has not cleared
 - **THEN** it is not started again on later bag or durability events
+
+#### Scenario: Trainer question in combat
+- **WHEN** a profession event fires during combat
+- **THEN** no question is shown, and the next event after combat asks as usual
 
 ### Requirement: Confirm before navigating
 The addon SHALL ask the player, in a dialog naming the reason and the closest vendor, before starting navigation, and SHALL navigate only if the player accepts.
@@ -88,14 +100,22 @@ The addon SHALL ask the player, in a dialog naming the reason and the closest ve
 - **THEN** the dialog closes without navigating
 
 ### Requirement: Navigation ends on resolution
-The addon SHALL clear its waypoint when a merchant window opens at a vendor or when the triggering condition clears.
+The addon SHALL clear a vendor waypoint when a merchant window opens at a vendor or when the triggering condition clears. A profession trainer waypoint SHALL instead be cleared when a trainer window for that profession opens, or when the profession is no longer within its threshold. Opening a merchant window SHALL NOT clear a trainer waypoint.
 
 #### Scenario: Player vends
 - **WHEN** the player sells items and free slots rise above the threshold
 - **THEN** the waypoint is removed
 
+#### Scenario: Player reaches the trainer
+- **WHEN** the player opens a trainer window for the profession being navigated to
+- **THEN** the waypoint is removed
+
+#### Scenario: Merchant opened on the way
+- **WHEN** the player opens a merchant window while navigating to a trainer
+- **THEN** the trainer waypoint stays
+
 ### Requirement: Settings panel
-The addon SHALL add a "Closest Vendor" page under Options, AddOns, with an on/off checkbox and a threshold slider for each trigger (bags, durability, ammo). Changes SHALL edit the same saved settings as the slash commands, take effect at once, and the panel SHALL honor the same limits as the commands. `/cvn config` SHALL open the page.
+The addon SHALL add a "Closest Vendor" page under Options, AddOns, with an on/off checkbox and a threshold slider for each trigger (bags, durability, ammo, profession). Changes SHALL edit the same saved settings as the slash commands, take effect at once, and the panel SHALL honor the same limits as the commands. `/cvn config` SHALL open the page.
 
 #### Scenario: Change a threshold in the panel
 - **WHEN** the player moves the bag slider to 4
@@ -104,6 +124,10 @@ The addon SHALL add a "Closest Vendor" page under Options, AddOns, with an on/of
 #### Scenario: Slash command and panel agree
 - **WHEN** the player runs `/cvn ammo 500` and then opens the panel
 - **THEN** the ammo slider shows 500
+
+#### Scenario: Profession slider
+- **WHEN** the player moves the profession slider to 25
+- **THEN** the saved profession threshold is 25 and `/cvn` reports it
 
 #### Scenario: Switch a trigger off
 - **WHEN** the player clears a trigger's checkbox
@@ -137,8 +161,54 @@ The addon SHALL provide `/cvn test sell`, `/cvn test repair`, `/cvn test arrows`
 - **THEN** the real triggers still ask when their own conditions are met
 
 ### Requirement: Configurable thresholds
-The addon SHALL persist a bag-slot threshold, a durability-percent threshold and an ammo-count threshold per account, settable via slash command, and SHALL allow disabling each trigger independently.
+The addon SHALL persist a bag-slot threshold, a durability-percent threshold, an ammo-count threshold and a profession-points threshold per account, settable via slash command, and SHALL allow disabling each trigger independently.
 
 #### Scenario: Custom bag threshold
 - **WHEN** the user sets the bag threshold to 5
 - **THEN** navigation is requested when free slots are 5 or fewer
+
+#### Scenario: Settings report
+- **WHEN** the player runs `/cvn`
+- **THEN** the report includes the profession threshold and whether it is on
+
+### Requirement: Two-target question
+When two candidates exist and the map choice mode is `ask`, the addon SHALL show one question with three buttons: the current-map target, the closer target, and Cancel. The question SHALL name both targets with their zones and distances, and the preferred target SHALL be the first button. Choosing a target SHALL start navigation to it; Cancel and Esc SHALL start nothing and SHALL count as declining.
+
+#### Scenario: Choose the closer target
+- **WHEN** the question shows two targets and the player picks the closer one
+- **THEN** navigation starts at that target only
+
+#### Scenario: Choose the current-map target
+- **WHEN** the question shows two targets and the player picks the current-map one
+- **THEN** navigation starts at that target only
+
+#### Scenario: Cancel
+- **WHEN** the player presses Cancel or Esc
+- **THEN** no navigation starts and the same condition does not ask again until it has cleared and recurred
+
+#### Scenario: Button order follows the preference
+- **WHEN** the preference is `distance`
+- **THEN** the closer target is the first button
+
+#### Scenario: Single candidate keeps the plain question
+- **WHEN** only one candidate exists
+- **THEN** the usual Yes/No question names that target
+
+### Requirement: Map choice settings
+The addon SHALL provide a mode (`ask`, the default, or `auto`) and a preference (`map`, the default, or `distance`) for choosing between a current-map and a closer other-map target. Both SHALL be saved, shared by vendor and trainer questions, settable by slash command and by the settings page, take effect at once, and appear in the debug report.
+
+#### Scenario: Defaults
+- **WHEN** the addon loads with no saved choice
+- **THEN** the mode is `ask` and the preference is `map`
+
+#### Scenario: Change by command
+- **WHEN** the player runs the command to set the mode to `auto`
+- **THEN** the saved mode is `auto` and `/cvn` reports it
+
+#### Scenario: Command and page agree
+- **WHEN** the player sets the preference by command and opens the settings page
+- **THEN** the page shows the same preference
+
+#### Scenario: Invalid value
+- **WHEN** the player gives a value other than the listed choices
+- **THEN** nothing changes and the valid choices are printed

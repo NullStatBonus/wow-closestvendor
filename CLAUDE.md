@@ -9,6 +9,10 @@ Bump the addon's semantic version every time a change's specs are applied to `op
 - Make the bump part of the same commit as the archive, name the new version in the commit message, and add a `## X.Y.Z` section to `CHANGELOG.md` in that commit (`tools/check-version.sh` fails without it).
 - To publish, tag the archive commit `vX.Y.Z` (the version without the `v` must equal the TOC version) and push the tag; see `docs/publishing.md`.
 
+## Git and PRs
+
+- **Archive before git.** Before any commit, push or PR for a change, run `/opsx:archive` first (sync specs, bump the version, write the CHANGELOG section), so the archive and the code ship in the same commit/PR. Commit nothing for a change that is still active in `openspec/changes/`.
+
 ## Documentation
 
 Update the supporting docs in the same change as any user-visible addon behavior, setting or command:

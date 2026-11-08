@@ -32,14 +32,14 @@ local function world(over)
         freeSlots = function() return w.free end,
         lowestDurability = function() return w.dur end,
         inCombat = function() return w.combat end,
-        playerPos = function() if w.pos then return w.pos[1], w.pos[2], w.pos[3] end end,
+        playerPos = function() if w.pos then return w.pos[1], w.pos[2], w.pos[3], w.pos[4] end end,
         playerFaction = 1,
         buckets = w.buckets or { [1] = VENDORS },
         log = (not w.noLog) and function(m) w.logs[#w.logs + 1] = m end or nil,
         ammo = function() return w.ammoKind, w.ammoCount end,
-        confirm = function(kind, v, accept, count, trade)
-            w.prompts[#w.prompts + 1] = { kind = kind, vendor = v, accept = accept, count = count, trade = trade }
-            if w.autoAccept ~= false then accept() else w.open = true end -- tests say autoAccept = false to hold the question open
+        confirm = function(kind, v, accept, count, trade, two)
+            w.prompts[#w.prompts + 1] = { kind = kind, vendor = v, accept = accept, count = count, trade = trade, two = two }
+            if w.autoAccept ~= false then (w.pickOther and two and two.acceptOther or accept)() else w.open = true end -- tests say autoAccept = false to hold the question open
         end,
         cancelConfirm = function() w.cancelCount = w.cancelCount + 1; w.open = false end,
         nav = {
@@ -586,5 +586,125 @@ before = w.clearCount
 w.free = 20
 w.c.Evaluate()
 eq(w.clearCount, before, "bags freed: the trainer pin stays")
+
+-- Map-aware choice -----------------------------------------------------------------------------------------
+-- Other (map 200) is nearest; Home (map 100) is farther but on the player's map.
+local MAPV = {
+    { 31, "Other Seller", 200, 0.1, 0.1, 0, false, 0, 10, 0 },
+    { 32, "Home Seller",  100, 0.5, 0.1, 0, false, 0, 50, 0 },
+}
+local function mapped(over)
+    local o = { free = 1, buckets = { [1] = MAPV }, pos = { 1, 0, 0, 100 } }
+    for k, v in pairs(over or {}) do o[k] = v end
+    return world(o)
+end
+
+-- Ask mode, prefer map (the defaults when unset): current-map vendor first, the closer one second.
+w = mapped({ autoAccept = false })
+w.c.Evaluate()
+eq(#w.prompts, 1, "one question")
+eq(w.prompts[1].vendor[2], "Home Seller", "map preference: current-map vendor is first")
+eq(w.prompts[1].two.other[2], "Other Seller", "the closer vendor is offered second")
+eq(w.prompts[1].two.mapFirst, true, "first is the map one")
+eq(w.prompts[1].two.dist, 50, "distance of the first")
+eq(w.prompts[1].two.otherDist, 10, "distance of the second")
+eq(w.setCount, 0, "nothing pinned before an answer")
+w.prompts[1].accept()
+eq(w.last[2], "Home Seller", "first button pins the first")
+w = mapped({ pickOther = true })
+w.c.Evaluate()
+eq(w.last[2], "Other Seller", "second button pins the other vendor")
+eq(w.setCount, 1, "exactly one pin")
+
+-- Prefer distance: the closer vendor is first.
+w = mapped({ autoAccept = false, cfg = { vendorPrefer = "distance" } })
+w.c.Evaluate()
+eq(w.prompts[1].vendor[2], "Other Seller", "distance preference: closer vendor first")
+eq(w.prompts[1].two.mapFirst, false, "first is not the map one")
+eq(w.prompts[1].two.other[2], "Home Seller", "the map vendor is second")
+
+-- Cancel: no pin; a late answer after the question is withdrawn is ignored.
+w = mapped({ autoAccept = false })
+w.c.Evaluate()
+w.c.OnMerchantShow()
+w.prompts[1].two.acceptOther()
+eq(w.setCount, 0, "a withdrawn question cannot navigate (second button)")
+w.prompts[1].accept()
+eq(w.setCount, 0, "a withdrawn question cannot navigate (first button)")
+
+-- One candidate: the nearest is on the player's map, there is no map, or nothing is on the map.
+w = mapped({ autoAccept = false, pos = { 1, 60, 0, 100 } })
+w.c.Evaluate()
+eq(w.prompts[1].vendor[2], "Home Seller", "nearest is on the map")
+eq(w.prompts[1].two, nil, "plain question")
+w = mapped({ autoAccept = false, pos = { 1, 0, 0 } })
+w.c.Evaluate()
+eq(w.prompts[1].vendor[2], "Other Seller", "no map id: the nearest")
+eq(w.prompts[1].two, nil, "no map id: plain question")
+w = mapped({ autoAccept = false, pos = { 1, 0, 0, 300 } })
+w.c.Evaluate()
+eq(w.prompts[1].vendor[2], "Other Seller", "nothing on the map: the nearest")
+eq(w.prompts[1].two, nil, "nothing on the map: plain question")
+
+-- Auto mode: no question; map preference pins the current-map vendor, distance the closer one.
+w = mapped({ cfg = { vendorMode = "auto" } })
+w.c.Evaluate()
+eq(#w.prompts, 0, "auto: no question")
+eq(w.setCount, 1, "auto: pinned")
+eq(w.last[2], "Home Seller", "auto, prefer map")
+eq(table.concat(w.says, "\n"):find("Navigating to Home Seller.", 1, true) ~= nil, true, "auto: one chat line names the target")
+w = mapped({ cfg = { vendorMode = "auto", vendorPrefer = "distance" } })
+w.c.Evaluate()
+eq(w.last[2], "Other Seller", "auto, prefer distance")
+w = mapped({ pos = { 1, 60, 0, 100 }, cfg = { vendorMode = "auto" } })
+w.c.Evaluate()
+eq(#w.prompts, 0, "auto with one candidate: no question")
+eq(w.last[2], "Home Seller", "auto with one candidate pins it")
+
+-- Auto still waits for the usual gates.
+w = mapped({ combat = true, cfg = { vendorMode = "auto" } })
+w.c.Evaluate()
+eq(w.setCount, 0, "auto: nothing pinned in combat")
+
+-- /cvn test goes through the same choice.
+w = mapped({ free = 20, autoAccept = false })
+w.c.Test("sell")
+eq(w.prompts[1].two.other[2], "Other Seller", "test command offers both")
+
+-- Trainers follow the same rule.
+local MTR = {
+    { 40, "Other Miner", 200, 0.1, 0.1, 0, { Mining = true }, 10, 0 },
+    { 41, "Home Miner",  100, 0.5, 0.1, 0, { Mining = true }, 50, 0 },
+}
+local function mtrade(over)
+    local o = { known = { Mining = true }, skills = mining(70), trainers = { [1] = MTR }, pos = { 1, 0, 0, 100 } }
+    for k, v in pairs(over or {}) do o[k] = v end
+    return world(o)
+end
+w = mtrade({ autoAccept = false })
+w.c.OnCraft()
+eq(w.prompts[1].kind, "trainer", "trainer question")
+eq(w.prompts[1].vendor[2], "Home Miner", "trainer: map one first")
+eq(w.prompts[1].two.other[2], "Other Miner", "trainer: closer one second")
+eq(w.prompts[1].count, 5, "trainer: points left passed on")
+w = mtrade({ cfg = { vendorMode = "auto" } })
+w.c.OnCraft()
+eq(#w.prompts, 0, "trainer auto: no question")
+eq(w.last[2], "Home Miner", "trainer auto: pinned")
+w.free = 20
+w.c.Evaluate()
+eq(w.clearCount, 0, "trainer auto: the pin is a trainer pin, vendor events leave it")
+w = mtrade({ cfg = { vendorMode = "auto", vendorPrefer = "distance" }, combat = true })
+w.c.OnCraft()
+eq(w.setCount, 0, "trainer auto: combat blocks")
+
+-- PromptText with two targets.
+local T = ns.Controller.PromptText
+local txt = T("repair", MAPV[2], "Elwynn", nil, nil, { other = MAPV[1], dist = 50, otherDist = 10 }, "Westfall")
+eq(txt:find("Home Seller (Elwynn, 50 yards)", 1, true) ~= nil, true, "first target has zone and distance")
+eq(txt:find("Other Seller (Westfall, 10 yards)", 1, true) ~= nil, true, "second target has zone and distance")
+txt = T("sell", MAPV[2], nil, nil, nil, { other = MAPV[1], dist = 50, otherDist = 10 }, nil)
+eq(txt:find("Home Seller (50 yards)", 1, true) ~= nil, true, "no zone: name and distance")
+eq(T("trainer", MTR[2], "A", 5, "Mining", { other = MTR[1], dist = 1, otherDist = 2 }, "B"):find("Mining", 1, true) ~= nil, true, "trainer text names the profession")
 
 H.done()

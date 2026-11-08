@@ -18,6 +18,8 @@ When that happens it **asks first** (Yes / No). Yes shows the vendor through the
 
 Era has no built-in waypoint API, so on Era you need TomTom to get an arrow.
 
+**When the closest vendor is on another map,** and a vendor on your own map is farther away, the question lists both with their zone and distance and has three buttons: the one on your map, the closest, and Cancel. Your preference (default: the one on your map) is the first button. If you would rather not be asked, `/cvn choice auto` sets the waypoint straight away using the same preference. The same applies to trainers.
+
 ## Install
 
 Copy the `ClosestVendor` folder into your AddOns folder:
@@ -29,7 +31,7 @@ The addon ships one TOC per game (`ClosestVendor_Vanilla.toc` for Era, `ClosestV
 
 ## Settings page
 
-Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger (bags, durability, ammo, professions), plus ammo buying: two checkboxes (buy ammo, ask before buying) and a dropdown for arrows and one for bullets. It changes the same settings as the commands below, and `/cvn config` opens it.
+Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger (bags, durability, ammo, professions), plus ammo buying: two checkboxes (buy ammo, ask before buying) and a dropdown for arrows and one for bullets. Two more dropdowns choose what happens when the closest target is on another map: ask which one or navigate without asking, and prefer the target on your map or the closest. It changes the same settings as the commands below, and `/cvn config` opens it.
 
 ## Commands
 
@@ -56,6 +58,10 @@ Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger
 /cvn debug off
 /cvn log
 /cvn log clear
+/cvn choice auto
+/cvn choice ask
+/cvn prefer distance
+/cvn prefer map
 /cvn buy off
 /cvn buy ask
 /cvn arrows best
@@ -67,6 +73,8 @@ Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger
 - `/cvn dur <percent>` sets the durability threshold (1 to 100). `on` / `off` turns the durability trigger on or off.
 - `/cvn ammo <count>` sets the ammo threshold (0 to 2000). `on` / `off` turns the ammo trigger on or off.
 - `/cvn trade <points>` sets the profession threshold (0 to 300). `on` / `off` turns the profession trigger on or off.
+- `/cvn choice ask` (the default) lists both targets when the closest is on another map and waits for your pick; `/cvn choice auto` sets the waypoint at once, with no question.
+- `/cvn prefer map` (the default) prefers the nearest target on your current map; `/cvn prefer distance` prefers the nearest by distance. It decides the first button, and what `auto` picks.
 - `/cvn buy on` / `/cvn buy off` switch ammo buying on or off. `/cvn buy ask` shows the count and price and waits for a Yes; `/cvn buy auto` (the default) buys at once.
 - `/cvn arrows <mode>` and `/cvn bullets <mode>` choose which ammo to buy: `equipped` (the default), `best` or `cheapest`.
 - `/cvn test sell`, `/cvn test repair`, `/cvn test arrows` and `/cvn test bullets` ask the same question right now for that kind of vendor, whatever your bags, gear and ammo look like. Yes sets the pin. Opening any vendor window clears it.
@@ -91,6 +99,7 @@ Vendors you open in WoW Forever's new zones (Mount Hyjal, Riverglades, Zephras I
 - **Trainers are learned, not shipped.** Until you have opened a trainer for a profession, the addon cannot send you to one; it says so once per profession per session in chat. It only watches professions it has seen at a trainer or in a crafting window.
 - **The last skill tier is taken to end at 300.** A profession whose limit is already 300 is never asked about. Whether WoW Forever has tiers above 300 is not verified. The trainer's level requirement is not checked, so a character that is too low may be sent to a trainer who cannot teach the next tier yet.
 - **Distance is a straight line**, not a walking route, and only vendors on your current continent are considered.
+- **"Your map" means the exact map you are standing in.** A city is its own map, separate from the zone around it, so in a city "your map" is that city.
 - **Vendors of the other faction are skipped.** Neutral vendors count for everyone.
 - Nothing is shown in places the game gives no map position, such as dungeons. The addon waits and retries.
 - Professions are matched by the name the game shows, so after changing the game language, trainers are learned again.

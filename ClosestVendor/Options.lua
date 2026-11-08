@@ -72,6 +72,27 @@ function O.Register(cfg, defaults, onChange)
             setting:SetValueChangedCallback(onChange)
         end
     end
+    -- Which target to take when the closest is on another map; like the grades, needs the dropdown API.
+    if Settings.CreateDropdown and Settings.CreateControlTextContainer and Settings.VarType.String then
+        local rows = {
+            { "vendorMode", "VENDOR_MODE", L["When the closest target is on another map"], {
+                { "ask", L["Ask which one"] }, { "auto", L["Navigate without asking"] } },
+              L["Ask shows both targets and lets you pick. Navigate without asking sets the waypoint at once using the preference below."] },
+            { "vendorPrefer", "VENDOR_PREFER", L["Preferred target"], {
+                { "map", L["On your map"] }, { "distance", L["Closest"] } },
+              L["On your map prefers the nearest target in the zone you are in. Closest prefers the nearest by distance, whatever the map."] },
+        }
+        for _, r in ipairs(rows) do
+            local setting = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_" .. r[2], r[1], cfg,
+                Settings.VarType.String, r[3], defaults[r[1]])
+            Settings.CreateDropdown(category, setting, function()
+                local c = Settings.CreateControlTextContainer()
+                for _, o in ipairs(r[4]) do c:Add(o[1], o[2]) end
+                return c:GetData()
+            end, r[5])
+            setting:SetValueChangedCallback(onChange)
+        end
+    end
     Settings.RegisterAddOnCategory(category)
     return category
 end

@@ -96,7 +96,7 @@ local function boot(opts)
         StaticPopup_Show = function(which, text, _, data)
             g.popup = { which = which, text = text, accept = data }
             g.shown = (g.shown or 0) + 1
-            if g.autoAccept ~= false then data() end -- tests say g.autoAccept = false to hold it open
+            if g.autoAccept ~= false then (type(data) == "table" and data.accept or data)() end -- tests say g.autoAccept = false to hold it open
         end,
         StaticPopup_Hide = function() g.popup = nil; g.hidden = (g.hidden or 0) + 1 end,
         ClosestVendorDB = opts.db,
@@ -714,7 +714,7 @@ eq(win ~= nil and win.shown, true, "the report window is shown")
 local report = win.box.text
 eq(report:find("^Closest Vendor report\n") ~= nil, true, "starts with a title")
 for _, part in ipairs({ "addon version: 0.1.0", "game: 1.60.1 build 70790, interface 16001", "locale: enUS", "navigation: chat",
-                        "vendors: 7 shipped, 0 learned, per continent: 1:6", "settings: bags on/2, durability on/20, ammo on/200",
+                        "vendors: 7 shipped, 0 learned, per continent: 1:6", "settings: bags on/2, durability on/20, ammo on/200", "target choice: ask, prefers map",
                         "Debug log: on", "event BAG_UPDATE_DELAYED" }) do
     eq(has(report, part), true, "report contains '" .. part .. "'")
 end
@@ -937,5 +937,51 @@ g.autoAccept = false
 g.skillLines = { { "Mining", 70, 75 } }; g.tradeWindow = "Mining"
 g.onEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 eq(has(g.popup.text, "Trainer B"), true, "the nearer trainer by real coordinates")
+
+-- 30. Closest target on another map: the three-button question and auto mode.
+local function twoMaps()
+    local g = boot({ tomtom = true })
+    g.ns.ShippedVendors = {
+        { 91, "Home Shop",  100, 0.9, 0.9, 0, false }, -- on the player's map, farther
+        { 92, "Other Shop", 200, 0.55, 0.5, 0, false }, -- on another map, closer
+    }
+    login(g)
+    return g
+end
+g = twoMaps(); g.autoAccept = false
+g.free = 1
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup.which, "CLOSESTVENDOR_CONFIRM_MAP", "map preference: the map target is the first button")
+eq(g.popup.text:find("Home Shop", 1, true) ~= nil and g.popup.text:find("Other Shop", 1, true) ~= nil, true, "names both targets: " .. g.popup.text)
+eq(g.popup.text:find("yards", 1, true) ~= nil, true, "shows distances")
+local d3 = g.env.StaticPopupDialogs.CLOSESTVENDOR_CONFIRM_MAP
+eq(d3.hideOnEscape, true, "Escape cancels")
+eq(type(d3.button1) == "string" and type(d3.button3) == "string" and type(d3.button2) == "string", true, "three buttons")
+eq(g.env.StaticPopupDialogs.CLOSESTVENDOR_CONFIRM_DISTANCE.button1, d3.button3, "the distance copy swaps the first two buttons")
+eq(#g.tomtom, 0, "nothing before a choice")
+d3.OnAlt(nil, nil)
+eq(#g.tomtom, 0, "missing data is harmless")
+local data = g.popup.accept
+d3.OnAlt(nil, data)
+eq(g.tomtom[1], "Other Shop", "second button navigates to the closer target")
+g = twoMaps(); g.autoAccept = false
+g.free = 1
+g.onEvent("BAG_UPDATE_DELAYED")
+d3.OnAccept(nil, g.popup.accept)
+eq(g.tomtom[1], "Home Shop", "first button navigates to the map target")
+
+g = twoMaps(); g.autoAccept = false
+g.env.SlashCmdList.CLOSESTVENDOR("prefer distance")
+g.free = 1
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup.which, "CLOSESTVENDOR_CONFIRM_DISTANCE", "distance preference: the closer target is the first button")
+
+g = twoMaps()
+g.env.SlashCmdList.CLOSESTVENDOR("choice auto")
+g.free = 1
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "auto: no question")
+eq(g.tomtom[1], "Home Shop", "auto: pinned the map target")
+eq(lastPrinted(g):find("Navigating to Home Shop.", 1, true) ~= nil, true, "auto: says where")
 
 H.done()

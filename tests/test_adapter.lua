@@ -115,8 +115,9 @@ local m, x, y = boot(mapGame()).mapPosition()
 eq(m .. "/" .. x .. "/" .. y, "1429/0.4/0.6", "map position")
 local c, wx, wy = boot(mapGame()).toWorld(1429, 0.4, 0.6)
 eq(c .. "/" .. wx .. "/" .. wy, "0/40/60", "world position")
-c, wx = boot(mapGame()).playerWorldPos()
-eq(c .. "/" .. wx, "0/40", "player world position")
+local pm
+c, wx, _, pm = boot(mapGame()).playerWorldPos()
+eq(c .. "/" .. wx .. "/" .. pm, "0/40/1429", "player world position and map id")
 local function withMap(field, fn) local g = mapGame(); g.C_Map[field] = fn; return boot(g) end
 eq(withMap("GetBestMapForUnit", function() end).mapPosition(), nil, "no map for the unit")
 eq(withMap("GetPlayerMapPosition", function() end).mapPosition(), nil, "no position (instance)")

@@ -120,10 +120,12 @@ function A.toWorld(map, x, y)
     if continent and w then return continent, w.x, w.y end
 end
 
--- Continent id and world x,y of the player, or nil.
+-- Continent id, world x,y and map id of the player, or nil.
 function A.playerWorldPos()
     local map, x, y = A.mapPosition()
-    if map then return A.toWorld(map, x, y) end
+    if not map then return end
+    local continent, wx, wy = A.toWorld(map, x, y)
+    if continent then return continent, wx, wy, map end
 end
 
 function A.mapName(id)

@@ -6,7 +6,8 @@ local L = ns.L
 
 local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
     bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true,
-    ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped" }
+    ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped",
+    vendorMode = "ask", vendorPrefer = "map" }
 local POLL_SECONDS = 5
 
 local POPUP = "CLOSESTVENDOR_CONFIRM"
@@ -22,6 +23,32 @@ if StaticPopupDialogs then
         hideOnEscape = true,
         preferredIndex = 3,
     }
+end
+
+-- The two-target question: Cancel plus one button per target. Two copies so the preferred target
+-- is always the first button.
+local POPUP_MAP, POPUP_DIST = "CLOSESTVENDOR_CONFIRM_MAP", "CLOSESTVENDOR_CONFIRM_DISTANCE"
+if StaticPopupDialogs then
+    local function threeWay(first, second)
+        return {
+            text = "%s",
+            button1 = first,
+            button3 = second,
+            button2 = CANCEL or "Cancel",
+            OnAccept = function(_, data) if data and data.accept then data.accept() end end,
+            OnAlt = function(_, data) if data and data.alt then data.alt() end end,
+            timeout = 0,
+            whileDead = false,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+    end
+    StaticPopupDialogs[POPUP_MAP] = threeWay(L["This map"], L["Closest"])
+    StaticPopupDialogs[POPUP_DIST] = threeWay(L["Closest"], L["This map"])
+end
+
+local function closeQuestions()
+    A.hidePopup(POPUP); A.hidePopup(POPUP_MAP); A.hidePopup(POPUP_DIST)
 end
 
 local DB, controller, timerArmed, panel, log
@@ -147,6 +174,7 @@ local function reportText()
             c.tradeEnabled and "on" or "off", c.tradeThreshold),
         ("ammo buying: %s, %s, arrows %s, bullets %s"):format(c.ammoBuyEnabled and "on" or "off",
             c.ammoBuyPrompt and "asks first" or "buys at once", tostring(c.arrowGrade), tostring(c.bulletGrade)),
+        ("target choice: %s, prefers %s"):format(tostring(c.vendorMode), tostring(c.vendorPrefer)),
         ("trainers: %d learned, professions seen: %s"):format(trainers, table.concat(professions, ", ")),
     }
     return ns.Log.Report(header, log.Entries(), log.Enabled()), header
@@ -177,11 +205,17 @@ local function start()
         buckets = buckets,
         nav = nav,
         ammo = A.ammoStatus,
-        confirm = function(kind, v, accept, count, trade)
-            A.showPopup(POPUP, ns.Controller.PromptText(kind, v, A.mapName(v[3]), count, trade), accept)
+        confirm = function(kind, v, accept, count, trade, two)
+            closeQuestions() -- one question is open at a time, whichever kind it is
+            if not two then
+                A.showPopup(POPUP, ns.Controller.PromptText(kind, v, A.mapName(v[3]), count, trade), accept)
+                return
+            end
+            local text = ns.Controller.PromptText(kind, v, A.mapName(v[3]), count, trade, two, A.mapName(two.other[3]))
+            A.showPopup(two.mapFirst and POPUP_MAP or POPUP_DIST, text, { accept = accept, alt = two.acceptOther })
         end,
-        cancelConfirm = function() A.hidePopup(POPUP) end,
-        questionOpen = function() return A.popupShown(POPUP) end,
+        cancelConfirm = closeQuestions,
+        questionOpen = function() return A.popupShown(POPUP) or A.popupShown(POPUP_MAP) or A.popupShown(POPUP_DIST) end,
         skills = A.skills,
         known = DB.professions,
         trainerBuckets = trainerBuckets,
