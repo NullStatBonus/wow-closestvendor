@@ -1,5 +1,10 @@
 # Closest Vendor
 
+## Delegation
+- Use subagents for self-contained work that would clutter the main context: broad codebase searches, independent research threads, parallel edits across unrelated files, and reviews.
+- Pick the subagent model by difficulty: haiku for search and lookup, sonnet for routine implementation, opus (or inherit) for design, debugging, and anything requiring judgment.
+- Do small or tightly coupled work inline. Don't delegate just to delegate.
+
 ## Releases
 
 Bump the addon's semantic version every time a change's specs are applied to `openspec/specs/` (at `/opsx:sync` or `/opsx:archive`).
