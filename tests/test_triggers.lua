@@ -5,7 +5,8 @@ local T = ns.Triggers
 package.path = "tests/?.lua;" .. package.path
 local H = require("harness")
 local eq = H.eq
-local function act(a) return a and (a[2] and (a[1] .. ":" .. a[2]) or a[1]) or "nil" end
+-- A clear also names what ended (a[2], a[3]); those are checked where they matter.
+local function act(a) return a and ((a[2] and a[1] ~= "clear") and (a[1] .. ":" .. a[2]) or a[1]) or "nil" end
 local function cfg() return { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true } end
 
 -- FreeSlots: sums general bags only, skips quivers/special bags.
@@ -184,7 +185,7 @@ t.OnMerchantShow()
 eq(t.Active(), nil, "cleared by a merchant")
 
 -- Reagents: one request per low item, in the order given, and never while ammo or repair is open.
-local function ract(a) return a and (a[2] and (a[1] .. ":" .. a[2] .. (a[3] and (":" .. a[3]) or "")) or a[1]) or "nil" end
+local function ract(a) return a and ((a[2] and a[1] ~= "clear") and (a[1] .. ":" .. a[2] .. (a[3] and (":" .. a[3]) or "")) or a[1]) or "nil" end
 t = T.New(cfg())
 eq(ract(t.Update(10, nil, false, nil, nil)), "nil", "no reagents: nothing")
 eq(ract(t.Update(10, nil, false, nil, {})), "nil", "empty list: nothing")
@@ -226,5 +227,76 @@ eq(ract(t.Update(10, nil, false, nil, { 17020 })), "go:reagent:17020", "reagent 
 eq(ract(t.Update(10, nil, false, 10, { 17020 })), "go:ammo", "ammo replaces an open reagent question")
 eq(ract(t.OnMerchantShow()), "clear", "ammo vendor visited")
 eq(ract(t.Update(10, nil, false, 300, { 17020 })), "go:reagent:17020", "the displaced reagent is asked again")
+
+-- Conditions: the one "is it low" test, shared by the warnings and the status window.
+local function cond(c, free, d, ammo) local n = T.Conditions(c, free, d, ammo); return tostring(n.sell) .. "/" .. tostring(n.repair) .. "/" .. tostring(n.ammo) end
+eq(cond(cfg(), 2, 19.9, 200), "true/true/true", "at the bag and ammo thresholds, below the durability one: all low")
+eq(cond(cfg(), 3, 20, 201), "false/false/false", "just past each threshold: none low")
+eq(cond(cfg(), nil, nil, nil), "nil/false/false", "unknown bags are neither low nor fine; unknown durability and ammo are not low")
+c = cfg(); c.bagEnabled, c.durEnabled, c.ammoEnabled = false, false, false
+eq(cond(c, 0, 0, 0), "false/false/false", "a switched-off warning is never low")
+-- Update decides with Conditions: a replaced Conditions changes what Update asks.
+local real = T.Conditions
+T.Conditions = function() return { sell = false, repair = true, ammo = false } end
+eq(act(T.New(cfg()).Update(20, 100, false, 900)), "go:repair", "Update asks what Conditions reports")
+T.Conditions = real
+
+-- A clear names the request that ended.
+t = T.New(cfg())
+t.Update(1, nil, false)
+local a = t.Update(20, nil, false)
+eq(a[1] .. ":" .. a[2], "clear:sell", "clear names sell")
+t = T.New(cfg())
+t.Update(10, nil, false, nil, { 17020 })
+a = t.Update(10, nil, false, nil, {})
+eq(a[1] .. ":" .. a[2] .. ":" .. a[3], "clear:reagent:17020", "clear names the reagent")
+
+-- Instances: nothing is asked inside, and the latch is not used up (the battleground case: bags fill
+-- inside, the question comes after leaving).
+t = T.New(cfg())
+eq(act(t.Update(1, nil, false, nil, nil, true)), "nil", "full bags in a battleground: nothing asked")
+eq(t.Active(), nil, "nothing active inside")
+eq(act(t.Update(1, nil, false, nil, nil, true)), "nil", "still inside: still nothing")
+eq(act(t.Update(1, nil, false, nil, nil, false)), "go:sell", "left with full bags: asked now")
+t = T.New(cfg())
+eq(act(t.Update(1, nil, false, nil, nil, true)), "nil", "full inside")
+eq(act(t.Update(9, nil, false, nil, nil, false)), "nil", "emptied before leaving: nothing asked")
+t = T.New(cfg())
+eq(ract(t.Update(10, 5, false, 10, { 17020 }, true)), "nil", "repair, ammo and reagents all wait inside")
+eq(ract(t.Update(10, 5, false, 10, { 17020 }, false)), "go:repair", "and are asked in the usual order outside")
+t = T.New(cfg())
+t.Update(1, nil, false)
+eq(act(t.Update(20, nil, false, nil, nil, true)), "clear", "a request from outside still ends inside when it resolves")
+
+-- Take: the player went for it unasked. A low condition becomes the handled, active request.
+t = T.New(cfg())
+eq(t.Take("sell"), false, "nothing seen yet: not taken")
+t.Update(1, nil, true)
+eq(t.Take("sell"), true, "low (seen in combat): taken")
+eq(t.Active(), "sell", "taken request is active")
+eq(act(t.Update(1, nil, false)), "nil", "not asked about afterwards")
+a = t.Update(20, nil, false)
+eq(a[1] .. ":" .. a[2], "clear:sell", "ends when it resolves")
+eq(act(t.Update(1, nil, false)), "go:sell", "and may be asked again later")
+t = T.New(cfg())
+t.Update(10, nil, false)
+eq(t.Take("sell"), false, "not low: not taken")
+eq(t.Active(), nil, "nothing active")
+eq(t.Take("nonsense"), false, "unknown kind: not taken")
+-- Taking replaces the active request, even one of a higher priority; that one stays handled.
+t = T.New(cfg())
+eq(act(t.Update(1, 5, false)), "go:repair", "repair active")
+eq(t.Take("sell"), true, "sell taken over repair")
+eq(t.Active(), "sell", "sell is the active one")
+eq(act(t.Update(1, 5, false)), "nil", "repair is not asked again")
+eq(act(t.Update(20, 5, false)), "clear", "the taken sell ends on its own")
+-- Reagents are taken by item id.
+t = T.New(cfg())
+t.Update(10, nil, false, nil, { 17020 }, true)
+eq(t.Take("reagent", 17032), false, "a reagent that is not low is not taken")
+eq(t.Take("reagent", 17020), true, "the low reagent is taken")
+eq(ract(t.Update(10, nil, false, nil, { 17020 })), "nil", "and not asked about")
+a = t.Update(10, nil, false, nil, {})
+eq(a[1] .. ":" .. a[2] .. ":" .. a[3], "clear:reagent:17020", "it ends when restocked")
 
 H.done()

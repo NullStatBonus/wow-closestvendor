@@ -7,13 +7,16 @@ local eq = H.eq
 local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
     bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true,
     ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped",
-    vendorMode = "ask", vendorPrefer = "map", autoNotice = true, reagentThreshold = 5 }
+    vendorMode = "ask", vendorPrefer = "map", autoNotice = true, reagentThreshold = 5,
+    reagentBuyEnabled = false, reagentBuyPrompt = true, reagentBuyTarget = 20,
+    instanceAnchor = "hearth", ahEnabled = false, hudLocked = false, hudScale = 100, hudAlpha = 80, hudTextAlpha = 100, hudColor = "000000" }
 
 -- Load Commands and Options with the fake globals in their environment.
-local function load(settings)
-    local env = setmetatable({ Settings = settings, MinimalSliderWithSteppersMixin = { Label = { Right = "right" } } }, { __index = _G })
+local function load(settings, class)
+    local env = setmetatable({ Settings = settings, MinimalSliderWithSteppersMixin = { Label = { Right = "right" } },
+        CreateSettingsListSectionHeaderInitializer = function(text) return { text = text } end }, { __index = _G })
     local ns = {}
-    for _, f in ipairs({ "Locales/enUS", "Reagents", "Commands", "Options" }) do
+    for _, f in ipairs({ "Locales/enUS", "Reagents", "Status", "Commands", "Options" }) do
         local chunk = assert(loadfile("ClosestVendor/" .. f .. ".lua"))
         setfenv(chunk, env)
         chunk("ClosestVendor", ns)
@@ -33,12 +36,32 @@ local category = ns.Options.Register(cfg, DEFAULTS, function() changes = changes
 eq(category, rec.category, "returns the category")
 eq(category.name, "Closest Vendor", "page name")
 eq(rec.registered, category, "category registered under AddOns")
-eq(#rec.settings, 19, "two per trigger, the reagent slider, three mage reagents, four for ammo buying, three for the target choice and notice")
-eq(#rec.checkboxes, 10, "a checkbox per trigger and per mage reagent, plus two for ammo buying and one for the notice")
-eq(#rec.sliders, 5, "a slider per trigger, plus the reagent slider")
+eq(#rec.settings, 33, "main 13 (two per trigger, notice, three dropdowns, auction), reagents 7 (threshold, three reagents, three for buying), ammo buying 4, window 9 (lock, three sliders, five row groups)")
+eq(#rec.checkboxes, 14, "a checkbox per trigger, per mage reagent, two for reagent buying, two for ammo buying, notice, auction and lock")
+eq(#rec.sliders, 9, "a slider per trigger, the reagent slider, the reagent amount, scale, background and text opacity")
 local cbByKey, slByKey = {}, {}
 for _, c in ipairs(rec.checkboxes) do cbByKey[c.setting.key] = c end
 for _, sl in ipairs(rec.sliders) do slByKey[sl.setting.key] = sl end
+
+-- Subcategories: Reagents, Ammo and Status window, each with its own controls.
+local subs = {}
+for _, c in ipairs(rec.subcategories) do subs[c.name] = c; eq(c.parent, category, "subcategory of the main page: " .. c.name) end
+eq(#rec.subcategories, 3, "three subcategories")
+eq(subs["Reagents"] ~= nil and subs["Ammo"] ~= nil and subs["Status window"] ~= nil, true, "named")
+local function inPage(c)
+    local n = {}
+    for _, s in ipairs(rec.settings) do if s.category == c then n[#n + 1] = s end end
+    return n
+end
+eq(#inPage(category), 13, "main page controls")
+eq(#inPage(subs["Reagents"]), 7, "reagents page")
+eq(#inPage(subs["Ammo"]), 4, "ammo page")
+eq(#inPage(subs["Status window"]), 9, "status window page")
+eq(inPage(subs["Status window"])[1].key, "hudLocked", "Lock window position is the first control of the window page")
+local hdr = {}
+for _, h in ipairs(rec.headers) do eq(h.category, category, "headers only on the main page with subcategories"); hdr[#hdr + 1] = h.text end
+eq(table.concat(hdr, ","), "Warnings,Navigation", "main page sections")
+eq(rec.registered, category, "only the main category is registered")
 
 -- Settings are bound to the saved table and the right keys, with unique names and defaults.
 local keys, vars = {}, {}
@@ -47,13 +70,15 @@ for _, s in ipairs(rec.settings) do
   if type(s.key) == "number" then
     reagentSettings[#reagentSettings + 1] = s
   else
-    eq(s.tbl, cfg, "bound to the saved settings table: " .. s.key)
-    eq(s.category, category, "in the page: " .. s.key)
+    if s.key ~= "mode" then eq(s.tbl, cfg, "bound to the saved settings table: " .. s.key) end
+    eq(s.category == category or s.category.parent == category, true, "in the page or a subcategory: " .. s.key)
     eq(vars[s.variable], nil, "unique variable name: " .. s.variable)
     vars[s.variable] = true
-    keys[s.key] = s
+    if s.key ~= "mode" then keys[s.key] = s end
+    if s.key ~= "mode" then
     eq(s.default, DEFAULTS[s.key], "default for " .. s.key)
-    eq(s.vtype, (s.key:find("Enabled") or s.key == "ammoBuyPrompt" or s.key == "autoNotice") and "boolean" or (s.key:find("Grade") or s.key:find("^vendor")) and "string" or "number", "type of " .. s.key)
+    eq(s.vtype, (s.key:find("Enabled") or s.key == "ammoBuyPrompt" or s.key == "reagentBuyPrompt" or s.key == "autoNotice" or s.key == "hudLocked") and "boolean" or (s.key:find("Grade") or s.key:find("^vendor") or s.key == "instanceAnchor") and "string" or "number", "type of " .. s.key)
+    end
   end
 end
 for _, k in ipairs({ "bagEnabled", "bagThreshold", "durEnabled", "durThreshold", "ammoEnabled", "ammoThreshold", "tradeEnabled", "tradeThreshold" }) do
@@ -66,23 +91,23 @@ for _, k in ipairs({ "ammoBuyEnabled", "ammoBuyPrompt", "arrowGrade", "bulletGra
 end
 eq(cbByKey.ammoBuyEnabled ~= nil, true, "buy switch")
 eq(cbByKey.ammoBuyPrompt ~= nil, true, "ask-first switch")
-eq(#rec.dropdowns, 4, "a dropdown per ammo kind, plus the two target choices")
-eq(rec.dropdowns[1].setting.key, "arrowGrade", "arrow dropdown")
-eq(rec.dropdowns[2].setting.key, "bulletGrade", "bullet dropdown")
+eq(#rec.dropdowns, 3 + 2 + 5, "three navigation choices, a dropdown per ammo kind, a mode per window row group")
+local ddByKey = {}
+for _, d in ipairs(rec.dropdowns) do ddByKey[d.setting.key] = d end
+eq(ddByKey.arrowGrade ~= nil and ddByKey.bulletGrade ~= nil, true, "arrow and bullet dropdowns")
 local vals = {}
-for _, o in ipairs(rec.dropdowns[1].options) do vals[#vals + 1] = o.value end
+for _, o in ipairs(ddByKey.arrowGrade.options) do vals[#vals + 1] = o.value end
 eq(table.concat(vals, ","), table.concat(ns.Ammo and ns.Ammo.GRADES or { "equipped", "best", "cheapest" }, ","), "dropdown offers every grade")
 ns.Commands.Run(cfg, "arrows cheapest")
 eq(keys.arrowGrade:GetValue(), "cheapest", "page reads what the command set")
 
 -- Target choice: mode and preference dropdowns bound to the same keys the commands edit.
-eq(rec.dropdowns[3].setting.key, "vendorMode", "mode dropdown")
-eq(rec.dropdowns[4].setting.key, "vendorPrefer", "preference dropdown")
+eq(ddByKey.vendorMode ~= nil and ddByKey.vendorPrefer ~= nil, true, "mode and preference dropdowns")
 vals = {}
-for _, o in ipairs(rec.dropdowns[3].options) do vals[#vals + 1] = o.value end
+for _, o in ipairs(ddByKey.vendorMode.options) do vals[#vals + 1] = o.value end
 eq(table.concat(vals, ","), "ask,auto", "mode choices")
 vals = {}
-for _, o in ipairs(rec.dropdowns[4].options) do vals[#vals + 1] = o.value end
+for _, o in ipairs(ddByKey.vendorPrefer.options) do vals[#vals + 1] = o.value end
 eq(table.concat(vals, ","), "map,distance", "preference choices")
 eq(keys.vendorMode:GetValue(), "ask", "mode defaults to ask")
 eq(keys.vendorPrefer:GetValue(), "map", "preference defaults to map")
@@ -175,17 +200,13 @@ local create = S4.CreateSlider
 S4.CreateSlider = function(...) local i = create(...); i.SetParentInitializer = nil; return i end
 local ns4 = load(S4)
 eq(ns4.Options.Register({}, DEFAULTS, function() end) ~= nil, true, "works without SetParentInitializer")
-eq(#rec4.sliders, 5, "sliders still created")
+eq(#rec4.sliders, 9, "sliders still created")
 
 -- Reagents: the slider, and one checkbox per reagent of the class, all hanging off the master switch.
 cfg.ammoEnabled = true -- an earlier check switched it off
 eq(slByKey.reagentThreshold ~= nil, true, "reagent slider")
 eq(slByKey.reagentThreshold.options.min .. "-" .. slByKey.reagentThreshold.options.max, "1-40", "limits are the command limits")
-eq(slByKey.reagentThreshold.parent, cbByKey.ammoEnabled, "the reagent slider hangs off the master switch")
-eq(slByKey.reagentThreshold.pred(), true, "enabled while the master switch is on")
-cfg.ammoEnabled = false
-eq(slByKey.reagentThreshold.pred(), false, "greyed with the master switch")
-cfg.ammoEnabled = true
+eq(slByKey.reagentThreshold.parent, nil, "on its own page the reagent slider cannot hang off the ammo switch")
 eq(keys.reagentThreshold:GetValue(), 5, "default reagent threshold")
 ns.Commands.Run(cfg, "reagent 12")
 eq(keys.reagentThreshold:GetValue(), 12, "page reads what the command set")
@@ -220,10 +241,8 @@ cfg.reagentOff[17020] = nil
 for _, c in ipairs(rec.checkboxes) do
     if type(c.setting.key) == "number" then
         eq(type(c.tip), "string", "reagent checkbox has a tooltip")
-        eq(c.parent, cbByKey.ammoEnabled, "reagent checkbox hangs off the master switch")
-        cfg.ammoEnabled = false
-        eq(c.pred(), false, "and is greyed with it")
-        cfg.ammoEnabled = true
+        eq(c.parent, nil, "reagent checkbox has no parent on its own page")
+        eq(c.setting.category, subs["Reagents"], "reagent checkbox is on the Reagents page")
     end
 end
 
@@ -242,6 +261,294 @@ load(S6).Options.Register({ reagentOff = {} }, DEFAULTS, function() end, nil)
 local n6 = 0
 for _, st in ipairs(rec6.settings) do if type(st.key) == "number" then n6 = n6 + 1 end end
 eq(n6, 0, "no class: no reagent checkboxes")
-eq(#rec6.sliders, 5, "but the slider is still there")
+eq(#rec6.sliders, 9, "but the sliders are still there")
+
+-- Reagent buying: at the end of the Reagents page, buy, ask first and the amount, the last two
+-- greyed while buying is off; bound to the keys the commands edit.
+local rkeys = {}
+for _, st in ipairs(inPage(subs["Reagents"])) do rkeys[#rkeys + 1] = tostring(st.key) end
+eq(table.concat(rkeys, ","), "reagentThreshold,17020,17031,17032,reagentBuyEnabled,reagentBuyPrompt,reagentBuyTarget", "Reagents page order: warning, reagents, then buying")
+local rbBox, raBox, rtSl = cbByKey.reagentBuyEnabled, cbByKey.reagentBuyPrompt, slByKey.reagentBuyTarget
+eq(rbBox ~= nil and raBox ~= nil and rtSl ~= nil, true, "buy and ask checkboxes and the amount slider")
+eq(rbBox.setting.name .. "|" .. raBox.setting.name, "Buy reagents|Ask before buying reagents", "labels")
+eq(rtSl.options.min .. "-" .. rtSl.options.max .. "-" .. rtSl.options.step, "0-100-1", "amount range is the command limit")
+eq(rtSl.options.min .. "-" .. rtSl.options.max, table.concat(ns.Commands.LIMITS.reagentBuyTarget, "-"), "same limits as /cvn reagentbuy")
+eq(keys.reagentBuyEnabled:GetValue(), false, "buying is off by default")
+eq(keys.reagentBuyPrompt:GetValue(), true, "and asks first by default")
+eq(keys.reagentBuyTarget:GetValue(), 20, "20 of each by default")
+eq(rtSl.parent == rbBox and raBox.parent == rbBox, true, "ask and amount hang off the buy checkbox")
+eq(rtSl.pred() or raBox.pred(), false, "greyed while buying is off")
+ns.Commands.Run(cfg, "reagentbuy on", "MAGE")
+eq(rtSl.pred() and raBox.pred(), true, "usable while buying is on")
+ns.Commands.Run(cfg, "reagentbuy 35", "MAGE")
+eq(keys.reagentBuyTarget:GetValue(), 35, "page reads what the command set")
+local savedB = changes
+keys.reagentBuyTarget:SetValue(10)
+eq(cfg.reagentBuyTarget .. "/" .. (changes - savedB), "10/1", "page writes the amount and reports it")
+keys.reagentBuyPrompt:SetValue(false)
+eq(cfg.reagentBuyPrompt, false, "page writes ask first")
+eq(rbBox:CanModify() and raBox:CanModify() and rtSl:CanModify(), true, "a mage can use them")
+eq(rbBox.tip ~= "Your class does not use reagents.", true, "with the normal tip")
+cfg.reagentBuyEnabled, cfg.reagentBuyPrompt, cfg.reagentBuyTarget = false, true, 20
+-- A class without vendor reagents (Hunter; Warlock has only display-only Soul Shards): greyed, says why.
+for _, cls in ipairs({ "HUNTER", "WARLOCK" }) do
+    local Sx, recx = fake.new()
+    load(Sx).Options.Register({ reagentOff = {} }, DEFAULTS, function() end, cls)
+    local n = 0
+    for _, init in ipairs(recx.checkboxes) do
+        if init.setting.key == "reagentBuyEnabled" or init.setting.key == "reagentBuyPrompt" then
+            n = n + 1
+            eq(init:CanModify(), false, cls .. ": " .. init.setting.key .. " greyed out")
+            eq(init.tip, "Your class does not use reagents.", cls .. ": tooltip says why")
+        end
+    end
+    for _, init in ipairs(recx.sliders) do
+        if init.setting.key == "reagentBuyTarget" then
+            n = n + 1
+            eq(init:CanModify(), false, cls .. ": amount greyed out")
+            eq(init.tip, "Your class does not use reagents.", cls .. ": slider tooltip says why")
+        end
+    end
+    eq(n, 3, cls .. ": all three buying controls are still shown")
+end
+
+-- Status window page: Lock, scale, opacity, then one mode dropdown per row group, whatever the class.
+local win = subs["Status window"]
+local modeDD = {}
+for _, d in ipairs(rec.dropdowns) do if d.setting.category == win and d.setting.key == "mode" then modeDD[#modeDD + 1] = d end end
+local names = {}
+for _, d in ipairs(modeDD) do names[#names + 1] = d.setting.name end
+eq(table.concat(names, "|"), "Show: Ammo|Show: Reagents|Show: Bag space|Show: Durability|Show: Professions", "five groups in window order, Reagents right below Ammo")
+local scale, alpha, textAlpha
+for _, sl in ipairs(rec.sliders) do
+    if sl.setting.key == "hudScale" then scale = sl elseif sl.setting.key == "hudAlpha" then alpha = sl
+    elseif sl.setting.key == "hudTextAlpha" then textAlpha = sl end
+end
+eq(scale.options.min .. "-" .. scale.options.max, "50-200", "scale range")
+eq(alpha.options.min .. "-" .. alpha.options.max, "0-100", "background opacity goes down to 0 (nothing drawn)")
+eq(textAlpha.options.min .. "-" .. textAlpha.options.max, "20-100", "text opacity range")
+eq(alpha.setting.default .. "/" .. textAlpha.setting.default, "80/100", "opacity defaults")
+eq(scale.setting.category, win, "scale on the window page")
+eq(alpha.setting.category == win and textAlpha.setting.category == win, true, "both opacities on the window page")
+local wkeys = {}
+for _, st in ipairs(inPage(win)) do if st.key ~= "mode" then wkeys[#wkeys + 1] = st.key end end
+eq(table.concat(wkeys, ","), "hudLocked,hudScale,hudAlpha,hudTextAlpha", "window page order: lock, scale, opacities (the colour is a swatch button, not a setting)")
+local ammoMode, reagentsMode, bagsMode, profMode = modeDD[1], modeDD[2], modeDD[3], modeDD[5]
+local vals7 = {}
+for _, o in ipairs(bagsMode.options) do vals7[#vals7 + 1] = o.value end
+eq(table.concat(vals7, ","), "low,always,never", "mode choices")
+eq(bagsMode.setting:GetValue() .. reagentsMode.setting:GetValue() .. profMode.setting:GetValue(), "lowlowlow", "every group defaults to low")
+eq(profMode.setting.default, "low", "and says so")
+local before8 = changes
+bagsMode.setting:SetValue("always")
+eq(cfg.hudRow.bags, "always", "the dropdown writes hudRow")
+eq(changes, before8 + 1, "and reports the change")
+profMode.setting:SetValue("always")
+eq(cfg.hudRow.professions, "always", "one Professions dropdown writes the group key")
+reagentsMode.setting:SetValue("never")
+eq(cfg.hudRow.reagents, "never", "a mage's Reagents dropdown writes the group key")
+cfg.hudRow.durability = "never"
+eq(modeDD[4].setting:GetValue(), "never", "reads what /cvn hud row set")
+eq(bagsMode.setting:GetValue() == "always" and modeDD[4].setting:GetValue() == "never", true, "each group its own")
+cfg.hudRow.reagents, cfg.hudRow.professions, cfg.hudRow.durability = nil, nil, nil
+local S9, rec9 = fake.new()
+local ns9 = load(S9)
+local cfg9 = {}
+for k, v in pairs(DEFAULTS) do cfg9[k] = v end
+ns9.Options.Register(cfg9, DEFAULTS, function() end, "HUNTER")
+local hasAmmo = false
+for _, st in ipairs(rec9.settings) do if st.name == "Show: Ammo" then hasAmmo = true end end
+eq(hasAmmo, true, "a hunter gets the ammo row")
+eq(type(cfg9.hudRow), "table", "hudRow is created for old saved settings")
+
+-- Rows that do not apply to the class are shown greyed out, say why, and never write hudRow.
+local function modeRows(recx, label)
+    for _, d in ipairs(recx.dropdowns) do if d.setting.name == label then return d end end
+end
+eq(ammoMode.setting.name, "Show: Ammo", "mage: ammo row present")
+eq(ammoMode.tip, "Your class does not use ammo.", "tooltip says why")
+eq(ammoMode:CanModify(), false, "and the row is greyed out (modify predicate)")
+eq(bagsMode:CanModify(), true, "an applicable row is not")
+ammoMode.setting:SetValue("always")
+eq(cfg.hudRow.ammo, nil, "a greyed-out ammo row writes nothing to hudRow")
+eq(ammoMode.setting:GetValue(), "low", "and keeps its default")
+eq(reagentsMode:CanModify(), true, "a class with reagents: the Reagents row is usable")
+eq(reagentsMode.tip ~= "Your class does not use reagents.", true, "with the normal tip")
+-- A class with display-only items only (Warlock: Soul Shards) can use the Reagents row too.
+local S12, rec12 = fake.new()
+load(S12).Options.Register({ reagentOff = {} }, DEFAULTS, function() end, "WARLOCK")
+eq(modeRows(rec12, "Show: Reagents"):CanModify(), true, "warlock: Reagents row usable for its soul shards")
+-- Hunter: ammo row enabled; no reagents, so a disabled Reagents row.
+local S11, rec11 = fake.new()
+local ns11 = load(S11)
+local cfg11 = {}
+for k, v in pairs(DEFAULTS) do cfg11[k] = v end
+ns11.Options.Register(cfg11, DEFAULTS, function() end, "HUNTER")
+local hAmmo, hReag = modeRows(rec11, "Show: Ammo"), modeRows(rec11, "Show: Reagents")
+eq(hAmmo:CanModify(), true, "hunter: ammo row usable")
+eq(hAmmo.tip ~= "Your class does not use ammo.", true, "hunter: normal tip")
+eq(hReag:CanModify(), false, "hunter: Reagents row greyed out")
+eq(hReag.tip, "Your class does not use reagents.", "hunter: reagents reason")
+hReag.setting:SetValue("never")
+eq(cfg11.hudRow.reagents, nil, "hunter: Reagents row writes nothing")
+hAmmo.setting:SetValue("always")
+eq(cfg11.hudRow.ammo, "always", "hunter: ammo row writes hudRow")
+
+-- A client without subcategories: one page, headers separate the groups, reagent controls grey with the ammo switch.
+local S10, rec10 = fake.new()
+S10.RegisterVerticalLayoutSubcategory = nil
+local ns10 = load(S10)
+local cfg10 = {}
+for k, v in pairs(DEFAULTS) do cfg10[k] = v end
+cfg10.reagentOff = {}
+local cat10 = ns10.Options.Register(cfg10, DEFAULTS, function() end, "MAGE")
+eq(#rec10.subcategories, 0, "no subcategories")
+eq(#rec10.settings, 33, "same controls")
+for _, st in ipairs(rec10.settings) do eq(st.category, cat10, "all on one page: " .. tostring(st.key)) end
+local h10 = {}
+for _, h in ipairs(rec10.headers) do h10[#h10 + 1] = h.text end
+eq(table.concat(h10, ","), "Warnings,Navigation,Reagents,Ammo,Status window", "headers for every group")
+local ammoCb10
+for _, c in ipairs(rec10.checkboxes) do if c.setting.key == "ammoEnabled" then ammoCb10 = c end end
+local rs10
+for _, sl in ipairs(rec10.sliders) do if sl.setting.key == "reagentThreshold" then rs10 = sl end end
+eq(rs10.parent, ammoCb10, "reagent slider still hangs off the ammo switch")
+eq(rec10.settings[#rec10.settings - 8].key, "hudLocked", "Lock still leads the window group")
+
+-- Navigation: anchor dropdown and auction checkbox on the main page.
+eq(ddByKey.instanceAnchor.setting.category, category, "anchor dropdown on the main page")
+local anchors = {}
+for _, o in ipairs(ddByKey.instanceAnchor.options) do anchors[#anchors + 1] = o.value end
+eq(table.concat(anchors, ","), "hearth,last", "anchor choices")
+eq(keys.instanceAnchor:GetValue(), "hearth", "anchor defaults to the hearthstone")
+eq(keys.ahEnabled:GetValue(), false, "auction routing defaults to off")
+eq(keys.ahEnabled.category, category, "auction checkbox on the main page")
+eq(cbByKey.ahEnabled ~= nil, true, "auction checkbox exists")
+
+-- The background colour swatch button: only where the client has a settings button and the game's
+-- colour picker (Adapter.pickColor is passed in only then). The swatch shows the saved colour, the
+-- button opens the picker at it and saves the pick.
+local function withButtons(pick, saved)
+    local Sb, recb = fake.new()
+    _G.CreateSettingsButtonInitializer = function(name, text, onClick, tip)
+        return { name = name, text = text, onClick = onClick, tip = tip, data = { buttonText = text } }
+    end
+    local nsb = load(Sb)
+    local cfgb = {}
+    for k, v in pairs(DEFAULTS) do cfgb[k] = v end
+    cfgb.hudColor = saved or cfgb.hudColor
+    local changed = 0
+    nsb.Options.Register(cfgb, DEFAULTS, function() changed = changed + 1 end, "MAGE", pick)
+    _G.CreateSettingsButtonInitializer = nil
+    return recb, cfgb, function() return changed end
+end
+local opened
+local recb, cfgb, changedb = withButtons(function(r, g, b, onPick) opened = { r, g, b }; onPick(1, 0, 0.5) end, "336699")
+eq(#recb.buttons, 1, "a colour swatch button")
+eq(recb.buttons[1].category.name, "Status window", "on the window page")
+eq(recb.buttons[1].init.name, "Background color", "labelled")
+eq(recb.buttons[1].init.text:find(":51:102:153|t", 1, true) ~= nil, true, "the swatch shows the saved colour (#336699)")
+local recd = withButtons(function() end)
+eq(recd.buttons[1].init.text:find(":0:0:0|t", 1, true) ~= nil, true, "a fresh install shows black")
+for _, d in ipairs(recb.dropdowns) do eq(d.setting.key ~= "hudColor", true, "no colour dropdown") end
+recb.buttons[1].init.onClick()
+eq(table.concat(opened, ","), 0.2 .. "," .. 0.4 .. "," .. 0.6, "the picker opens at the saved colour")
+eq(cfgb.hudColor .. "/" .. changedb(), "ff0080/1", "the picked colour is saved and reported")
+eq(recb.buttons[1].init.data.buttonText:find(":255:0:128|t", 1, true) ~= nil, true, "and the swatch shows it")
+cfgb.hudColor = "bad"
+recb.buttons[1].init.onClick()
+eq(table.concat(opened, ","), "0,0,0", "a saved colour that is not one opens at black")
+local recn = withButtons(nil)
+eq(#recn.buttons, 0, "no colour picker in the game: no control at all")
+-- Each missing need is named in the note, so the debug report says why no swatch showed.
+local function noteFor(pick, button, layout)
+    local Sn, recz = fake.new(layout == false and "none" or layout == "method" and "method" or "return")
+    _G.CreateSettingsButtonInitializer = button and function(name, text, onClick) return { onClick = onClick, data = {} } end or nil
+    local nn = load(Sn)
+    local c = {}
+    for k, v in pairs(DEFAULTS) do c[k] = v end
+    local notes = {}
+    local okr = pcall(nn.Options.Register, c, DEFAULTS, function() end, "MAGE", pick, function(t) notes[#notes + 1] = t end)
+    _G.CreateSettingsButtonInitializer = nil
+    return okr, table.concat(notes, "|"), recz
+end
+local _, nAll, recz_ret = noteFor(function() end, true, true)
+eq(nAll, "background color control built as a button; no swatch, missing: ColorPickerFrame:SetupColorPickerAndShow or :GetPreviousValues, Settings.CreateColorSwatch", "button built: said so, and why no swatch")
+local _, nPick = noteFor(nil, true, true)
+eq(nPick, "background color control not built, missing: color picker (ColorPickerFrame); no swatch, missing: color picker (ColorPickerFrame), Settings.CreateColorSwatch", "no picker named")
+local _, nBtn = noteFor(function() end, false, true)
+eq(nBtn:find("background color control not built, missing: CreateSettingsButtonInitializer;", 1, true) == 1, true, "no button maker named")
+local _, nTwo = noteFor(nil, false, true)
+local _, nLay = noteFor(function() end, true, false)
+local _, nMeth, recMeth = noteFor(function() end, true, "method")
+eq(nMeth:find("background color control built as a button", 1, true) == 1, true, "only category:GetLayout(): still built")
+eq(#recMeth.buttons, 1, "swatch built through category:GetLayout()")
+eq(#recMeth.headers > 0, true, "headers built through category:GetLayout()")
+eq(#recz_ret.buttons, 1, "swatch built through the returned layout")
+eq(nLay:find("page layout", 1, true) ~= nil and nLay:find("layout.AddInitializer", 1, true) ~= nil, true, "no layout named")
+eq(nTwo:find("color picker", 1, true) ~= nil and nTwo:find("CreateSettingsButtonInitializer", 1, true) ~= nil, true, "all missing are listed")
+eq(#rec.buttons, 0, "no settings button maker: no control either")
+
+-- The game's own colour swatch row (Settings.CreateColorSwatch): built instead of the button where
+-- the client has it and its picker takes the swatch's calls (swatchPicker). Its setting holds
+-- "aarrggbb", read from and written to hudColor ("rrggbb").
+local function withSwatch(opts, pick, swatchPicker, saved, layout)
+    local Sw, recw = fake.new(layout or "return", opts)
+    _G.CreateSettingsButtonInitializer = function(name, text, onClick, tip)
+        return { name = name, text = text, onClick = onClick, tip = tip, data = { buttonText = text } }
+    end
+    local nw = load(Sw)
+    local c = {}
+    for k, v in pairs(DEFAULTS) do c[k] = v end
+    c.hudColor = saved or c.hudColor
+    local changed, notes = 0, {}
+    nw.Options.Register(c, DEFAULTS, function() changed = changed + 1 end, "MAGE", pick,
+        function(t) notes[#notes + 1] = t end, swatchPicker)
+    _G.CreateSettingsButtonInitializer = nil
+    return recw, c, function() return changed end, table.concat(notes, "|")
+end
+local pickAny = function() end
+local recs, cfgs, changeds, notes = withSwatch({ swatch = true }, pickAny, true, "336699")
+eq(#recs.swatches, 1, "a swatch row")
+eq(#recs.buttons, 0, "and no button")
+eq(notes, "background color control built as a swatch", "said so")
+local sw = recs.swatches[1]
+eq(sw.category.name, "Status window", "swatch on the window page")
+eq(sw.setting.name, "Background color", "labelled")
+eq(sw.setting.vtype, "string", "a string setting")
+eq(sw.setting.variable, "CLOSESTVENDOR_HUD_COLOR", "with the addon's prefix")
+eq(sw.setting.default, "ff000000", "black by default, in the game's aarrggbb form")
+eq(sw.tip:find("color picker", 1, true) ~= nil, true, "keeps the tooltip")
+eq(sw.setting:GetValue(), "ff336699", "shows the saved colour")
+sw.setting:SetValue("FFFF0080") -- the player picks; the game writes upper or lower case hex
+eq(cfgs.hudColor .. "/" .. changeds(), "ff0080/1", "the pick is saved as rrggbb and reported")
+eq(sw.setting:GetValue(), "ffff0080", "and the swatch shows it")
+cfgs.hudColor = "101820" -- /cvn hud color #101820 while the page is closed
+eq(sw.setting:GetValue(), "ff101820", "a colour set by command shows the next time the page is shown")
+cfgs.hudColor = "bad"
+eq(sw.setting:GetValue(), "ff000000", "a saved colour that is not one shows black")
+cfgs.hudColor = "ff0080"
+sw.setting:SetValue("nonsense")
+eq(cfgs.hudColor, "ff0080", "a value that is not a colour is ignored")
+local wkeys2 = {}
+for _, st in ipairs(recs.settings) do if st.category.name == "Status window" and st.key ~= "mode" then wkeys2[#wkeys2 + 1] = st.key end end
+eq(table.concat(wkeys2, ","), "hudLocked,hudScale,hudAlpha,hudTextAlpha,hudColor", "swatch after the opacities")
+local _, _, _, nNoLayout = withSwatch({ swatch = true }, pickAny, true, nil, "none")
+eq(nNoLayout, "background color control built as a swatch", "the swatch needs no layout of ours (the game adds it)")
+-- Fallbacks to the button, each naming what the swatch lacked.
+local recf, _, _, nf = withSwatch({ swatch = true }, pickAny, nil)
+eq(#recf.swatches .. "/" .. #recf.buttons, "0/1", "picker without the swatch's calls: button")
+eq(nf, "background color control built as a button; no swatch, missing: ColorPickerFrame:SetupColorPickerAndShow or :GetPreviousValues", "and why")
+local recg, _, _, ng = withSwatch(nil, pickAny, true)
+eq(#recg.swatches .. "/" .. #recg.buttons, "0/1", "no Settings.CreateColorSwatch: button")
+eq(ng, "background color control built as a button; no swatch, missing: Settings.CreateColorSwatch", "and why")
+local rech, cfgh, _, nh = withSwatch({ swatchThrows = true }, pickAny, true)
+eq(#rech.buttons, 1, "a swatch that raises an error: button instead, page still built")
+eq(rech.registered ~= nil, true, "the page is still registered")
+eq(nh, "background color control built as a button; no swatch, missing: Settings.CreateColorSwatch failed: swatch template missing", "the error is named")
+eq(cfgh.hudColor, "000000", "the failed swatch left the colour alone")
+local reci, _, _, ni = withSwatch({ swatch = true }, nil, true)
+eq(#reci.swatches .. "/" .. #reci.buttons, "0/0", "no picker at all: neither")
+eq(ni:find("background color control not built", 1, true) == 1, true, "said so")
 
 H.done()

@@ -26,6 +26,12 @@
 --   env.notify(text)                optional: show text on screen, silently (used by "auto" pins)
 --   env.zoneName(mapId)             optional: the name of a map, or nil
 --   env.log(text)                   optional: record a decision in the debug log
+--   env.auctionBuckets              optional: { [continentId] = { auctioneer records, same shape as vendors } }
+--   env.instanceType()              optional: "none", "party", "raid" or "pvp"; nil (unknown) counts as "none"
+--   env.anchor(which)               optional: { continent, x, y, map } (world x,y) for "hearth" (the
+--                                      hearthstone point) or "last" (the last position outside an
+--                                      instance), or nil when that one is not known
+--   env.after(seconds, fn)          optional: run fn later; false when there are no timers (only the demo uses it)
 local _, ns = ...
 
 local L = ns.L
@@ -92,12 +98,16 @@ function C.PromptText(kind, vendor, zone, count, trade, two, otherZone)
     return L["Your bags are almost full.\n\nNavigate to the closest vendor, %s?"]:format(who)
 end
 
+-- How long a demo (/cvn demo) lasts, in seconds.
+C.DEMO_SECONDS = 10
+
 function C.New(env)
     local triggers = ns.Triggers.New(env.cfg)
     local self = { pending = nil } -- "sell"/"repair"/"ammo" waiting for a position
     local ammoKind, ammoCount -- from the last Evaluate
     local handle
     local pinTrade -- profession of the active trainer waypoint, if the waypoint is a trainer's
+    local pinKind, pinId -- what the waypoint is for: "sell"/"repair"/"ammo"/"reagent" (+ item id)/"trainer"
     local lastKind, lastTrade -- what the most recent question was about
     local noticed = {} -- professions already told about having no known trainer
     local noticedReagent = {} -- reagents already told about having no known seller
@@ -107,15 +117,28 @@ function C.New(env)
     local professions = ns.Professions.New()
     local questionOpen = env.questionOpen or function() return false end
     local say = env.say or function() end
+    -- The demo: its token (a newer demo makes an older timer do nothing), the waypoint it set and
+    -- the question it asked.
+    local demoToken, demoHandle, demoPrompt = 0, nil, nil
 
     local function clearNav()
         if handle then env.nav.Clear(handle) end
-        handle, pinTrade = nil, nil
+        handle, pinTrade, pinKind, pinId = nil, nil, nil, nil
     end
 
-    -- Vendor triggers end a vendor waypoint, never a trainer's.
-    local function clearVendorNav()
-        if not pinTrade then clearNav() end
+    -- Vendor triggers end a vendor waypoint, never a trainer's. With kind (and the item id for a
+    -- reagent), only a waypoint set for that same thing ends: a trigger never removes another's pin.
+    -- Without kind (a merchant window) every vendor waypoint ends.
+    local function clearVendorNav(kind, id)
+        if pinTrade then return end
+        if kind and (pinKind ~= kind or pinId ~= id) then return end
+        clearNav()
+    end
+
+    -- "party", "raid" or "pvp" while the player is in an instance, else nil (unknown is the open world).
+    local function instance()
+        local kind = env.instanceType and env.instanceType()
+        if kind and kind ~= "none" then return kind end
     end
 
     -- Invalidate any open question so a late Yes cannot navigate.
@@ -130,61 +153,77 @@ function C.New(env)
         return math.floor(math.sqrt(dx * dx + dy * dy) + 0.5)
     end
 
-    -- Nearest eligible vendor for kind, or nil plus "nopos" / "novendor". A third value is the nearest
-    -- one on the player's map when the overall nearest is on another map, else nil; then x, y.
-    local function findVendor(kind, reagent)
+    -- The player's position as { continent, x, y, map }, or nil.
+    local function here()
         local continent, x, y, map = env.playerPos()
-        if not continent then return nil, "nopos" end
-        local need = (kind == "repair" or kind == "arrow" or kind == "bullet") and kind or nil
-        if kind == "reagent" then need = { reagent = reagent } end
-        local v, onMap = ns.Search.Nearest(env.buckets[continent] or {}, x, y, need, env.playerFaction, map)
-        if not v then return nil, "novendor" end
-        if onMap == v then onMap = nil end
-        return v, nil, onMap, x, y
+        if continent then return { continent = continent, x = x, y = y, map = map } end
     end
 
-    -- Take a chosen target: the usual accept path for vendors and trainers.
-    local function pin(v, trade)
+    -- Nearest eligible vendor for kind, or nil plus "nopos" / "novendor". A third value is the nearest
+    -- one on the player's map when the overall nearest is on another map, else nil; then x, y. With
+    -- at ({ continent, x, y, map }, an anchor) the search starts there instead of at the player.
+    local function findVendor(kind, reagent, at)
+        at = at or here()
+        if not at then return nil, "nopos" end
+        local need = (kind == "repair" or kind == "arrow" or kind == "bullet") and kind or nil
+        if kind == "reagent" then need = { reagent = reagent } end
+        local v, onMap = ns.Search.NearestFrom(env.buckets, at, need, env.playerFaction)
+        if not v then return nil, "novendor" end
+        if onMap == v then onMap = nil end
+        return v, nil, onMap, at.x, at.y
+    end
+
+    -- Take a chosen target: the usual accept path for vendors and trainers. kind and id (a reagent's
+    -- item id) are remembered as what the waypoint is for.
+    local function pin(v, trade, kind, id)
         clearNav()
         handle = env.nav.Set(v)
-        if trade and handle then pinTrade = trade end
+        if handle then
+            pinTrade = trade
+            pinKind = (kind == "arrow" or kind == "bullet") and "ammo" or kind
+            pinId = id
+        end
         log(("accepted: %s via %s"):format(v[2], handle and handle.kind or "nothing available"))
     end
 
-    -- Offer the nearest target v (and, when v is on another map, the nearest on the player's map).
-    -- In "auto" mode pin without asking; otherwise ask, navigating only on a choice. trade is set for
-    -- trainers, count is the ammo or reagent left or the points left to the cap. name is the reagent's
-    -- name for a reagent.
-    local function offer(kind, v, onMap, x, y, count, trade, name)
+    -- Pin without asking and say why, in chat and on screen: the nearest target v, or onMap (the nearest
+    -- on the player's map) when there is one and the map is preferred. x, y is where the search started.
+    local function autoPin(kind, v, onMap, x, y, trade, name, id)
+        local cfg = env.cfg
+        local i = kind == "trainer" and 8 or 9
+        local pick = (onMap and cfg.vendorPrefer ~= "distance") and onMap or v
+        log(("auto: %s (npc %s)%s"):format(pick[2], tostring(pick[1]), onMap and " chosen from two candidates" or ""))
+        lastKind, lastTrade = kind, trade
+        pin(pick, trade, kind, id)
+        local function describe(t) return target(t, env.zoneName and env.zoneName(t[3]), yards(t, i, x, y)) end
+        local text
+        local why
+        if trade then why = L["to train %s"]:format(trade)
+        elseif name then why = L["to buy %s"]:format(name)
+        elseif kind == "arrow" or kind == "bullet" then why = L["to buy ammo"]
+        elseif kind == "repair" then why = L["to repair your gear"]
+        elseif kind == "sell" then why = L["to sell items and free bag space"] end
+        if why and onMap then
+            text = L["Navigating to %s %s. The other choice was %s."]:format(describe(pick), why, describe(pick == v and onMap or v))
+        elseif why then
+            text = L["Navigating to %s %s."]:format(describe(pick), why)
+        elseif onMap then
+            text = L["Navigating to %s. The other choice was %s."]:format(describe(pick), describe(pick == v and onMap or v))
+        else
+            text = L["Navigating to %s."]:format(describe(pick))
+        end
+        say(text)
+        if env.notify and cfg.autoNotice ~= false then env.notify(text) end
+    end
+
+    -- Ask about the nearest target v (and, when v is on another map, the nearest on the player's
+    -- map), navigating only on a choice. trade is set for trainers, count is the ammo or reagent left
+    -- or the points left to the cap. name is the reagent's name and id its item id for a reagent.
+    -- pinned (optional) is called after an answer set the waypoint.
+    local function ask(kind, v, onMap, x, y, count, trade, name, id, pinned)
         local cfg = env.cfg
         local mapFirst = cfg.vendorPrefer ~= "distance"
         local i = kind == "trainer" and 8 or 9
-        if cfg.vendorMode == "auto" then
-            local pick = (onMap and mapFirst) and onMap or v
-            log(("auto: %s (npc %s)%s"):format(pick[2], tostring(pick[1]), onMap and " chosen from two candidates" or ""))
-            lastKind, lastTrade = kind, trade
-            pin(pick, trade)
-            local function describe(t) return target(t, env.zoneName and env.zoneName(t[3]), yards(t, i, x, y)) end
-            local text
-            local why
-            if trade then why = L["to train %s"]:format(trade)
-            elseif name then why = L["to buy %s"]:format(name)
-            elseif kind == "arrow" or kind == "bullet" then why = L["to buy ammo"]
-            elseif kind == "repair" then why = L["to repair your gear"]
-            elseif kind == "sell" then why = L["to sell items and free bag space"] end
-            if why and onMap then
-                text = L["Navigating to %s %s. The other choice was %s."]:format(describe(pick), why, describe(pick == v and onMap or v))
-            elseif why then
-                text = L["Navigating to %s %s."]:format(describe(pick), why)
-            elseif onMap then
-                text = L["Navigating to %s. The other choice was %s."]:format(describe(pick), describe(pick == v and onMap or v))
-            else
-                text = L["Navigating to %s."]:format(describe(pick))
-            end
-            say(text)
-            if env.notify and cfg.autoNotice ~= false then env.notify(text) end
-            return
-        end
         promptId = promptId + 1
         local mine = promptId
         lastKind, lastTrade = kind, trade
@@ -200,12 +239,19 @@ function C.New(env)
         local function answer(t)
             return function()
                 if mine ~= promptId then log("answer ignored: the question was withdrawn") return end
-                pin(t, trade)
+                pin(t, trade, kind, id)
+                if pinned then pinned() end
             end
         end
         local two = second and { other = second, acceptOther = answer(second), mapFirst = mapFirst,
             dist = yards(first, i, x, y), otherDist = yards(second, i, x, y) }
         env.confirm(kind, first, answer(first), count, trade or name, two)
+    end
+
+    -- Offer a target: in "auto" mode pin without asking, otherwise ask (see ask for the arguments).
+    local function offer(kind, v, onMap, x, y, count, trade, name, id)
+        if env.cfg.vendorMode == "auto" then return autoPin(kind, v, onMap, x, y, trade, name, id) end
+        ask(kind, v, onMap, x, y, count, trade, name, id)
     end
 
     -- skills: the player's skill list. Asks about the profession nearest its cap that has a
@@ -221,6 +267,7 @@ function C.New(env)
         end
         if #within == 0 then return end
         if env.inCombat() then log("profession check skipped: in combat") return end
+        if instance() then log("profession check skipped: in an instance") return end
         -- Lowest priority: never over an open question, an open or active vendor request, or a trainer trip.
         if pinTrade or questionOpen() or triggers.Active() then return end
         local continent, x, y, map = env.playerPos()
@@ -252,7 +299,7 @@ function C.New(env)
             log("no map position yet: " .. trigger .. " request kept for a retry")
         elseif v then
             self.pending, self.pendingId = nil, nil
-            offer(kind, v, onMap, x, y, trigger == "ammo" and ammoCount or (r and r.count) or nil, nil, r and r.name)
+            offer(kind, v, onMap, x, y, trigger == "ammo" and ammoCount or (r and r.count) or nil, nil, r and r.name, id)
         else
             self.pending, self.pendingId = nil, nil
             log("no known vendor for " .. kind .. " on this continent")
@@ -265,16 +312,20 @@ function C.New(env)
 
     function self.Evaluate()
         ammoKind, ammoCount = env.ammo()
-        local free, dur, combat = env.freeSlots(), env.lowestDurability(), env.inCombat()
+        local free, dur, combat, inside = env.freeSlots(), env.lowestDurability(), env.inCombat(), instance()
+        -- Reagents.Low is the one "is it low" test for reagents; the status window uses it too.
+        local items, watched = {}, {}
+        for _, r in ipairs(env.reagents and env.reagents() or {}) do
+            items[#items + 1] = r.item
+            watched[r.item.id] = r
+        end
         lowReagents = {}
         local lowIds = {}
-        for _, r in ipairs(env.reagents and env.reagents() or {}) do
-            if r.count <= env.cfg.reagentThreshold then
-                lowReagents[r.item.id] = r
-                lowIds[#lowIds + 1] = r.item.id
-            end
+        for _, low in ipairs(ns.Reagents.Low(items, function(id) return watched[id].count end, env.cfg.reagentThreshold)) do
+            lowReagents[low.item.id] = watched[low.item.id]
+            lowIds[#lowIds + 1] = low.item.id
         end
-        local a = triggers.Update(free, dur, combat, ammoKind and ammoCount or nil, lowIds)
+        local a = triggers.Update(free, dur, combat, ammoKind and ammoCount or nil, lowIds, inside ~= nil)
         if a then
             log(("trigger %s%s%s (bags=%s durability=%s ammo=%s combat=%s)"):format(a[1], a[2] and (" " .. a[2]) or "",
                 a[3] and (" " .. a[3]) or "",
@@ -283,11 +334,11 @@ function C.New(env)
             if a[1] == "clear" then
                 self.pending = nil
                 cancelPrompt()
-                clearVendorNav()
+                clearVendorNav(a[2], a[3]) -- only the waypoint of the request that ended
             else
                 place(a[2], a[3])
             end
-        elseif self.pending and not combat then
+        elseif self.pending and not combat and not inside then
             log("retrying the " .. self.pending .. " request")
             place(self.pending, self.pendingId)
         end
@@ -326,34 +377,201 @@ function C.New(env)
         end
     end
 
+    local function noVendorText(kind, name)
+        if kind == "reagent" then return L["No known vendor selling %s on this continent for your faction."]:format(name) end
+        if kind == "repair" then return L["No known repair vendor on this continent for your faction."] end
+        if kind == "arrow" then return L["No known vendor selling arrows on this continent for your faction."] end
+        if kind == "bullet" then return L["No known vendor selling bullets on this continent for your faction."] end
+        return L["No known vendor on this continent for your faction."]
+    end
+
     -- For /cvn test: ask the usual question for kind, ignoring triggers and combat.
     -- Returns a message when there is nothing to ask about, otherwise nil.
     function self.Test(kind)
         log("test command: " .. kind)
+        local r
         if kind == "reagent" then
-            local r = (env.reagents and env.reagents() or {})[1]
+            r = (env.reagents and env.reagents() or {})[1]
             if not r then
                 return L["No class reagent to ask about. Your class has none, or you do not know the spells that use them."]
             end
-            local v, why, onMap, x, y = findVendor(kind, r.item)
-            if why == "nopos" then
-                return L["No map position here (dungeons and some areas have none). Try again outside."]
-            elseif why == "novendor" then
-                return L["No known vendor selling %s on this continent for your faction."]:format(r.name)
-            end
-            return offer(kind, v, onMap, x, y, r.count, nil, r.name)
         end
-        local v, why, onMap, x, y = findVendor(kind)
+        local v, why, onMap, x, y = findVendor(kind, r and r.item)
         if why == "nopos" then
             return L["No map position here (dungeons and some areas have none). Try again outside."]
         elseif why == "novendor" then
-            if kind == "repair" then return L["No known repair vendor on this continent for your faction."] end
-            if kind == "arrow" then return L["No known vendor selling arrows on this continent for your faction."] end
-            if kind == "bullet" then return L["No known vendor selling bullets on this continent for your faction."] end
-            return L["No known vendor on this continent for your faction."]
+            return noVendorText(kind, r and r.name)
         end
-        offer(kind, v, onMap, x, y)
+        offer(kind, v, onMap, x, y, r and r.count, nil, r and r.name, r and r.item.id)
     end
+
+    -- Where a direct pin searches from: nil in the open world (the player's position). In an instance,
+    -- the anchor { continent, x, y, map } and which one it is ("hearth" or "last"), or nil and "none"
+    -- when neither is known. A battleground starts from the last position outside; a dungeon or raid
+    -- from the instanceAnchor setting; either falls back to the other anchor.
+    local function anchorFor(inside)
+        if not inside then return nil end
+        local first = (inside == "pvp" or env.cfg.instanceAnchor == "last") and "last" or "hearth"
+        local second = first == "last" and "hearth" or "last"
+        for _, which in ipairs({ first, second }) do
+            local at = env.anchor and env.anchor(which)
+            if at then return at, which end
+        end
+        return nil, "none"
+    end
+
+    -- A direct pin (a click on a status window row): pin the nearest target for kind at once. No
+    -- question, whatever vendorMode is, and combat does not hold it back: the player asked for it.
+    -- kind is "sell", "repair", "ammo", "reagent" (id: the item id) or "trainer" (id: the profession
+    -- name). An open question is closed, and a condition that is low counts as handled, as if the
+    -- player had answered Yes. Returns true when a target was pinned; otherwise chat says why not
+    -- (nothing is said for a row that cannot be routed to). demo: the pin is only for show, so a
+    -- low condition is not marked as handled.
+    local function direct(kind, id, demo)
+        log(("direct pin: %s%s"):format(tostring(kind), id and (" " .. tostring(id)) or ""))
+        local find, name, trade = kind, nil, nil -- find: what to search for
+        local item
+        if kind == "ammo" then
+            ammoKind, ammoCount = env.ammo()
+            if not ammoKind then log("direct pin: no ranged weapon that uses ammo") return false end
+            find = ammoKind
+        elseif kind == "reagent" then
+            item = ns.Reagents.ById(id)
+            -- An item no vendor sells (display-only) cannot be routed to.
+            if not item or item.vendor == false then log("direct pin: not an item a vendor sells") return false end
+            name = item.name
+            for _, r in ipairs(env.reagents and env.reagents() or {}) do
+                if r.item.id == id then name = r.name end
+            end
+        elseif kind == "trainer" then
+            -- Only while the profession is near its cap: otherwise the next skill check would clear the pin.
+            local near = false
+            for _, p in ipairs(ns.Professions.Within(env.skills and env.skills(), env.known or {}, env.cfg.tradeThreshold)) do
+                if p.name == id then near = true end
+            end
+            if not near then log("direct pin: profession is not near its cap") return false end
+            trade = id
+        elseif kind ~= "sell" and kind ~= "repair" then
+            return false
+        end
+
+        local inside = instance()
+        local at, which = anchorFor(inside)
+        if which == "none" then
+            say(L["No target is known yet: the addon has not seen your hearthstone point or a position outside an instance."])
+            return false
+        end
+        at = at or here()
+        if not at then
+            say(L["No map position here (dungeons and some areas have none). Try again outside."])
+            return false
+        end
+
+        local v, onMap
+        if trade then
+            v, onMap = ns.Search.NearestTrainer((env.trainerBuckets or {})[at.continent] or {}, at.x, at.y, trade, env.playerFaction, at.map)
+            if not v then
+                say(L["No known trainer for %s on this continent yet. Open a %s trainer window once and the addon will remember where it is."]:format(trade, trade))
+                return false
+            end
+            if onMap == v then onMap = nil end
+        else
+            local _
+            v, _, onMap = findVendor(find, item, at)
+            -- Only a click, never an automatic trigger, may route to an auctioneer: for something that
+            -- is bought (ammo, a reagent) that is not soulbound, with the setting on, outside instances.
+            local ah
+            if env.cfg.ahEnabled and not inside and (kind == "ammo" or kind == "reagent") and not (item and item.soulbound) then
+                ah = ns.Search.NearestFrom(env.auctionBuckets or {}, at, "auction", env.playerFaction)
+            end
+            if ah and (not v or yards(ah, 9, at.x, at.y) < yards(v, 9, at.x, at.y)) then
+                cancelPrompt()
+                log(("direct pin: auctioneer %s (npc %s) is closer"):format(ah[2], tostring(ah[1])))
+                lastKind, lastTrade = kind, nil
+                pin(ah, nil, kind, item and id or nil)
+                local where = target(ah, env.zoneName and env.zoneName(ah[3]), yards(ah, 9, at.x, at.y))
+                local text
+                if name then text = L["Navigating to %s to buy %s at the auction house."]:format(where, name)
+                else text = L["Navigating to %s to buy ammo at the auction house."]:format(where) end
+                say(text)
+                if env.notify and env.cfg.autoNotice ~= false then env.notify(text) end
+                if not demo and triggers.Take(kind, id) then self.pending, self.pendingId = nil, nil end
+                return true
+            end
+            if not v then say(noVendorText(find, name)) return false end
+        end
+
+        cancelPrompt() -- a question about something else is answered by this choice
+        autoPin(trade and "trainer" or find, v, onMap, at.x, at.y, trade, name, item and id or nil)
+        if which == "hearth" then
+            say(L["You are in an instance, so the search started from your hearthstone point."])
+        elseif which == "last" then
+            say(L["You are in an instance, so the search started from your last position outside."])
+        end
+        -- A low condition is now handled and active, so it ends the usual way and is not asked about.
+        if not demo and not trade and triggers.Take(kind, id) then self.pending, self.pendingId = nil, nil end
+        return true
+    end
+
+    function self.Go(kind, id) return direct(kind, id) end
+
+    -- Take back what the running demo did: the waypoint it set (unless something else replaced it)
+    -- and the question it asked (unless a newer question or a cancel came after it).
+    local function endDemo()
+        if demoHandle and demoHandle == handle then
+            log("demo: waypoint cleared")
+            clearNav()
+        end
+        if demoPrompt and demoPrompt == promptId then cancelPrompt() end
+        demoHandle, demoPrompt = nil, nil
+    end
+
+    -- For /cvn demo: one random warning through the usual code, taken back after DEMO_SECONDS.
+    -- roll(n) gives a whole number from 1 to n. The warning is the notice of a pin made without
+    -- asking, the question, or a direct pin, for a random kind of vendor near the player; settings
+    -- are read as usual and never changed. A demo that is still running is ended first, and its
+    -- timer then does nothing. done() (optional) is called when this demo's time is up, after its
+    -- waypoint and question are gone. Returns false, doing nothing, when there are no timers.
+    local DEMO_KINDS = { "sell", "repair", "arrow", "bullet" }
+    function self.Demo(roll, done)
+        if not env.after then return false end
+        endDemo()
+        demoToken = demoToken + 1
+        local mine = demoToken
+        local armed = env.after(C.DEMO_SECONDS, function()
+            if mine ~= demoToken then return end -- a newer demo is running: it has its own timer
+            log("demo: over")
+            endDemo()
+            if done then done() end
+        end)
+        if not armed then return false end
+        local way = roll(3)
+        if way == 3 then
+            local kind = DEMO_KINDS[roll(2)]
+            log("demo: direct pin, " .. kind)
+            if direct(kind, nil, true) then demoHandle = handle end
+            return true
+        end
+        local kind = DEMO_KINDS[roll(#DEMO_KINDS)]
+        log(("demo: %s, %s"):format(way == 1 and "pin without asking" or "question", kind))
+        local v, why, onMap, x, y = findVendor(kind)
+        if why == "nopos" then
+            say(L["No map position here (dungeons and some areas have none). Try again outside."])
+        elseif why == "novendor" then
+            say(noVendorText(kind))
+        elseif way == 1 then
+            autoPin(kind, v, onMap, x, y)
+            demoHandle = handle
+        else
+            demoPrompt = promptId + 1 -- the id ask gives this question
+            ask(kind, v, onMap, x, y, nil, nil, nil, nil, function() demoHandle, demoPrompt = handle, nil end)
+        end
+        return true
+    end
+
+    -- What the current waypoint is for: "sell", "repair", "ammo", "reagent" (plus the item id) or
+    -- "trainer"; nil when the addon has no waypoint set.
+    function self.PinKind() return pinKind, pinId end
 
     return self
 end

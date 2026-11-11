@@ -28,6 +28,7 @@ local function world(over)
         skills = function() return w.skills end,
         known = w.known,
         trainerBuckets = w.trainers or {},
+        auctionBuckets = w.auction,
         say = function(t) w.says[#w.says + 1] = t end,
         notify = (not w.noNotify) and function(t) w.notes[#w.notes + 1] = t end or nil,
         zoneName = function(id) return w.zones and w.zones[id] end,
@@ -35,6 +36,14 @@ local function world(over)
         freeSlots = function() return w.free end,
         lowestDurability = function() return w.dur end,
         inCombat = function() return w.combat end,
+        instanceType = function() return w.instance end,
+        anchor = function(which) return w.anchors and w.anchors[which] end,
+        after = (not w.noAfter) and function(s, fn)
+            if w.noTimers then return false end
+            w.timers = w.timers or {}
+            w.timers[#w.timers + 1] = { s = s, fn = fn }
+            return true
+        end or nil,
         playerPos = function() if w.pos then return w.pos[1], w.pos[2], w.pos[3], w.pos[4] end end,
         playerFaction = 1,
         buckets = w.buckets or { [1] = VENDORS },
@@ -52,6 +61,7 @@ local function world(over)
     }
     for k, v in pairs(w.cfg or {}) do env.cfg[k] = v end
     w.c = ns.Controller.New(env)
+    w.liveCfg = env.cfg
     return w
 end
 
@@ -889,5 +899,401 @@ w = reagent({ buckets = { [1] = { RV[1] } } })
 eq(w.c.Test("reagent"):find("Arcane Powder", 1, true) ~= nil, true, "no seller: says so")
 w = reagent({ pos = false })
 eq(w.c.Test("reagent"):find("No map position", 1, true) ~= nil, true, "no position")
+
+-- Reagents: the controller decides "low" with Reagents.Low, the test the status window also uses.
+local realLow = ns.Reagents.Low
+local lowCalls = {}
+ns.Reagents.Low = function(items, count, threshold)
+    lowCalls[#lowCalls + 1] = { n = #items, count = count(items[1].id), threshold = threshold }
+    return {}
+end
+w = reagent({ reagents = { { item = POWDER, count = 1, name = "Arcane Powder" } } })
+w.c.Evaluate()
+ns.Reagents.Low = realLow
+eq(#lowCalls, 1, "Evaluate asks Reagents.Low")
+eq(lowCalls[1].n .. ":" .. lowCalls[1].count .. ":" .. lowCalls[1].threshold, "1:1:5", "with the watched items, their counts and the threshold")
+eq(w.setCount, 0, "and follows its answer: nothing low, nothing asked")
+
+-- Instances -----------------------------------------------------------------------------------------------
+-- Triggers wait inside and keep their latch: the question comes after leaving.
+w = world({ free = 1, instance = "pvp", pos = { 7, 0, 0 } }) -- a battleground has a position but no vendors
+w.c.Evaluate()
+eq(w.setCount, 0, "battleground: nothing pinned")
+eq(#w.prompts, 0, "battleground: nothing asked")
+w.instance, w.pos = "none", { 1, 0, 0 }
+w.c.Evaluate()
+eq(w.setCount, 1, "asked after leaving with full bags")
+w = world({ dur = 5, instance = "party" })
+w.c.Evaluate()
+eq(#w.prompts, 0, "dungeon: nothing asked")
+w.instance = nil
+w.c.Evaluate()
+eq(w.prompts[1].kind, "repair", "asked outside (unknown instance state is the open world)")
+w = world({ free = 1, instance = "raid" })
+w.c.Evaluate()
+w.free = 20; w.instance = "none"
+w.c.Evaluate()
+eq(#w.prompts, 0, "resolved before leaving: never asked")
+-- A request waiting for a position is not retried inside.
+w = world({ free = 1, pos = false })
+w.c.Evaluate()
+w.instance, w.pos = "pvp", { 7, 0, 0 }
+w.c.Evaluate()
+eq(w.c.pending, "sell", "the waiting request is kept inside")
+w.instance, w.pos = "none", { 1, 0, 0 }
+w.c.Evaluate()
+eq(w.setCount, 1, "and placed after leaving")
+-- Professions wait too.
+w = trade({ instance = "party" })
+w.c.OnCraft()
+eq(#w.prompts, 0, "profession question waits in a dungeon")
+w.instance = "none"
+w.c.OnCraft()
+eq(#w.prompts, 1, "and is asked outside")
+
+-- Pin kinds --------------------------------------------------------------------------------------------------
+w = world({ free = 1 })
+eq(w.c.PinKind(), nil, "no waypoint: no kind")
+w.c.Evaluate()
+eq(w.c.PinKind(), "sell", "a sell pin knows what it is for")
+w.c.OnMerchantShow()
+eq(w.c.PinKind(), nil, "cleared with the waypoint")
+w = world({ ammoKind = "arrow", ammoCount = 10 })
+w.c.Evaluate()
+eq(w.c.PinKind(), "ammo", "arrows and bullets are an ammo pin")
+w = reagent()
+w.c.Evaluate()
+local pk, pid = w.c.PinKind()
+eq(pk .. ":" .. pid, "reagent:17020", "a reagent pin knows its item")
+w = trade(); w.c.OnCraft()
+eq(w.c.PinKind(), "trainer", "a trainer pin")
+w = world({ free = 1, nilNav = true })
+w.c.Evaluate()
+eq(w.c.PinKind(), nil, "no waypoint could be set: no kind")
+
+-- A trigger that ends removes only a pin of its own kind. Sell declined, ammo pinned by a click,
+-- then the bags are emptied: the ammo pin stays.
+w = world({ free = 1, ammoKind = "arrow", ammoCount = 900, autoAccept = false })
+w.c.Evaluate()
+eq(w.prompts[1].kind, "sell", "sell asked")
+w.open = false -- the player said No
+eq(w.c.Go("ammo"), true, "ammo pinned by a click")
+eq(w.last[2], "Arrow Man", "the arrow vendor")
+w.free = 20
+w.c.Evaluate()
+eq(w.clearCount, 0, "sell ended: the ammo pin stays")
+eq(w.c.PinKind(), "ammo", "still the ammo pin")
+w.c.OnMerchantShow()
+eq(w.clearCount, 1, "a merchant window clears every vendor pin")
+-- Its own kind still clears.
+w = world({ free = 1 })
+w.c.Evaluate()
+w.free = 20
+w.c.Evaluate()
+eq(w.clearCount, 1, "sell ended: the sell pin is cleared")
+-- One reagent ending does not remove another reagent's pin.
+w = reagent({ autoAccept = false, reagents = { { item = POWDER, count = 1, name = "Arcane Powder" }, { item = PORTALS, count = 9, name = "Rune of Portals" } } })
+w.c.Evaluate()
+w.open = false
+eq(w.c.Go("reagent", 17032), true, "the other reagent pinned by a click")
+w.reagents[1].count = 50
+w.c.Evaluate()
+eq(w.clearCount, 0, "powder restocked: the rune pin stays")
+
+-- Direct pin (Go) --------------------------------------------------------------------------------------------
+-- Ask mode: pinned at once, no question, and the usual notice says why.
+w = world({ dur = 100, zones = { [100] = "Elwynn" } })
+eq(w.c.Go("repair"), true, "pinned")
+eq(#w.prompts, 0, "ask mode: no question")
+eq(w.last[2], "Far Repairer", "the nearest repair vendor")
+eq(w.says[1], "Navigating to Far Repairer (Elwynn, 90 yards) to repair your gear.", "chat says why")
+eq(w.notes[1], w.says[1], "and so does the on-screen notice")
+eq(#w.says, 1, "nothing about anchors in the open world")
+eq(w.c.PinKind(), "repair", "the pin knows its kind")
+w = world({ cfg = { autoNotice = false } })
+w.c.Go("sell")
+eq(#w.notes, 0, "notice switched off: chat only")
+eq(#w.says, 1, "chat line still printed")
+-- Combat does not hold it back.
+w = world({ combat = true })
+eq(w.c.Go("sell"), true, "pinned in combat")
+eq(w.last[2], "Near Seller", "nearest vendor")
+-- The map preference chooses between the two candidates.
+w = mapped({ free = 20 })
+w.c.Go("sell")
+eq(w.last[2], "Home Seller", "prefers the player's map by default")
+eq(w.says[1]:find("The other choice was Other Seller", 1, true) ~= nil, true, "names the other choice")
+w = mapped({ free = 20, cfg = { vendorPrefer = "distance" } })
+w.c.Go("sell")
+eq(w.last[2], "Other Seller", "distance preference: the closest")
+-- Ammo follows the weapon; no weapon, nothing.
+w = world({ ammoKind = "bullet", ammoCount = 900 })
+w.c.Go("ammo")
+eq(w.last[2], "Gun Shop", "bullets for a gun")
+eq(w.says[1]:find(" to buy ammo.", 1, true) ~= nil, true, "reason is ammo")
+w = world({ ammoKind = nil })
+eq(w.c.Go("ammo"), false, "no ranged weapon: nothing")
+eq(w.setCount + #w.says, 0, "silently")
+-- Reagents by item id, named in the notice.
+w = reagent({ reagents = { { item = POWDER, count = 80, name = "Arkanpulver" } } })
+eq(w.c.Go("reagent", 17020), true, "reagent pinned")
+eq(w.last[2], "Powder Seller", "a vendor that sells it")
+eq(w.says[1]:find(" to buy Arkanpulver.", 1, true) ~= nil, true, "the game's name for it")
+w = reagent({ reagents = {} })
+w.c.Go("reagent", 17032)
+eq(w.says[1]:find(" to buy Rune of Portals.", 1, true) ~= nil, true, "falls back to the table's name")
+eq(w.c.Go("reagent", 1), false, "not a reagent: nothing")
+eq(w.c.Go("nonsense"), false, "unknown kind: nothing")
+-- A display-only item cannot be routed to.
+local shard = { id = 6265, class = "WARLOCK", name = "Soul Shard", vendor = false }
+local realById = ns.Reagents.ById
+ns.Reagents.ById = function(id) if id == 6265 then return shard end return realById(id) end
+w = reagent()
+eq(w.c.Go("reagent", 6265), false, "display-only item: nothing pinned")
+eq(w.setCount + #w.says + #w.prompts, 0, "and nothing said or asked")
+ns.Reagents.ById = realById
+-- No vendor and no position say so.
+w = world({ pos = { 7, 0, 0 } })
+eq(w.c.Go("repair"), false, "no vendor: nothing pinned")
+eq(w.says[1], "No known repair vendor on this continent for your faction.", "chat says so")
+w = reagent({ buckets = { [1] = { RV[1] } } })
+w.c.Go("reagent", 17020)
+eq(w.says[1], "No known vendor selling Arcane Powder on this continent for your faction.", "names the reagent")
+w = world({ pos = false })
+eq(w.c.Go("sell"), false, "no position: nothing pinned")
+eq(w.says[1], "No map position here (dungeons and some areas have none). Try again outside.", "chat says so")
+-- An open question about something else is closed, and its late Yes does nothing.
+w = world({ free = 1, autoAccept = false })
+w.c.Evaluate()
+local cancelsBefore = w.cancelCount
+w.c.Go("repair")
+eq(w.cancelCount, cancelsBefore + 1, "the open question is closed")
+eq(w.open, false, "question gone")
+w.prompts[1].accept()
+eq(w.last[2], "Far Repairer", "a late Yes on the old question does not move the pin")
+w = world({ free = 1, autoAccept = false, pos = { 7, 0, 0 } })
+w.c.Evaluate()
+cancelsBefore = w.cancelCount
+w.c.Go("repair")
+eq(w.cancelCount, cancelsBefore, "nothing found: the question stays")
+-- A low condition counts as handled: not asked again, and the pin ends when it resolves.
+w = world({ free = 1, combat = true, autoAccept = false })
+w.c.Evaluate()
+w.c.Go("sell")
+w.combat = false
+w.c.Evaluate()
+eq(#w.prompts, 0, "clicked while low: not asked about afterwards")
+w.free = 20
+w.c.Evaluate()
+eq(w.clearCount, 1, "resolved: the clicked pin is cleared")
+-- Not low: the pin stays until a merchant window.
+w = world({ free = 20 })
+w.c.Go("sell")
+w.c.Evaluate()
+eq(w.clearCount, 0, "not low: nothing clears it")
+w.c.OnMerchantShow()
+eq(w.clearCount, 1, "until a merchant window opens")
+-- A request waiting for a position is dropped once the click handles it.
+w = world({ free = 1, pos = false, autoAccept = false })
+w.c.Evaluate()
+eq(w.c.pending, "sell", "waiting for a position")
+w.pos = { 1, 0, 0 }
+w.c.Go("sell")
+eq(w.c.pending, nil, "the click took it over")
+-- Profession rows: only while within the threshold.
+w = trade({ autoAccept = false })
+eq(w.c.Go("trainer", "Mining"), true, "near the cap: pinned")
+eq(#w.prompts, 0, "no question")
+eq(w.last[2], "Near Miner", "nearest trainer for it")
+eq(w.says[1]:find(" to train Mining.", 1, true) ~= nil, true, "reason is training")
+eq(w.c.PinKind(), "trainer", "a trainer pin")
+w.c.OnCraft()
+eq(w.clearCount, 0, "the next skill check keeps it")
+w = trade({ skills = mining(50) })
+eq(w.c.Go("trainer", "Mining"), false, "far from the cap: nothing")
+eq(w.setCount + #w.says, 0, "silently")
+w = trade({ trainers = {} })
+eq(w.c.Go("trainer", "Mining"), false, "no trainer known")
+eq(w.says[1]:find("No known trainer for Mining", 1, true) ~= nil, true, "chat says so")
+
+-- Direct pin inside an instance: the search starts from an anchor, and chat says which.
+local HEARTH, LAST = { continent = 1, x = 95, y = 0, map = 100 }, { continent = 1, x = 48, y = 0, map = 100 }
+w = world({ instance = "party", pos = false, anchors = { hearth = HEARTH, last = LAST } })
+eq(w.c.Go("sell"), true, "dungeon: pinned although there is no position")
+eq(w.last[2], "Far Repairer", "default anchor: closest to the hearthstone point")
+eq(w.says[1]:find("(5 yards)", 1, true) ~= nil, true, "distance is from the anchor: " .. w.says[1])
+eq(w.says[2], "You are in an instance, so the search started from your hearthstone point.", "chat names the anchor")
+w = world({ instance = "raid", cfg = { instanceAnchor = "last" }, anchors = { hearth = HEARTH, last = LAST } })
+w.c.Go("sell")
+eq(w.last[2], "Arrow Man", "anchor setting last: closest to the last position outside")
+eq(w.says[2], "You are in an instance, so the search started from your last position outside.", "chat names the anchor")
+w = world({ instance = "party", anchors = { last = LAST } })
+w.c.Go("sell")
+eq(w.last[2], "Arrow Man", "hearthstone point unknown: falls back to the last position")
+w = world({ instance = "party", cfg = { instanceAnchor = "last" }, anchors = { hearth = HEARTH } })
+w.c.Go("sell")
+eq(w.last[2], "Far Repairer", "last position unknown: falls back to the hearthstone point")
+w = world({ instance = "pvp", pos = { 7, 0, 0 }, cfg = { instanceAnchor = "hearth" }, anchors = { hearth = HEARTH, last = LAST } })
+w.c.Go("sell")
+eq(w.last[2], "Arrow Man", "battleground: always the last position outside")
+w = world({ instance = "party", anchors = {} })
+eq(w.c.Go("sell"), false, "no anchor known: nothing pinned")
+eq(w.says[1], "No target is known yet: the addon has not seen your hearthstone point or a position outside an instance.", "chat says so")
+eq(w.setCount, 0, "no waypoint")
+w = world({ instance = "party", anchors = { hearth = { continent = 7, x = 0, y = 0 } } })
+eq(w.c.Go("repair"), false, "no vendor near the anchor")
+eq(w.says[1], "No known repair vendor on this continent for your faction.", "chat says so")
+w = trade({ instance = "party", pos = false, anchors = { hearth = HEARTH } })
+w.c.Go("trainer", "Mining")
+eq(w.last[2], "Far Miner", "trainers are searched from the anchor too")
+
+-- Auction house routing (Go only) --------------------------------------------------------------------------
+-- { npcId, name, uiMapID, mx, my, faction, nil, 0, wx, wy }
+local function auction(over)
+    local o = { buckets = { [1] = RV }, auction = { [1] = { { 90, "Auctioneer Near", 100, 0.2, 0.1, 0, nil, 0, 20, 0 } } },
+                cfg = { ahEnabled = true }, reagents = { { item = POWDER, count = 3, name = "Arcane Powder" } } }
+    for k, v in pairs(over or {}) do o[k] = v end
+    return world(o)
+end
+w = auction({ pos = { 1, 20, 0 } })
+eq(w.c.Go("reagent", 17020), true, "pinned")
+eq(w.last[2], "Auctioneer Near", "auctioneer closer than the powder seller")
+eq(w.says[1]:find("at the auction house", 1, true) ~= nil, true, "notice says to buy at the auction house: " .. w.says[1])
+eq(w.c.PinKind(), "reagent", "still a reagent pin")
+w = auction({ pos = { 1, 25, 0 } })
+w.c.Go("reagent", 17020)
+eq(w.last[2], "Powder Seller", "vendor closer: the vendor")
+w = auction({ pos = { 1, 20, 0 }, cfg = { ahEnabled = false } })
+w.c.Go("reagent", 17020)
+eq(w.last[2], "Powder Seller", "setting off: vendors only")
+w = auction({ pos = { 1, 20, 0 }, cfg = {} })
+w.c.Go("reagent", 17020)
+eq(w.last[2], "Powder Seller", "setting unset: vendors only")
+w = auction({ pos = { 1, 20, 0 }, buckets = { [1] = {} } })
+eq(w.c.Go("reagent", 17020), true, "no vendor known but an auctioneer is")
+eq(w.last[2], "Auctioneer Near", "the auctioneer is pinned")
+w = auction({ instance = "party", anchors = { last = { continent = 1, x = 20, y = 0 } } })
+w.c.Go("reagent", 17020)
+eq(w.last[2], "Powder Seller", "in an instance the setting has no effect")
+POWDER.soulbound = true
+w = auction({ pos = { 1, 20, 0 } })
+w.c.Go("reagent", 17020)
+POWDER.soulbound = nil
+eq(w.last[2], "Powder Seller", "a soulbound item never goes to an auctioneer")
+w = auction({ pos = { 1, 20, 0 }, ammoKind = "arrow", ammoCount = 5, buckets = { [1] = VENDORS } })
+w.c.Go("ammo")
+eq(w.last[2], "Auctioneer Near", "ammo can go to an auctioneer")
+w = auction({ pos = { 1, 20, 0 }, dur = 50, buckets = { [1] = VENDORS } })
+w.c.Go("repair")
+eq(w.last[2], "Far Repairer", "repair never goes to an auctioneer")
+-- Automatic triggers stay vendor-only.
+w = auction({ pos = { 1, 20, 0 } })
+w.c.Evaluate()
+eq(w.prompts[1].vendor[2], "Powder Seller", "the question offers vendors only")
+w = auction({ pos = { 1, 20, 0 }, auction = { [1] = {} } })
+w.c.Go("reagent", 17020)
+eq(w.last[2], "Powder Seller", "no auctioneer known: the vendor")
+
+-- Demo -------------------------------------------------------------------------------------------------------
+-- rolls: a fixed list of rolls in place of the random ones. First the warning (1 pin without asking,
+-- 2 question, 3 direct pin), then the kind (1 sell, 2 repair, 3 arrows, 4 bullets).
+local function rolls(...)
+    local list, i = { ... }, 0
+    return function(n) i = i + 1; assert(list[i] and list[i] <= n, "roll out of range"); return list[i] end
+end
+local function flat(t)
+    local out = {}
+    for k, v in pairs(t) do out[#out + 1] = tostring(k) .. "=" .. tostring(v) end
+    table.sort(out)
+    return table.concat(out, ",")
+end
+-- Pin without asking, in ask mode: the usual notice, and the pin goes after 10 seconds.
+w = world({ autoAccept = false })
+local saved = flat(w.liveCfg)
+local dones = 0
+eq(w.c.Demo(rolls(1, 2), function() dones = dones + 1 end), true, "demo started")
+eq(#w.prompts, 0, "pin without asking: no question")
+eq(w.last[2], "Far Repairer", "the rolled kind (repair) is pinned through the usual search")
+eq(w.says[1], "Navigating to Far Repairer (90 yards) to repair your gear.", "the usual chat line")
+eq(w.notes[1], w.says[1], "and the usual on-screen notice")
+eq(#w.timers .. "/" .. w.timers[1].s, "1/10", "one timer, 10 seconds")
+eq(w.clearCount .. "/" .. dones, "0/0", "nothing is taken back before the timer")
+w.timers[1].fn()
+eq(w.clearCount, 1, "time up: the demo's pin is cleared")
+eq(w.c.PinKind(), nil, "no waypoint left")
+eq(dones, 1, "and the caller is told")
+eq(flat(w.liveCfg), saved, "pin without asking: settings exactly as before")
+-- Question: shown through the usual dialog, closed after 10 seconds, a late Yes does nothing.
+w = world({ autoAccept = false, cfg = { vendorMode = "auto" } })
+saved = flat(w.liveCfg)
+w.c.Demo(rolls(2, 3))
+eq(#w.prompts .. "/" .. w.prompts[1].kind .. "/" .. w.prompts[1].vendor[2], "1/arrow/Arrow Man", "question asked even in auto mode")
+eq(w.setCount, 0, "nothing pinned until it is answered")
+local cancels = w.cancelCount
+w.timers[1].fn()
+eq(w.cancelCount, cancels + 1, "time up: the demo's question is closed")
+w.prompts[1].accept()
+eq(w.setCount, 0, "a Yes after the demo does nothing")
+eq(flat(w.liveCfg), saved, "question: settings exactly as before")
+-- Question answered Yes: that pin is the demo's and goes with it.
+w = world({ autoAccept = false })
+w.c.Demo(rolls(2, 1))
+w.prompts[1].accept()
+eq(w.setCount .. "/" .. w.clearCount, "1/0", "answered: pinned")
+w.timers[1].fn()
+eq(w.clearCount, 1, "time up: the pin from the demo's question is cleared")
+-- Direct pin: the row-click path. Bags that really are low are still asked about afterwards.
+w = world({ autoAccept = false, free = 1, combat = true })
+saved = flat(w.liveCfg)
+w.c.Evaluate() -- in combat: the low bags are seen but not asked about yet
+w.c.Demo(rolls(3, 1))
+eq(w.last[2], "Near Seller", "direct pin, in combat like any row click")
+eq(#w.prompts, 0, "no question")
+w.timers[1].fn()
+eq(w.clearCount, 1, "time up: cleared")
+w.combat = false
+w.c.Evaluate()
+eq(#w.prompts, 1, "the demo did not use up the real warning")
+eq(flat(w.liveCfg), saved, "direct pin: settings exactly as before")
+-- A second demo ends the first and restarts the 10 seconds: the first timer no longer does anything.
+w = world({ autoAccept = false })
+dones = 0
+w.c.Demo(rolls(1, 1), function() dones = dones + 1 end)
+w.c.Demo(rolls(2, 2), function() dones = dones + 10 end)
+eq(w.clearCount, 1, "the first demo's pin is cleared when the second starts")
+eq(#w.prompts .. "/" .. tostring(w.open), "1/true", "the second demo's question is open")
+cancels = w.cancelCount
+w.timers[1].fn()
+eq(w.cancelCount .. "/" .. tostring(w.open) .. "/" .. dones, cancels .. "/true/0", "the first timer does not cut the second demo short")
+w.timers[2].fn()
+eq(tostring(w.open) .. "/" .. dones, "false/10", "the second timer ends it")
+-- A waypoint set by something else during the demo is not the demo's to clear; nor is a newer question.
+w = world({ autoAccept = false })
+w.c.Demo(rolls(1, 1))
+w.c.Go("repair")
+local clears = w.clearCount
+w.timers[1].fn()
+eq(w.clearCount .. "/" .. tostring(w.c.PinKind()), clears .. "/repair", "a real pin made during the demo stays")
+w = world({ autoAccept = false })
+w.c.Demo(rolls(2, 1))
+w.c.Test("repair")
+cancels = w.cancelCount
+w.timers[1].fn()
+eq(w.cancelCount .. "/" .. tostring(w.open), cancels .. "/true", "a newer question stays open")
+-- Nowhere to go: chat says so, the demo still runs its time.
+w = world({ pos = false })
+eq(w.c.Demo(rolls(1, 1)), true, "no position: still a demo")
+eq(w.says[1], "No map position here (dungeons and some areas have none). Try again outside.", "chat says why there is no warning")
+w = world({ pos = { 7, 0, 0 } })
+w.c.Demo(rolls(2, 2))
+eq(w.says[1], "No known repair vendor on this continent for your faction.", "no vendor: chat says so")
+w.timers[1].fn()
+eq(w.clearCount .. "/" .. w.setCount, "0/0", "nothing to take back")
+-- No timers: no demo at all, since nothing could take it back.
+w = world({ noTimers = true })
+eq(w.c.Demo(rolls(1, 1)), false, "timers refuse: no demo")
+eq(w.setCount, 0, "nothing pinned")
+w = world({ noAfter = true })
+eq(w.c.Demo(rolls(1, 1)), false, "no timer function: no demo")
 
 H.done()

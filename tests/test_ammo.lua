@@ -68,6 +68,8 @@ local function run(cfg, over)
 end
 local b, s = run()
 eq(#b, 4, "default: buys at once")
+local _, spentCost = M.OnMerchant({ ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped" }, { kind = function() return "arrow" end, equippedID = function() return 11 end, level = function() return 30 end, offers = function() return offers end, money = function() return 100000 end, space = function() return 400 end, buy = function() end, say = function() end })
+eq(spentCost, 1600, "returns what an immediate purchase cost")
 eq(b[1], 2, "buys the equipped item's offer")
 eq(s[1], "Bought 400 Sharp for 16s 0c.", "reports")
 

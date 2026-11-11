@@ -3,6 +3,7 @@
 ## Delegation
 - Use subagents for self-contained work that would clutter the main context: broad codebase searches, independent research threads, parallel edits across unrelated files, and reviews.
 - Pick the subagent model by difficulty: haiku for search and lookup, sonnet for routine implementation, opus (or inherit) for design, debugging, and anything requiring judgment.
+- When delegating UI work, tell the subagent to check the Blizzard UI source and popular addons for the standard control first (see Conventions).
 - Do small or tightly coupled work inline. Don't delegate just to delegate.
 
 ## Releases
@@ -36,3 +37,5 @@ Update the supporting docs in the same change as any user-visible addon behavior
 - **New files go in both TOC files in the same order** (`make check` fails otherwise). The `Locales` files load first.
 - **Tests:** `make test`. Each module has a `tests/test_*.lua`; new behavior needs a test, and a test is only trusted once breaking the code makes it fail.
 - **Chat text** never contains a raw `|`; `Core.lua` doubles it.
+- **Persistent visuals are OLED-safe.** Anything that stays on screen (the status window, any future HUD) defaults to a pure black background (never grey; the user may pick another color), draws nothing (no fill, border or texture) when its opacity is 0, keeps text and icons dimmable, and avoids bright fixed-position fills, so static elements do not burn in.
+- **Use the game's own UI patterns before inventing one.** For any new control or screen (settings rows, color pickers, buttons, frames), find how the Blizzard UI or popular addons already do it and use that. Build a custom control only when no standard one exists, and then keep the standard control as the fallback where the custom one is unavailable.

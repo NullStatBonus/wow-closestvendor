@@ -71,7 +71,8 @@ end
 --   offers() -> list (see Pick)|nil      money() -> copper|nil
 --   space(id, kind) -> items|nil         buy(index)                 say(text)
 --   confirm(text, accept)                asks the player; calls accept() only on Yes
--- Returns the number of purchases made (0 when none, or when waiting for a Yes).
+-- Returns the number of purchases made (0 when none, or when waiting for a Yes) and, when it
+-- bought at once, what that cost (so a reagent purchase right after knows the money left).
 function M.OnMerchant(cfg, env)
     local function log(text) if env.log then env.log("ammo buy: " .. text) end end
     if not cfg.ammoBuyEnabled then log("off") return 0 end
@@ -110,5 +111,5 @@ function M.OnMerchant(cfg, env)
         return 0
     end
     buy()
-    return n
+    return n, cost
 end

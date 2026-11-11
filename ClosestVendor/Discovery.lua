@@ -42,6 +42,22 @@ function D.RecordTrainer(learned, rec, trades)
     return true
 end
 
+-- Auctioneers: learned[npcId] = { npcId, name, uiMapID, mx, my, faction }. A learned record replaces
+-- the shipped one with the same id (see Merge). Returns true if stored or changed.
+function D.RecordAuctioneer(learned, rec)
+    local id = rec and rec[1]
+    if type(id) ~= "number" or id <= 0 then return false end
+    local new = { rec[1], rec[2], rec[3], rec[4], rec[5], rec[6] }
+    local old = learned[id]
+    if old then
+        local same = true
+        for i = 1, 6 do if old[i] ~= new[i] then same = false break end end
+        if same then return false end
+    end
+    learned[id] = new
+    return true
+end
+
 -- Shipped list plus learned records; a learned record replaces a shipped one with the same id.
 -- Does not modify its inputs.
 function D.Merge(shipped, learned)

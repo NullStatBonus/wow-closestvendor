@@ -128,6 +128,78 @@ function A.playerWorldPos()
     if continent then return continent, wx, wy, map end
 end
 
+-- Where the player is: "none" (open world), "party" (dungeon), "raid" or "pvp" (battleground or
+-- arena); nil when the game cannot say. Any other kind of instance counts as a dungeon.
+function A.instanceType()
+    local inside, kind = call("IsInInstance", IsInInstance)
+    if inside == nil and kind == nil then return nil end
+    if not inside or kind == "none" then return "none" end
+    if kind == "pvp" or kind == "arena" then return "pvp" end
+    if kind == "raid" then return "raid" end
+    return "party"
+end
+
+-- The name of the place the hearthstone is bound to, or nil. The game gives no position for it.
+function A.bindLocation()
+    local name = call("GetBindLocation", GetBindLocation)
+    if type(name) == "string" and name ~= "" then return name end
+end
+
+-- True or false whether a Shift key is held; nil when the game cannot say.
+function A.shiftDown()
+    local down = call("IsShiftKeyDown", IsShiftKeyDown)
+    if down == nil then return nil end
+    return down and true or false
+end
+
+-- True when the game has a colour picker window; nil when it has none.
+function A.hasColorPicker()
+    if type(ColorPickerFrame) == "table" then return true end
+end
+
+-- True when the game's colour picker takes the calls the game's own settings colour swatch makes
+-- (ColorPickerFrame:SetupColorPickerAndShow and :GetPreviousValues); nil when not.
+function A.hasSwatchPicker()
+    local frame = ColorPickerFrame
+    if type(frame) == "table" and type(frame.SetupColorPickerAndShow) == "function"
+            and type(frame.GetPreviousValues) == "function" then
+        return true
+    end
+end
+
+-- True when the settings page can hold a button (the game's CreateSettingsButtonInitializer); nil when not.
+function A.hasSettingsButton()
+    if type(CreateSettingsButtonInitializer) == "function" then return true end
+end
+
+-- Open the game's colour picker at r, g, b (0 to 1, no opacity). onPick(r, g, b) is called for every
+-- colour tried, and with the starting colour when the player cancels. True when the picker opened;
+-- nothing, and one failure reported, when it is missing or differs. Newer clients take one table,
+-- older ones are set up field by field.
+function A.pickColor(r, g, b, onPick)
+    local frame = ColorPickerFrame
+    if type(frame) ~= "table" then fail("ColorPickerFrame", "missing") return end
+    local function picked()
+        local ok, nr, ng, nb = pcall(frame.GetColorRGB, frame)
+        if ok and type(nr) == "number" and type(ng) == "number" and type(nb) == "number" then onPick(nr, ng, nb) end
+    end
+    local function cancelled() onPick(r, g, b) end
+    local ok, err
+    if type(frame.SetupColorPickerAndShow) == "function" then
+        ok, err = pcall(frame.SetupColorPickerAndShow, frame,
+            { r = r, g = g, b = b, hasOpacity = false, swatchFunc = picked, cancelFunc = cancelled })
+    else
+        ok, err = pcall(function()
+            frame.hasOpacity = false
+            frame.func, frame.cancelFunc = picked, cancelled
+            frame:SetColorRGB(r, g, b)
+            frame:Show()
+        end)
+    end
+    if not ok then fail("ColorPickerFrame", err) return end
+    return true
+end
+
 -- Show text on screen for about NOTICE_SECONDS, silently, in a frame of our own (the game's error
 -- frame fades too soon and is shared with real errors). A newer message replaces the one showing and
 -- restarts the time. Nothing happens, and one failure is reported, where the client has no frames.
@@ -253,6 +325,14 @@ function A.npc()
     return id, name
 end
 
+-- The auctioneer whose window just opened: { id, name, faction }, or nil when the open window's NPC
+-- cannot be identified as a creature.
+function A.auctioneer()
+    local id, name = A.npc()
+    if not id then return end
+    return { id = id, name = name, faction = A.factionId("npc") }
+end
+
 -- What the open merchant window sells: an ammo code (0 none, 1 arrows, 2 bullets, 3 both) and a
 -- reagent mask (bits of the Reagents table). One pass over the offered items.
 local function merchantScan()
@@ -358,7 +438,10 @@ function A.money() return call("GetMoney", GetMoney) end
 -- One slot of a bag: false if empty, { id, count } if filled; nil if it cannot be read.
 local function bagSlot(bag, slot)
     local f = (C_Container and C_Container.GetContainerItemInfo) or GetContainerItemInfo
-    local a, b = call("GetContainerItemInfo", f, bag, slot)
+    -- Called directly so a missing or failing function (unknown) is not taken for an empty slot.
+    if type(f) ~= "function" then fail("GetContainerItemInfo", "missing") return end
+    local ok, a, b = pcall(f, bag, slot)
+    if not ok then fail("GetContainerItemInfo", a) return end
     if type(a) == "table" then return a.itemID and { a.itemID, a.stackCount or 1 } or false end
     if a == nil then return false end
     local id = call("GetContainerItemID", (C_Container and C_Container.GetContainerItemID) or GetContainerItemID, bag, slot)
@@ -385,9 +468,63 @@ function A.ammoSpace(id, kind)
     if readable then return ns.Ammo.Space(slots, stack, id) end
 end
 
--- Buy one purchase (one batch) of merchant item `index`.
-function A.buyMerchantItem(index)
-    call("BuyMerchantItem", BuyMerchantItem, index)
+-- Buy one purchase (one batch) of merchant item `index`, or `quantity` single items of it.
+function A.buyMerchantItem(index, quantity)
+    if quantity then call("BuyMerchantItem", BuyMerchantItem, index, quantity)
+    else call("BuyMerchantItem", BuyMerchantItem, index) end
+end
+
+-- Buying reagents -------------------------------------------------------------------------------
+
+-- The open merchant's class reagents (vendor-sold reagents of the Reagents table, never display-only
+-- items): list of { index, id, name, price, batch, stock, maxBuy }. maxBuy is how many single items one
+-- purchase may take (GetMerchantItemMaxStack), nil when unknown. Items paid with more than gold are
+-- left out. nil when the merchant list cannot be read.
+function A.merchantReagents()
+    local count = call("GetMerchantNumItems", GetMerchantNumItems)
+    if not count then return end
+    local list = {}
+    for i = 1, count do
+        local link = call("GetMerchantItemLink", GetMerchantItemLink, i)
+        local id = type(link) == "string" and tonumber(link:match("item:(%d+)"))
+        if id and ns.Reagents.ById(id) then
+            local name, price, batch, stock, extended = merchantItem(i)
+            if price and not extended then
+                local maxBuy = GetMerchantItemMaxStack and call("GetMerchantItemMaxStack", GetMerchantItemMaxStack, i)
+                list[#list + 1] = { index = i, id = id, name = name or tostring(id), price = price, batch = batch or 1,
+                    stock = stock, maxBuy = type(maxBuy) == "number" and maxBuy or nil }
+            end
+        end
+    end
+    return list
+end
+
+-- Every slot of the general-purpose bags, backpack included (quivers, ammo pouches and other special
+-- bags cannot hold class reagents and are left out): false if empty, { id, count } if filled. A bag
+-- whose kind cannot be read is left out (less room, never more); nil when the backpack or any slot of
+-- a general bag cannot be read.
+function A.bagSlots()
+    local slots = {}
+    for bag = 0, NUM_BAG_SLOTS or 4 do
+        local _, family = bagFree(bag)
+        if family == nil and bag == 0 then return end
+        if family == 0 then
+            local n = call("GetContainerNumSlots", (C_Container and C_Container.GetContainerNumSlots) or GetContainerNumSlots, bag)
+            if not n then return end
+            for slot = 1, n do
+                local s = bagSlot(bag, slot)
+                if s == nil then return end
+                slots[#slots + 1] = s
+            end
+        end
+    end
+    return slots
+end
+
+-- How many of the item fit in one bag slot, or nil when unknown (item not cached).
+function A.stackSize(id)
+    local stack = select(8, itemInfo(id))
+    return type(stack) == "number" and stack or nil
 end
 
 -- Misc -------------------------------------------------------------------------------------------
