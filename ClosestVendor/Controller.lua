@@ -8,9 +8,13 @@
 --   env.buckets                     { [continentId] = { vendor records, see Search.lua } }
 --   env.nav                         { Set(vendor) -> handle|nil, Clear(handle) }
 --   env.ammo()                      -> "arrow"|"bullet", count  for the equipped ranged weapon, or nil
+--   env.reagents()                  -> list of { item, count, name } for the class reagents being watched
+--                                      (spell known, not switched off, count readable), or nil; name is
+--                                      what the question calls the reagent
 --   env.confirm(kind, vendor, accept, count, trade, two)  ask the player; call accept() only on Yes
---       kind is "sell", "repair", "arrow", "bullet" or "trainer"; count is the ammo left, or for a
---       trainer the points left to the cap; trade names the profession. two (optional) is a second
+--       kind is "sell", "repair", "arrow", "bullet", "reagent" or "trainer"; count is the ammo or
+--       reagent left, or for a trainer the points left to the cap; trade names the profession (or,
+--       for a reagent, the reagent). two (optional) is a second
 --       choice { other = record, acceptOther = fn, dist, otherDist (yards), mapFirst = bool }: vendor
 --       is the first button, other the second; mapFirst says whether vendor is the one on the player's map
 --   env.cancelConfirm()             close the question if it is showing
@@ -35,8 +39,9 @@ local function target(v, zone, dist)
     return L["%s (%d yards)"]:format(v[2], dist)
 end
 
--- Dialog text for a found vendor or trainer; kind is "sell", "repair", "arrow", "bullet" or
--- "trainer"; zone and count may be nil. For a trainer, count is the points left and trade the profession.
+-- Dialog text for a found vendor or trainer; kind is "sell", "repair", "arrow", "bullet", "reagent"
+-- or "trainer"; zone and count may be nil. For a trainer, count is the points left and trade the
+-- profession; for a reagent, count is how many are left and trade the reagent's name.
 -- two (see env.confirm) with otherZone gives the text that offers both targets.
 function C.PromptText(kind, vendor, zone, count, trade, two, otherZone)
     local who = vendor[2] .. (zone and (" (" .. zone .. ")") or "")
@@ -47,6 +52,8 @@ function C.PromptText(kind, vendor, zone, count, trade, two, otherZone)
                 return L["Your %s skill is %d point(s) from its current limit.\n\nWhich %s trainer do you want to navigate to?\n\n%s\n%s"]:format(trade, count, trade, a, b)
             end
             return L["Your %s skill has reached its current limit.\n\nWhich %s trainer do you want to navigate to?\n\n%s\n%s"]:format(trade, trade, a, b)
+        elseif kind == "reagent" then
+            return L["You are low on %s (%d left).\n\nWhich vendor that sells %s do you want to navigate to?\n\n%s\n%s"]:format(trade, count, trade, a, b)
         elseif kind == "arrow" then
             if count then
                 return L["You are low on arrows (%d left).\n\nWhich vendor that sells arrows do you want to navigate to?\n\n%s\n%s"]:format(count, a, b)
@@ -67,6 +74,8 @@ function C.PromptText(kind, vendor, zone, count, trade, two, otherZone)
             return L["Your %s skill is %d point(s) from its current limit.\n\nNavigate to the closest %s trainer, %s?"]:format(trade, count, trade, who)
         end
         return L["Your %s skill has reached its current limit.\n\nNavigate to the closest %s trainer, %s?"]:format(trade, trade, who)
+    elseif kind == "reagent" then
+        return L["You are low on %s (%d left).\n\nNavigate to the closest vendor that sells %s, %s?"]:format(trade, count, trade, who)
     elseif kind == "arrow" then
         if count then
             return L["You are low on arrows (%d left).\n\nNavigate to the closest vendor that sells arrows, %s?"]:format(count, who)
@@ -91,6 +100,8 @@ function C.New(env)
     local pinTrade -- profession of the active trainer waypoint, if the waypoint is a trainer's
     local lastKind, lastTrade -- what the most recent question was about
     local noticed = {} -- professions already told about having no known trainer
+    local noticedReagent = {} -- reagents already told about having no known seller
+    local lowReagents = {} -- item id -> { item, count, name } for the reagents low at the last Evaluate
     local promptId = 0
     local log = env.log or function() end
     local professions = ns.Professions.New()
@@ -121,10 +132,11 @@ function C.New(env)
 
     -- Nearest eligible vendor for kind, or nil plus "nopos" / "novendor". A third value is the nearest
     -- one on the player's map when the overall nearest is on another map, else nil; then x, y.
-    local function findVendor(kind)
+    local function findVendor(kind, reagent)
         local continent, x, y, map = env.playerPos()
         if not continent then return nil, "nopos" end
         local need = (kind == "repair" or kind == "arrow" or kind == "bullet") and kind or nil
+        if kind == "reagent" then need = { reagent = reagent } end
         local v, onMap = ns.Search.Nearest(env.buckets[continent] or {}, x, y, need, env.playerFaction, map)
         if not v then return nil, "novendor" end
         if onMap == v then onMap = nil end
@@ -141,8 +153,9 @@ function C.New(env)
 
     -- Offer the nearest target v (and, when v is on another map, the nearest on the player's map).
     -- In "auto" mode pin without asking; otherwise ask, navigating only on a choice. trade is set for
-    -- trainers, count is the ammo left or the points left to the cap.
-    local function offer(kind, v, onMap, x, y, count, trade)
+    -- trainers, count is the ammo or reagent left or the points left to the cap. name is the reagent's
+    -- name for a reagent.
+    local function offer(kind, v, onMap, x, y, count, trade, name)
         local cfg = env.cfg
         local mapFirst = cfg.vendorPrefer ~= "distance"
         local i = kind == "trainer" and 8 or 9
@@ -153,7 +166,17 @@ function C.New(env)
             pin(pick, trade)
             local function describe(t) return target(t, env.zoneName and env.zoneName(t[3]), yards(t, i, x, y)) end
             local text
-            if onMap then
+            local why
+            if trade then why = L["to train %s"]:format(trade)
+            elseif name then why = L["to buy %s"]:format(name)
+            elseif kind == "arrow" or kind == "bullet" then why = L["to buy ammo"]
+            elseif kind == "repair" then why = L["to repair your gear"]
+            elseif kind == "sell" then why = L["to sell items and free bag space"] end
+            if why and onMap then
+                text = L["Navigating to %s %s. The other choice was %s."]:format(describe(pick), why, describe(pick == v and onMap or v))
+            elseif why then
+                text = L["Navigating to %s %s."]:format(describe(pick), why)
+            elseif onMap then
                 text = L["Navigating to %s. The other choice was %s."]:format(describe(pick), describe(pick == v and onMap or v))
             else
                 text = L["Navigating to %s."]:format(describe(pick))
@@ -169,6 +192,8 @@ function C.New(env)
         if onMap and mapFirst then first, second = onMap, v elseif onMap then second = onMap end
         if trade then
             log(("question shown: trainer for %s, %s (npc %s), %d point(s) left"):format(trade, first[2], tostring(first[1]), count))
+        elseif name then
+            log(("question shown: reagent %s, %s (npc %s), %d left"):format(name, first[2], tostring(first[1]), count))
         else
             log(("question shown: %s, %s (npc %s)"):format(kind, first[2], tostring(first[1])))
         end
@@ -180,7 +205,7 @@ function C.New(env)
         end
         local two = second and { other = second, acceptOther = answer(second), mapFirst = mapFirst,
             dist = yards(first, i, x, y), otherDist = yards(second, i, x, y) }
-        env.confirm(kind, first, answer(first), count, trade, two)
+        env.confirm(kind, first, answer(first), count, trade or name, two)
     end
 
     -- skills: the player's skill list. Asks about the profession nearest its cap that has a
@@ -214,29 +239,45 @@ function C.New(env)
         end
     end
 
-    -- trigger is "sell", "repair" or "ammo"; ammo resolves to arrows or bullets from the weapon.
-    local function place(trigger)
+    -- trigger is "sell", "repair", "ammo" or "reagent"; ammo resolves to arrows or bullets from the
+    -- weapon, reagent needs the item id.
+    local function place(trigger, id)
         -- ammo resolves to arrows or bullets from the weapon seen by the last Evaluate
         local kind = trigger == "ammo" and ammoKind or trigger
-        local v, why, onMap, x, y = findVendor(kind)
+        local r = trigger == "reagent" and lowReagents[id] or nil
+        if trigger == "reagent" and not r then self.pending, self.pendingId = nil, nil return end
+        local v, why, onMap, x, y = findVendor(kind, r and r.item)
         if why == "nopos" then
-            self.pending = trigger -- no map position yet (loading, instance); retry later
+            self.pending, self.pendingId = trigger, id -- no map position yet (loading, instance); retry later
             log("no map position yet: " .. trigger .. " request kept for a retry")
         elseif v then
-            self.pending = nil
-            offer(kind, v, onMap, x, y, trigger == "ammo" and ammoCount or nil)
+            self.pending, self.pendingId = nil, nil
+            offer(kind, v, onMap, x, y, trigger == "ammo" and ammoCount or (r and r.count) or nil, nil, r and r.name)
         else
-            self.pending = nil
+            self.pending, self.pendingId = nil, nil
             log("no known vendor for " .. kind .. " on this continent")
+            if r and not noticedReagent[id] then
+                noticedReagent[id] = true
+                say(L["No known vendor sells %s on this continent yet. Open a vendor that sells it once and the addon will remember it."]:format(r.name))
+            end
         end
     end
 
     function self.Evaluate()
         ammoKind, ammoCount = env.ammo()
         local free, dur, combat = env.freeSlots(), env.lowestDurability(), env.inCombat()
-        local a = triggers.Update(free, dur, combat, ammoKind and ammoCount or nil)
+        lowReagents = {}
+        local lowIds = {}
+        for _, r in ipairs(env.reagents and env.reagents() or {}) do
+            if r.count <= env.cfg.reagentThreshold then
+                lowReagents[r.item.id] = r
+                lowIds[#lowIds + 1] = r.item.id
+            end
+        end
+        local a = triggers.Update(free, dur, combat, ammoKind and ammoCount or nil, lowIds)
         if a then
-            log(("trigger %s%s (bags=%s durability=%s ammo=%s combat=%s)"):format(a[1], a[2] and (" " .. a[2]) or "",
+            log(("trigger %s%s%s (bags=%s durability=%s ammo=%s combat=%s)"):format(a[1], a[2] and (" " .. a[2]) or "",
+                a[3] and (" " .. a[3]) or "",
                 tostring(free), dur and ("%.0f%%"):format(dur) or "n/a",
                 ammoKind and (ammoKind .. ":" .. tostring(ammoCount)) or "n/a", tostring(combat)))
             if a[1] == "clear" then
@@ -244,11 +285,11 @@ function C.New(env)
                 cancelPrompt()
                 clearVendorNav()
             else
-                place(a[2])
+                place(a[2], a[3])
             end
         elseif self.pending and not combat then
             log("retrying the " .. self.pending .. " request")
-            place(self.pending)
+            place(self.pending, self.pendingId)
         end
     end
 
@@ -289,6 +330,19 @@ function C.New(env)
     -- Returns a message when there is nothing to ask about, otherwise nil.
     function self.Test(kind)
         log("test command: " .. kind)
+        if kind == "reagent" then
+            local r = (env.reagents and env.reagents() or {})[1]
+            if not r then
+                return L["No class reagent to ask about. Your class has none, or you do not know the spells that use them."]
+            end
+            local v, why, onMap, x, y = findVendor(kind, r.item)
+            if why == "nopos" then
+                return L["No map position here (dungeons and some areas have none). Try again outside."]
+            elseif why == "novendor" then
+                return L["No known vendor selling %s on this continent for your faction."]:format(r.name)
+            end
+            return offer(kind, v, onMap, x, y, r.count, nil, r.name)
+        end
         local v, why, onMap, x, y = findVendor(kind)
         if why == "nopos" then
             return L["No map position here (dungeons and some areas have none). Try again outside."]

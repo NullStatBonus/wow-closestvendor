@@ -37,6 +37,24 @@ eq(D.Record(learned, { 500, "Old Shape", 1429, 0.2, 0.2, 0, false }), true, "sev
 eq(learned[500][8], 0, "missing ammo code becomes 0")
 eq(D.Record(learned, { 500, "Old Shape", 1429, 0.2, 0.2, 0, false }), false, "and is stable on revisit")
 
+-- The reagent mask is the 9th field: stored, compared, and 0 when missing.
+eq(D.Record(learned, { 600, "Reagents", 1429, 0.4, 0.4, 0, false, 0, 5 }), true, "reagent vendor stored")
+eq(learned[600][9], 5, "mask stored")
+eq(D.Record(learned, { 600, "Reagents", 1429, 0.4, 0.4, 0, false, 0, 5 }), false, "same mask: no change")
+eq(D.Record(learned, { 600, "Reagents", 1429, 0.4, 0.4, 0, false, 0, 1 }), true, "changed offer updates the mask")
+eq(learned[600][9], 1, "mask updated")
+eq(D.Record(learned, { 600, "Reagents", 1429, 0.4, 0.4, 0, false, 0 }), true, "an offer without reagents clears the mask")
+eq(learned[600][9], 0, "missing mask is 0")
+learned[700] = { 700, "Saved Before", 1429, 0.5, 0.5, 0, false, 0 } -- a record saved by an older version
+eq(D.Record(learned, { 700, "Saved Before", 1429, 0.5, 0.5, 0, false, 0, 0 }), false, "old record without a mask equals an empty one")
+eq(D.Record(learned, { 700, "Saved Before", 1429, 0.5, 0.5, 0, false, 0, 4 }), true, "old record gains a mask")
+eq(learned[700][9], 4, "mask added to the old record")
+
+-- A learned record keeps the reagents it was learned with when it replaces a shipped one.
+local m = D.Merge({ { 600, "Shipped", 1429, 0.1, 0.1, 0, false, 0, 8 } }, { [600] = learned[600] })
+eq(m[1][2], "Reagents", "learned record used")
+eq(m[1][9], 0, "its own mask, not the shipped one")
+
 -- The stored record is a copy, not the caller's table.
 local rec = { 200, "Copy", 1429, 0.1, 0.1, 0, false, 1 }
 D.Record(learned, rec)
@@ -51,7 +69,7 @@ local shipped = {
 local merged = D.Merge(shipped, learned)
 local byId = {}
 for _, v in ipairs(merged) do byId[v[1]] = v end
-eq(#merged, 4, "100(learned) + 300 + 200 + 500")
+eq(#merged, 6, "100(learned) + 300 + 200 + 500 + 600 + 700")
 eq(byId[100][2], "Seller", "learned wins over shipped")
 eq(byId[300][2], "Shipped Only", "unrelated shipped kept")
 eq(byId[200][2], "Copy", "learned-only included")

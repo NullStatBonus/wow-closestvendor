@@ -16,7 +16,7 @@ Copy-ready text and field values for the CurseForge and Wago projects. Create th
 | Source code URL | `https://github.com/NullStatBonus/wow-closestvendor` |
 | Issues URL | `https://github.com/NullStatBonus/wow-closestvendor/issues` |
 | Relations | Optional dependencies: TomTom (`tomtom` on CurseForge) and WaypointUI (`waypointui` on CurseForge). The addon works without either. |
-| Tags | vendor, repair, ammo, profession, trainer, navigation, waypoint, quality of life, classic, forever |
+| Tags | vendor, repair, ammo, reagent, profession, trainer, navigation, waypoint, quality of life, classic, forever |
 | Release type | Release (use Beta for pre-release tags) |
 | Changelog | Taken from `CHANGELOG.md` by the packager; nothing to type. |
 | Donations | none |
@@ -29,11 +29,12 @@ Paste this into the description box (CurseForge and Wago both take Markdown or H
 
 Designed for WoW Forever and Classic Era, this World of Warcraft addon directs you to the nearest relevant vendor whenever your gear needs repair or your bags are nearly full.
 
-It watches four things and asks before it sends you anywhere:
+It watches five things and asks before it sends you anywhere:
 
 - **Bags nearly full:** 2 free slots or fewer (you choose the number) and it offers the nearest vendor you can sell to.
 - **Gear worn:** any equipped item below 20% durability (you choose) and it offers the nearest repair vendor.
 - **Ammo low:** a bow, crossbow or gun equipped and your arrows or bullets at 200 or fewer (you choose) and it offers the nearest vendor that sells that ammo. Once there, it buys the ammo for you (see below).
+- **Class reagents:** a reagent of your class at 5 or fewer (you choose) and it offers the nearest vendor that sells it. Mage (Arcane Powder, Rune of Teleportation, Rune of Portals), Rogue (Flash Powder), Priest (Holy Candle, Sacred Candle), Paladin (Symbol of Kings, Symbol of Divinity), Shaman (Ankh) and Druid (Rebirth seeds, Wild Berries, Wild Thornroot). A reagent is watched only once you know a spell that uses it, and you can switch each one off.
 - **Professions:** a profession 10 points or fewer from its current skill limit (you choose) and it offers the nearest trainer you have opened before. It asks on every skill-up and every craft.
 
 **Buys your ammo.** At any merchant, with a bow, crossbow or gun equipped, it fills your quiver or ammo pouch for you, no clicks. You can have it ask first instead. Arrows and bullets each have a setting: the same ammo you have equipped (default), the best your level allows, or the cheapest. It only buys what you can afford and says so in chat.
@@ -45,17 +46,18 @@ A small Yes / No question shows the vendor's name and zone. If the closest vendo
 3. The game's own map waypoint (WoW Forever)
 4. A chat message with the vendor, zone and coordinates (Classic Era without TomTom: install TomTom for an arrow)
 
-If several things are low at once it asks one question at a time: repair first, then ammo, then selling, then trainers. A repair or ammo trip also covers selling.
+If several things are low at once it asks one question at a time: repair first, then ammo, then reagents, then selling, then trainers. A repair or ammo trip also covers selling.
 
 **Learns as you play.** It ships with about 900 vendors and remembers every vendor window you open, including which ones repair and which sell arrows or bullets. That is how WoW Forever's new zones (Mount Hyjal, Riverglades, Zephras Isle, Darkspear Islands, Shen'dralas) get covered.
 
-**Settings.** Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger, plus an ammo-buying switch, an ask-first switch and a grade dropdown for arrows and for bullets, and two dropdowns for when the closest target is on another map (ask or navigate without asking; prefer your map or the closest). The same things are available as commands:
+**Settings.** Options, AddOns, **Closest Vendor** has a checkbox and a slider for each trigger, plus a slider for reagents and a checkbox for each reagent of your class (the ammo checkbox switches ammo and reagents together), an ammo-buying switch, an ask-first switch and a grade dropdown for arrows and for bullets, and two dropdowns for when the closest target is on another map (ask or navigate without asking; prefer your map or the closest). The same things are available as commands:
 
 - `/cvn` shows your settings, `/cvn config` opens the settings page
-- `/cvn bags 4`, `/cvn dur 30`, `/cvn ammo 300`, `/cvn trade 25` change the thresholds; add `on` or `off` to switch a trigger
+- `/cvn bags 4`, `/cvn dur 30`, `/cvn ammo 300`, `/cvn reagent 8`, `/cvn trade 25` change the thresholds; add `on` or `off` to switch a trigger (`/cvn ammo off` also silences reagents)
+- `/cvn reagents` lists your class's reagents; `/cvn reagent off arcane powder` and `/cvn reagent on arcane powder` switch one
 - `/cvn buy on`, `/cvn buy off`, `/cvn buy ask`, `/cvn buy auto` control ammo buying; `/cvn arrows best` and `/cvn bullets cheapest` pick the grade (`equipped`, `best` or `cheapest`)
 - `/cvn choice ask` or `/cvn choice auto`, and `/cvn prefer map` or `/cvn prefer distance`, decide what happens when the closest vendor or trainer is on another map; `/cvn notice off` hides the on-screen message that goes with automatic pins
-- `/cvn test sell`, `/cvn test repair`, `/cvn test arrows`, `/cvn test bullets` show each question right now so you can see what it does
+- `/cvn test sell`, `/cvn test repair`, `/cvn test arrows`, `/cvn test bullets`, `/cvn test reagent` show each question right now so you can see what it does
 
 **Good to know**
 
@@ -63,7 +65,8 @@ If several things are low at once it asks one question at a time: repair first, 
 - "Your map" is the exact map you stand in. A city is its own map, separate from the zone around it.
 - Vendors of the other faction are skipped.
 - The shipped vendor list is Vanilla data. Vendors that exist only in WoW Forever are unknown until you open them once.
-- Ammo is counted for the ammo you have equipped (bags included).
+- Ammo is counted for the ammo you have equipped (bags included). Reagents are counted in your bags, not the bank, and the addon does not buy them for you.
+- For ranked spells (Rebirth, Prayer of Fortitude, Gift of the Wild) only the reagent of your highest known rank is watched. Warlocks, hunters and warriors have no reagent questions.
 - Ammo buying fills only quivers and ammo pouches that match your weapon, never ordinary bags. "Best" goes by the level an item requires, because the game does not report ammo damage.
 - Trainers are learned, not shipped: open a profession trainer once and the addon remembers it for all your characters. The trainer's level requirement is not checked.
 - Nothing is shown in dungeons, where the game gives no map position.

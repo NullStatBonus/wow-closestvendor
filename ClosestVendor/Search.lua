@@ -1,16 +1,19 @@
 -- Pure nearest-vendor search: no WoW globals.
 -- Vendor record (array, for low memory): the on-disk shape plus world coordinates
---   { npcId, name, uiMapID, mx, my, faction, repair, ammo, wx, wy }
+--   { npcId, name, uiMapID, mx, my, faction, repair, ammo, wx, wy, reagents }
 -- faction: 0 = both, 1 = Alliance, 2 = Horde. repair: true if it can repair.
--- ammo: 0 none, 1 arrows, 2 bullets, 3 both.
+-- ammo: 0 none, 1 arrows, 2 bullets, 3 both. reagents (index 11): bitmask, see Reagents.lua; a
+-- record without it sells no reagents.
 local _, ns = ...
 
 local S = {}
 ns.Search = S
 
--- need: nil (any vendor), "repair", "arrow" or "bullet".
+-- need: nil (any vendor), "repair", "arrow", "bullet", or { reagent = item } (an entry of the
+-- Reagents table) for a vendor that sells that reagent.
 local function eligible(v, need)
     if need == nil then return true end
+    if type(need) == "table" then return ns.Reagents.Has(v[11], need.reagent) end
     if need == "repair" then return v[7] and true or false end
     local code = v[8] or 0
     if need == "arrow" then return code == 1 or code == 3 end

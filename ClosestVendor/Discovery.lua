@@ -1,5 +1,6 @@
 -- Pure learned-vendor store: no WoW globals.
--- Vendor record: {npcId, name, uiMapID, mx, my, faction (0 both, 1 Alliance, 2 Horde), repair, ammo (0-3)}
+-- Vendor record: {npcId, name, uiMapID, mx, my, faction (0 both, 1 Alliance, 2 Horde), repair, ammo (0-3),
+--   reagents (bitmask, see Reagents.lua)}
 local _, ns = ...
 
 local D = {}
@@ -9,11 +10,11 @@ ns.Discovery = D
 function D.Record(learned, rec)
     local id = rec and rec[1]
     if type(id) ~= "number" or id <= 0 then return false end
-    local new = { rec[1], rec[2], rec[3], rec[4], rec[5], rec[6], rec[7], rec[8] or 0 }
+    local new = { rec[1], rec[2], rec[3], rec[4], rec[5], rec[6], rec[7], rec[8] or 0, rec[9] or 0 }
     local old = learned[id]
     if old then
         local same = true
-        for i = 1, 8 do if old[i] ~= new[i] then same = false break end end
+        for i = 1, 9 do if (old[i] or (i >= 8 and 0)) ~= new[i] then same = false break end end
         if same then return false end
     end
     learned[id] = new

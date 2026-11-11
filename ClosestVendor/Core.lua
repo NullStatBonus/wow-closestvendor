@@ -7,7 +7,7 @@ local L = ns.L
 local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
     bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true,
     ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped",
-    vendorMode = "ask", vendorPrefer = "map", autoNotice = true }
+    vendorMode = "ask", vendorPrefer = "map", autoNotice = true, reagentThreshold = 5 }
 local POLL_SECONDS = 5
 
 local POPUP = "CLOSESTVENDOR_CONFIRM"
@@ -87,7 +87,7 @@ local function rebuildBuckets()
         if continent then
             local b = buckets[continent]
             if not b then b = {}; buckets[continent] = b end
-            b[#b + 1] = { r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8] or 0, wx, wy }
+            b[#b + 1] = { r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8] or 0, wx, wy, r[9] or 0 }
         end
     end
 end
@@ -120,7 +120,7 @@ local function learnMerchant()
     if not m then return end
     local map, x, y = A.mapPosition()
     if not map then return end
-    if ns.Discovery.Record(DB.learned, { m.id, m.name, map, x, y, m.faction, m.repair, m.ammo }) then
+    if ns.Discovery.Record(DB.learned, { m.id, m.name, map, x, y, m.faction, m.repair, m.ammo, m.reagents }) then
         rebuildBuckets()
     end
 end
@@ -144,11 +144,39 @@ local function init()
     DB = ClosestVendorDB
     DB.cfg = DB.cfg or {}
     for k, v in pairs(DEFAULTS) do if DB.cfg[k] == nil then DB.cfg[k] = v end end
+    DB.cfg.reagentOff = DB.cfg.reagentOff or {} -- item ids the player switched off; all others are on
     DB.learned = DB.learned or {}
     DB.trainers = DB.trainers or {}
     DB.professions = DB.professions or {}
     DB.log = DB.log or {}
     log = ns.Log.New(DB.log, A.now)
+end
+
+-- The class reagents being watched, with their counts: { { item, count, name } }, or nil when the
+-- class is unknown. A reagent is watched when the player knows a spell that uses it and has not
+-- switched it off; one whose count cannot be read is left out.
+local function reagentList()
+    local class = A.classToken()
+    if not class then return end
+    local out = {}
+    for _, item in ipairs(ns.Reagents.Watched(class, A.knowsSpell, DB.cfg.reagentOff)) do
+        local count = A.itemCount(item.id)
+        if count then out[#out + 1] = { item = item, count = count, name = A.itemName(item.id) or item.name } end
+    end
+    return out
+end
+
+-- One report line: the reagent threshold, what is being watched now and what the player switched off.
+local function reagentLine()
+    local watching, off = {}, {}
+    for _, r in ipairs(reagentList() or {}) do watching[#watching + 1] = r.item.name .. ":" .. r.count end
+    for id, v in pairs(DB.cfg.reagentOff) do
+        local item = v and ns.Reagents.ById(id)
+        if item then off[#off + 1] = item.name end
+    end
+    table.sort(off)
+    return ("reagents: class %s, threshold %d, watching: %s, switched off: %s"):format(tostring(A.classToken()),
+        DB.cfg.reagentThreshold, #watching > 0 and table.concat(watching, ", ") or "none", #off > 0 and table.concat(off, ", ") or "none")
 end
 
 -- The report: facts about this client and addon, then the debug log.
@@ -174,6 +202,7 @@ local function reportText()
             c.tradeEnabled and "on" or "off", c.tradeThreshold),
         ("ammo buying: %s, %s, arrows %s, bullets %s"):format(c.ammoBuyEnabled and "on" or "off",
             c.ammoBuyPrompt and "asks first" or "buys at once", tostring(c.arrowGrade), tostring(c.bulletGrade)),
+        reagentLine(),
         ("target choice: %s, prefers %s, on-screen notice %s"):format(tostring(c.vendorMode), tostring(c.vendorPrefer), c.autoNotice and "on" or "off"),
         ("trainers: %d learned, professions seen: %s"):format(trainers, table.concat(professions, ", ")),
     }
@@ -205,6 +234,7 @@ local function start()
         buckets = buckets,
         nav = nav,
         ammo = A.ammoStatus,
+        reagents = reagentList,
         confirm = function(kind, v, accept, count, trade, two)
             closeQuestions() -- one question is open at a time, whichever kind it is
             if not two then
@@ -224,7 +254,7 @@ local function start()
         zoneName = A.mapName,
     })
     -- The settings page is optional: if the client's settings API differs, only the page is lost.
-    local ok, category = pcall(ns.Options.Register, DB.cfg, DEFAULTS, evaluate)
+    local ok, category = pcall(ns.Options.Register, DB.cfg, DEFAULTS, evaluate, A.classToken())
     panel = ok and category or nil
 end
 
@@ -232,7 +262,7 @@ SLASH_CLOSESTVENDOR1 = "/cvn"
 SLASH_CLOSESTVENDOR2 = "/closestvendor"
 SlashCmdList["CLOSESTVENDOR"] = function(msg)
     if not DB then return end
-    local lines, action = ns.Commands.Run(DB.cfg, msg)
+    local lines, action = ns.Commands.Run(DB.cfg, msg, A.classToken())
     for _, line in ipairs(lines) do say(line) end
     if action and action[1] == "open" then
         if panel and pcall(ns.Options.Open, panel) then return end
@@ -289,6 +319,6 @@ end)
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA",
         "BAG_UPDATE_DELAYED", "UPDATE_INVENTORY_DURABILITY", "UNIT_INVENTORY_CHANGED", "PLAYER_EQUIPMENT_CHANGED",
         "PLAYER_REGEN_ENABLED", "MERCHANT_SHOW", "TRAINER_SHOW", "TRAINER_UPDATE", "SKILL_LINES_CHANGED",
-        "TRADE_SKILL_SHOW", "UNIT_SPELLCAST_SUCCEEDED" }) do
+        "TRADE_SKILL_SHOW", "UNIT_SPELLCAST_SUCCEEDED", "SPELLS_CHANGED" }) do
     ns.frame:RegisterEvent(e)
 end

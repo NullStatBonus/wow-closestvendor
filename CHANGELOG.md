@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+- Class reagents: reminds Mages, Rogues, Priests, Paladins, Shamans and Druids when a reagent they use is low (5 or fewer by default) and offers to navigate to the closest vendor that sells it. Only reagents for spells you know are watched, and rank-based reagents (druid seeds, priest candles) follow your highest rank.
+- Settings page: the Ammo row is now "Ammo and reagents", one switch for both. A new reagent threshold slider (1 to 40) applies to all reagents, and each of your class reagents has its own checkbox. All on by default.
+- Commands: `/cvn reagent <count>`, `/cvn reagents` (list), `/cvn reagent on <name>`, `/cvn reagent off <name>`, `/cvn test reagent`. `/cvn ammo on` and `/cvn ammo off` switch ammo and reagent questions together.
+- Priority order is now repair, ammo, reagent, sell, then profession trainer.
+- Vendor data records which vendors sell each reagent; vendors you open are learned with their reagents.
+- When a target is chosen without asking, the chat line and on-screen message now say why: "to buy ammo", "to buy <reagent>", "to repair your gear", "to sell items and free bag space" or "to train <profession>". The reagent question also names what to buy.
+- The `/cvn` help text is shorter.
+- The debug report lists the reagent settings.
+
 ## 0.4.1
 
 - The on-screen message shown when a target is chosen without asking now stays for about five seconds instead of fading after about three. It uses its own frame, so the game's own error messages are unchanged. A newer message replaces the one showing.
