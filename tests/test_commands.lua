@@ -5,6 +5,7 @@ local eq = H.eq
 local ns = {}
 H.locale(ns)
 loadfile("ClosestVendor/Reagents.lua")("ClosestVendor", ns)
+loadfile("ClosestVendor/Status.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Commands.lua")("ClosestVendor", ns)
 local M = ns.Commands
 
@@ -163,6 +164,39 @@ out = M.Run(c, "arrows nonsense")
 eq(c.arrowGrade, "best", "bad grade ignored")
 eq(has(out, "Choose equipped, best or cheapest."), true, "bad grade explained")
 
+-- Reagent buying: on/off, ask/auto and the amount (0-100), same words as /cvn buy; refused for a
+-- class without vendor reagents.
+c = fresh()
+out = M.Run(c, "", "MAGE")
+eq(has(out, "Reagent buying: off, asks first, up to 20 of each"), true, "status shows reagent buying with its defaults")
+M.Run(c, "reagentbuy on", "MAGE"); eq(c.reagentBuyEnabled, true, "reagentbuy on")
+M.Run(c, "reagentbuy auto", "MAGE"); eq(c.reagentBuyPrompt, false, "reagentbuy auto")
+M.Run(c, "reagentbuy ask", "MAGE"); eq(c.reagentBuyPrompt, true, "reagentbuy ask")
+out = M.Run(c, "reagentbuy 35", "MAGE")
+eq(c.reagentBuyTarget, 35, "reagentbuy amount")
+eq(has(out, "Reagent buying: on, asks first, up to 35 of each"), true, "reply shows it")
+M.Run(c, "reagentbuy 0", "MAGE"); eq(c.reagentBuyTarget, 0, "0 allowed")
+M.Run(c, "reagentbuy 100", "MAGE"); eq(c.reagentBuyTarget, 100, "100 allowed")
+for _, bad in ipairs({ "reagentbuy 101", "reagentbuy -1", "reagentbuy 2.5", "reagentbuy x", "reagentbuy" }) do
+    out = M.Run(c, bad, "MAGE")
+    eq(c.reagentBuyTarget, 100, bad .. ": unchanged")
+    eq(has(out, "Reagent amount must be a whole number from 0 to 100, or on, off, ask or auto."), true, bad .. ": explained")
+end
+M.Run(c, "reagentbuy off", "MAGE"); eq(c.reagentBuyEnabled, false, "reagentbuy off")
+eq(M.LIMITS.reagentBuyTarget[1] .. "-" .. M.LIMITS.reagentBuyTarget[2], "0-100", "reagent amount limits")
+for _, cls in ipairs({ "HUNTER", "WARLOCK" }) do
+    c = fresh()
+    out = M.Run(c, "reagentbuy on", cls)
+    eq(c.reagentBuyEnabled, nil, cls .. ": nothing set")
+    eq(out[1], "Your class does not use reagents.", cls .. ": says why")
+end
+eq(has(M.Run(fresh(), "help"), "/cvn reagentbuy on/off"), true, "help lists reagentbuy")
+for _, m in ipairs({ "reagentbuy on", "reagentbuy 5", "reagentbuy x", "" }) do
+    for _, line in ipairs((M.Run(fresh(), m, "MAGE"))) do
+        eq(line:find("|", 1, true), nil, "no pipe in output of '" .. m .. "': " .. line)
+    end
+end
+
 -- Target choice: mode and preference, with the valid values named on bad input.
 c = fresh()
 out = M.Run(c, "")
@@ -246,5 +280,146 @@ eq(old.reagentOff[17020], true, "an old settings table gets its off-list")
 local out2, action = M.Run(fresh(), "test reagent")
 eq(action[1] == "test" and action[2] == "reagent", true, "test reagent action")
 eq(has(out2, "reagent"), true, "test reagent line")
+
+-- Status window: lock, scale, reset.
+c = fresh()
+out = M.Run(c, "")
+eq(has(out, "Status window: unlocked, scale 100%"), true, "status shows the window, defaults for an old settings table")
+eq(has(out, "Status window rows changed"), false, "no changed rows: no such line")
+out = M.Run(c, "hud lock")
+eq(c.hudLocked, true, "locked")
+eq(has(out, "Status window: locked"), true, "reply shows it")
+M.Run(c, "hud unlock")
+eq(c.hudLocked, false, "unlocked")
+out = M.Run(c, "hud scale 150")
+eq(c.hudScale, 150, "scale set in percent")
+eq(has(out, "scale 150%"), true, "reply shows the scale")
+M.Run(c, "hud scale 50"); eq(c.hudScale, 50, "50 allowed")
+M.Run(c, "hud scale 200"); eq(c.hudScale, 200, "200 allowed")
+for _, bad in ipairs({ "hud scale", "hud scale 49", "hud scale 201", "hud scale 99.5", "hud scale big", "hud scale 100 100" }) do
+    out = M.Run(c, bad)
+    eq(c.hudScale, 200, bad .. ": unchanged")
+    eq(has(out, "from 50 to 200"), true, bad .. ": explained")
+end
+local action2
+out, action2 = M.Run(c, "hud reset")
+eq(action2[1] .. ":" .. action2[2], "hud:reset", "reset is an action for the caller")
+eq(has(out, "default position"), true, "reset says what it did")
+eq(has(M.Run(c, "hud"), "Choose lock, unlock, reset, scale, opacity, textopacity, color or row."), true, "bare hud explains")
+eq(has(M.Run(c, "hud dance"), "Choose lock, unlock, reset, scale, opacity, textopacity, color or row."), true, "unknown hud word explains")
+
+-- Status window: background opacity (0-100), text opacity (20-100) and background colour.
+c = fresh()
+out = M.Run(c, "")
+eq(has(out, "background 80% of color #000000, text and icons 100%"), true, "status shows the defaults for an old settings table")
+out = M.Run(c, "hud opacity 0")
+eq(c.hudAlpha, 0, "background opacity 0 allowed: only text and icons")
+eq(has(out, "background 0%"), true, "reply shows the background opacity")
+M.Run(c, "hud opacity 100"); eq(c.hudAlpha, 100, "100 allowed")
+for _, bad in ipairs({ "hud opacity", "hud opacity -1", "hud opacity 101", "hud opacity 50.5", "hud opacity dim", "hud opacity 5 5" }) do
+    out = M.Run(c, bad)
+    eq(c.hudAlpha, 100, bad .. ": unchanged")
+    eq(has(out, "Background opacity must be a whole number from 0 to 100."), true, bad .. ": explained")
+end
+out = M.Run(c, "hud textopacity 20")
+eq(c.hudTextAlpha, 20, "text opacity 20 allowed")
+eq(has(out, "text and icons 20%"), true, "reply shows the text opacity")
+M.Run(c, "hud textopacity 100"); eq(c.hudTextAlpha, 100, "100 allowed")
+for _, bad in ipairs({ "hud textopacity", "hud textopacity 19", "hud textopacity 0", "hud textopacity 101", "hud textopacity 30.5" }) do
+    out = M.Run(c, bad)
+    eq(c.hudTextAlpha, 100, bad .. ": unchanged")
+    eq(has(out, "Text opacity must be a whole number from 20 to 100."), true, bad .. ": explained")
+end
+out = M.Run(c, "hud color #1A2B3C")
+eq(c.hudColor, "1a2b3c", "colour set from #rrggbb, saved lower case without the #")
+eq(has(out, "of color #1a2b3c"), true, "reply shows the colour")
+M.Run(c, "hud color 102030"); eq(c.hudColor, "102030", "without the #")
+M.Run(c, "hud color black"); eq(c.hudColor, "000000", "black")
+M.Run(c, "hud colour 405060"); eq(c.hudColor, "405060", "colour spelt either way")
+M.Run(c, "hud color reset"); eq(c.hudColor, "000000", "reset is black")
+for _, bad in ipairs({ "hud color red", "hud color #12345", "hud color #1234567", "hud color 10 20 30" }) do
+    out = M.Run(c, bad)
+    eq(c.hudColor, "000000", bad .. ": unchanged")
+    eq(has(out, "Give the color as #rrggbb"), true, bad .. ": explained")
+end
+do -- no colour given: the caller opens the colour picker; nothing is changed or printed
+    local lines, action = M.Run(c, "hud color")
+    eq(#lines, 0, "hud color alone prints nothing itself")
+    eq(action and (action[1] .. "/" .. action[2]), "hud/pick", "hud color alone asks for the picker")
+    local _, a2 = M.Run(c, "hud colour")
+    eq(a2 and a2[2], "pick", "colour spelt either way")
+    local _, a3 = M.Run(c, "hud color red")
+    eq(a3, nil, "a bad colour does not open the picker")
+    eq(c.hudColor, "000000", "unchanged")
+end
+c.hudColor = "nonsense"
+eq(has(M.Run(c, ""), "of color #000000"), true, "a saved colour that is not one shows as black")
+
+-- Row modes, one per group.
+c = fresh()
+out = M.Run(c, "hud row reagents always", "MAGE")
+eq(c.hudRow.reagents, "always", "the Reagents group")
+eq(has(out, "Status window row Reagents: always"), true, "confirmed")
+eq(has(M.Run(c, ""), "Status window rows changed: Reagents: always"), true, "/cvn reports it")
+M.Run(c, "hud row professions never", "MAGE"); eq(c.hudRow.professions, "never", "the Professions group")
+M.Run(c, "hud row bags never", "MAGE")
+eq(c.hudRow.bags, "never", "bags row")
+M.Run(c, "hud row  Bag   Space  always", "MAGE")
+eq(c.hudRow.bags, "always", "long name, case and spaces ignored")
+M.Run(c, "hud row durability never", "MAGE"); eq(c.hudRow.durability, "never", "durability row")
+M.Run(c, "hud row ammo always", "MAGE"); eq(c.hudRow.ammo, "always", "ammo row")
+eq(has(M.Run(c, ""), "Ammo: always, Reagents: always, Bag space: always, Durability: never, Professions: never"), true, "changed groups listed in window order")
+M.Run(c, "hud row bags low", "MAGE")
+eq(c.hudRow.bags, nil, "back to the default: not kept in the table")
+for _, name in ipairs({ "arcane powder", "mining", "conjured water" }) do
+    eq(has(M.Run(c, "hud row " .. name .. " always", "MAGE"), "No status window row group named " .. name), true, name .. ": not a group")
+end
+eq(c.hudRow["prof:Mining"] or c.hudRow["reagent:17020"], nil, "no per-row key is written")
+c.hudRow["prof:Mining"] = "always" -- left by an earlier build
+eq(has(M.Run(c, ""), "Mining"), false, "a stale row key is not listed")
+for _, bad in ipairs({ "hud row", "hud row bags", "hud row bags sometimes", "hud row always" }) do
+    eq(has(M.Run(c, bad, "MAGE"), "choose low, always or never"), true, bad .. ": explained")
+end
+eq(c.hudRow.bags, nil, "bad input changes nothing")
+local bare = fresh(); bare.hudRow = nil
+M.Run(bare, "hud row bags always", "MAGE")
+eq(bare.hudRow.bags, "always", "an old settings table gets its row table")
+
+-- Anchor and auction house.
+c = fresh()
+eq(has(M.Run(c, ""), "searches from: your hearthstone point"), true, "status shows the anchor (hearth by default)")
+eq(has(M.Run(c, ""), "Auction house routing: off"), true, "status shows auction routing")
+out = M.Run(c, "anchor last")
+eq(c.instanceAnchor, "last", "anchor set")
+eq(has(out, "searches from: your last position outside"), true, "reply shows it")
+M.Run(c, "anchor hearth"); eq(c.instanceAnchor, "hearth", "anchor back to hearth")
+eq(has(M.Run(c, "anchor home"), "Choose hearth or last."), true, "bad anchor explains")
+eq(c.instanceAnchor, "hearth", "and changes nothing")
+out = M.Run(c, "ah on")
+eq(c.ahEnabled, true, "auction routing on")
+eq(has(out, "Auction house routing: on"), true, "reply shows it")
+M.Run(c, "ah off"); eq(c.ahEnabled, false, "auction routing off")
+eq(has(M.Run(c, "ah maybe"), "Choose on or off."), true, "bad value explains")
+
+-- Help lists the new commands; no line has a raw pipe.
+local help = M.Run(fresh(), "help")
+for _, word in ipairs({ "/cvn hud lock/unlock/reset", "/cvn hud scale <50-200>", "/cvn hud opacity <0-100>", "/cvn hud textopacity <20-100>", "/cvn hud color  open the color picker", "/cvn hud color <#rrggbb/black/reset>", "/cvn hud row <ammo/reagents/professions/bags/durability> low/always/never", "/cvn anchor hearth/last", "/cvn ah on/off" }) do
+    eq(has(help, word), true, "help lists " .. word)
+end
+eq(has(help, "|"), false, "no pipe in help")
+eq(has(help, "demo"), false, "the demo command is not in help")
+-- /cvn demo: an action for the caller, nothing printed, nothing changed.
+c = fresh()
+local function flat(t)
+    local parts = {}
+    for k, v in pairs(t) do parts[#parts + 1] = tostring(k) .. "=" .. tostring(v) end
+    table.sort(parts)
+    return table.concat(parts, ",")
+end
+local was = flat(c)
+local lines, action = M.Run(c, "demo")
+eq(#lines, 0, "demo prints nothing itself (and so not the help)")
+eq(action and action[1], "demo", "demo is an action for the caller")
+eq(flat(c), was, "demo changes no setting")
 
 H.done()

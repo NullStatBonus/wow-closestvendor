@@ -7,22 +7,35 @@ local L = ns.L
 local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
     bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true,
     ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped",
-    vendorMode = "ask", vendorPrefer = "map", autoNotice = true, reagentThreshold = 5 }
+    vendorMode = "ask", vendorPrefer = "map", autoNotice = true, reagentThreshold = 5,
+    -- Reagent buying: off until the player turns it on, asks first, stocks up to 20 of each.
+    reagentBuyEnabled = false, reagentBuyPrompt = true, reagentBuyTarget = 20,
+    -- Status window: scale, background opacity (0 draws no background) and text and icon opacity are
+    -- percentages; the background colour is "rrggbb", pure black unless the player chooses another.
+    -- Row group modes are in cfg.hudRow (see init).
+    hudLocked = false, hudScale = 100, hudAlpha = 80, hudTextAlpha = 100, hudColor = "000000",
+    instanceAnchor = "hearth", ahEnabled = false }
 local POLL_SECONDS = 5
+local WINDOW_DELAY = 0.25 -- one redraw of the status window this long after the first change
 
 local POPUP = "CLOSESTVENDOR_CONFIRM"
+-- The reagent purchase question has a dialog of its own, so it can show beside an ammo purchase
+-- question at the same merchant instead of replacing it.
+local POPUP_REAGENTS = "CLOSESTVENDOR_CONFIRM_REAGENTS"
 -- The question text is passed whole as the first argument, so "%" in vendor names is safe.
 if StaticPopupDialogs then
-    StaticPopupDialogs[POPUP] = {
-        text = "%s",
-        button1 = YES or "Yes",
-        button2 = NO or "No",
-        OnAccept = function(_, accept) if accept then accept() end end,
-        timeout = 0,
-        whileDead = false,
-        hideOnEscape = true,
-        preferredIndex = 3,
-    }
+    for _, which in ipairs({ POPUP, POPUP_REAGENTS }) do
+        StaticPopupDialogs[which] = {
+            text = "%s",
+            button1 = YES or "Yes",
+            button2 = NO or "No",
+            OnAccept = function(_, accept) if accept then accept() end end,
+            timeout = 0,
+            whileDead = false,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+    end
 end
 
 -- The two-target question: Cancel plus one button per target. Two copies so the preferred target
@@ -52,7 +65,9 @@ local function closeQuestions()
 end
 
 local DB, controller, timerArmed, panel, log
-local buckets, trainerBuckets = {}, {}
+local colorNote = "not registered" -- what Options said about the background colour control
+local buckets, trainerBuckets, auctionBuckets = {}, {}, {}
+local tracker, windowDirty, skillCache, playerClass
 
 -- Print to chat. "|" starts an escape code in chat, so it is doubled in the text.
 local function say(text)
@@ -105,8 +120,61 @@ local function rebuildTrainers()
     end
 end
 
+-- Shipped + learned auctioneers, in the vendor record shape (no repair, no ammo), bucketed by continent.
+local function rebuildAuctioneers()
+    for k in pairs(auctionBuckets) do auctionBuckets[k] = nil end
+    for _, r in ipairs(ns.Discovery.Merge(ns.ShippedAuctioneers or {}, DB.auctioneers)) do
+        local continent, wx, wy = A.toWorld(r[3], r[4], r[5])
+        if continent then
+            local b = auctionBuckets[continent]
+            if not b then b = {}; auctionBuckets[continent] = b end
+            b[#b + 1] = { r[1], r[2], r[3], r[4], r[5], r[6], nil, 0, wx, wy }
+        end
+    end
+end
+
+-- Notes where the player is: logs a change of instance, and while in the open world with a position
+-- keeps it as DB.lastOutside { continent, map, x, y } (world x,y). Never updated inside an instance.
+local lastInstance = "none"
+local function trackPlace()
+    local inst = A.instanceType() or "none" -- unknown is treated as the open world
+    if inst ~= lastInstance then
+        log.Add("instance: " .. lastInstance .. " -> " .. inst)
+        lastInstance = inst
+    end
+    if inst ~= "none" then return end
+    local continent, x, y, map = A.playerWorldPos()
+    if not continent then return end
+    local o = DB.lastOutside
+    if not o then o = {}; DB.lastOutside = o end
+    o.continent, o.map, o.x, o.y = continent, map, x, y
+end
+
+-- The hearthstone point, DB.hearth { name, continent, map, x, y }: the game gives only the name of
+-- the bind location, so when that name changes the player's position is taken as the point. The
+-- first name seen is kept without a position: that hearthstone was bound somewhere else, earlier.
+local function learnHearth()
+    local name = A.bindLocation()
+    if not name then return end
+    local h = DB.hearth
+    if not h then DB.hearth = { name = name } return end
+    if h.name == name or (A.instanceType() or "none") ~= "none" then return end
+    local continent, x, y, map = A.playerWorldPos()
+    if not continent then return end -- tried again at the next zone change
+    DB.hearth = { name = name, continent = continent, map = map, x = x, y = y }
+    log.Add("hearthstone point learned: " .. name)
+end
+
+-- A saved place for the controller: "hearth" or "last", nil while its position is not known.
+local function anchor(which)
+    local p
+    if which == "hearth" then p = DB.hearth else p = DB.lastOutside end
+    if p and p.continent then return p end
+end
+
 local function evaluate()
     if not controller then return end
+    trackPlace()
     controller.Evaluate()
     -- Re-check later only while a request is waiting for a map position.
     if controller.pending and not timerArmed then
@@ -139,13 +207,38 @@ local function learnTrainer()
     return set
 end
 
+-- Remember the auctioneer whose window just opened (position is the player's).
+local function learnAuctioneer()
+    local a = A.auctioneer()
+    if not a then return end
+    local map, x, y = A.mapPosition()
+    if not map then return end
+    if ns.Discovery.RecordAuctioneer(DB.auctioneers, { a.id, a.name, map, x, y, a.faction }) then
+        rebuildAuctioneers()
+    end
+end
+
 local function init()
     ClosestVendorDB = ClosestVendorDB or {}
     DB = ClosestVendorDB
     DB.cfg = DB.cfg or {}
     for k, v in pairs(DEFAULTS) do if DB.cfg[k] == nil then DB.cfg[k] = v end end
     DB.cfg.reagentOff = DB.cfg.reagentOff or {} -- item ids the player switched off; all others are on
+    -- A saved window number outside its range, or a colour that is not one, is put right.
+    for _, key in ipairs({ "hudScale", "hudAlpha", "hudTextAlpha", "reagentBuyTarget" }) do
+        local v, limits = tonumber(DB.cfg[key]), ns.Commands.LIMITS[key]
+        DB.cfg[key] = v and math.max(limits[1], math.min(limits[2], v)) or DEFAULTS[key]
+    end
+    if not ns.Status.Color(DB.cfg.hudColor) then DB.cfg.hudColor = DEFAULTS.hudColor end
+    -- Status window group key -> mode, only for groups the player changed. Anything else in it (a key
+    -- that is not a group, a mode that is not one) is dropped: it would mean the default anyway.
+    if type(DB.cfg.hudRow) ~= "table" then DB.cfg.hudRow = {} end
+    for key, mode in pairs(DB.cfg.hudRow) do
+        if ns.Status.Group(key) ~= key or not ns.Status.MODES[mode] then DB.cfg.hudRow[key] = nil end
+    end
+    DB.hud = DB.hud or {} -- where the status window was dragged to; empty means its default place
     DB.learned = DB.learned or {}
+    DB.auctioneers = DB.auctioneers or {}
     DB.trainers = DB.trainers or {}
     DB.professions = DB.professions or {}
     DB.log = DB.log or {}
@@ -166,6 +259,101 @@ local function reagentList()
     return out
 end
 
+-- What ns.Reagents.OnMerchant needs when a merchant opens: the reagents the warning watches, with
+-- the same counts, and the game reads and the purchase through the Adapter. Money is what is left
+-- after an ammo purchase made a moment before (the game updates it only when the server answers).
+local ammoSpent = 0
+local REAGENT_ENV = {
+    watched = function() return reagentList() end,
+    offers = A.merchantReagents,
+    slots = A.bagSlots,
+    stack = A.stackSize,
+    money = function()
+        local m = A.money()
+        return m and math.max(0, m - ammoSpent) or nil
+    end,
+    buy = A.buyMerchantItem,
+    say = say,
+    log = function(text) if log then log.Add(text) end end,
+    confirm = function(text, accept) A.showPopup(POPUP_REAGENTS, text, accept) end,
+}
+
+-- Status window ---------------------------------------------------------------------------------
+
+-- What Status.Snapshot reads. Skills are kept until SKILL_LINES_CHANGED says they changed.
+local STATUS_SRC = {
+    freeSlots = A.freeSlots, lowestDurability = A.lowestDurability, ammo = A.ammoStatus,
+    knows = A.knowsSpell, itemCount = A.itemCount, itemName = A.itemName,
+    skills = function()
+        if not skillCache then skillCache = A.skills() end
+        return skillCache
+    end,
+}
+
+-- Redraw the status window now. Nothing is read from the game for a row set to "never".
+local function refreshWindow()
+    if not tracker then return end
+    playerClass = playerClass or A.classToken()
+    local cfg = DB.cfg
+    STATUS_SRC.known = DB.professions
+    local rows = ns.Status.Visible(ns.Status.Rows(ns.Status.Snapshot(STATUS_SRC, cfg, playerClass), cfg, playerClass), cfg)
+    local ok, err = pcall(tracker.Show, rows)
+    if not ok then
+        log.Add("status window failed and is switched off: " .. tostring(err))
+        tracker = nil
+    end
+end
+
+-- Something the window shows may have changed: one redraw shortly, however many events arrive.
+local function touchWindow()
+    if not tracker or windowDirty then return end
+    if A.after(WINDOW_DELAY, function() windowDirty = false; refreshWindow() end) then
+        windowDirty = true
+    else
+        refreshWindow() -- no timers on this client
+    end
+end
+
+-- A window setting changed (scale, opacity, text opacity, colour, lock, a row mode): apply it and redraw at once.
+local function applyWindow()
+    if not tracker then return end
+    pcall(tracker.Apply)
+    refreshWindow()
+end
+
+-- Open the settings page (the main one); false when it cannot be opened.
+local function openSettings()
+    return (panel and pcall(ns.Options.Open, panel)) and true or false
+end
+
+local function buildWindow()
+    local ok, t = pcall(ns.Tracker.New, {
+        cfg = DB.cfg,
+        pos = DB.hud,
+        shiftDown = A.shiftDown,
+        go = function(row)
+            log.Add("row click: " .. row.key .. " (" .. row.text .. ")")
+            if controller and not controller.Go(row.kind, row.id) then log.Add("row click: nothing pinned") end
+            touchWindow()
+        end,
+        openSettings = function()
+            if not openSettings() then say(L["The settings page is not available here; type /cvn help for the commands."]) end
+        end,
+    })
+    if ok then tracker = t else log.Add("status window not available: " .. tostring(t)) end
+end
+
+-- One report line: the status window settings; only group modes that are not the default are listed.
+local function windowLine()
+    local c, rows = DB.cfg, {}
+    for _, group in ipairs(ns.Status.GROUPS) do
+        local mode = ns.Status.Mode(c, group)
+        if mode ~= ns.Status.DEFAULT_MODE then rows[#rows + 1] = group .. "=" .. mode end
+    end
+    return ("status window: %s, scale %s%%, opacity %s%%, color #%s, text opacity %s%%, %s, rows: %s"):format(c.hudLocked and "locked" or "unlocked",
+        tostring(c.hudScale), tostring(c.hudAlpha), tostring(c.hudColor), tostring(c.hudTextAlpha), tracker and "built" or "not built", #rows > 0 and table.concat(rows, ", ") or "all default")
+end
+
 -- One report line: the reagent threshold, what is being watched now and what the player switched off.
 local function reagentLine()
     local watching, off = {}, {}
@@ -182,7 +370,8 @@ end
 -- The report: facts about this client and addon, then the debug log.
 local function reportText()
     local info = A.clientInfo()
-    local learned, continents = 0, {}
+    local learned, continents, auctioneers = 0, {}, 0
+    for _ in pairs(DB.auctioneers) do auctioneers = auctioneers + 1 end
     local trainers, professions = 0, {}
     for _ in pairs(DB.learned) do learned = learned + 1 end
     for _ in pairs(DB.trainers) do trainers = trainers + 1 end
@@ -203,8 +392,15 @@ local function reportText()
         ("ammo buying: %s, %s, arrows %s, bullets %s"):format(c.ammoBuyEnabled and "on" or "off",
             c.ammoBuyPrompt and "asks first" or "buys at once", tostring(c.arrowGrade), tostring(c.bulletGrade)),
         reagentLine(),
+        ("reagent buying: %s, %s, up to %s of each"):format(c.reagentBuyEnabled and "on" or "off",
+            c.reagentBuyPrompt and "asks first" or "buys at once", tostring(c.reagentBuyTarget)),
         ("target choice: %s, prefers %s, on-screen notice %s"):format(tostring(c.vendorMode), tostring(c.vendorPrefer), c.autoNotice and "on" or "off"),
         ("trainers: %d learned, professions seen: %s"):format(trainers, table.concat(professions, ", ")),
+        windowLine(),
+        ("color picker: %s, settings button: %s, %s"):format(A.hasColorPicker() and "available" or "missing",
+            A.hasSettingsButton() and "available" or "missing", colorNote),
+        ("instance anchor: %s, auction house routing: %s, auctioneers: %d shipped, %d learned"):format(tostring(c.instanceAnchor),
+            c.ahEnabled and "on" or "off", #(ns.ShippedAuctioneers or {}), auctioneers),
     }
     return ns.Log.Report(header, log.Entries(), log.Enabled()), header
 end
@@ -221,6 +417,7 @@ local function start()
     log.Add("---- login ----")
     rebuildBuckets()
     rebuildTrainers()
+    rebuildAuctioneers()
     local nav = { Set = function(v) return ns.Nav.Set(A.navApi(say), v) end,
                   Clear = function(h) ns.Nav.Clear(A.navApi(say), h) end }
     controller = ns.Controller.New({
@@ -249,13 +446,23 @@ local function start()
         skills = A.skills,
         known = DB.professions,
         trainerBuckets = trainerBuckets,
+        auctionBuckets = auctionBuckets,
         say = say,
         notify = A.screenMessage,
         zoneName = A.mapName,
+        instanceType = A.instanceType,
+        anchor = anchor,
+        after = A.after,
     })
     -- The settings page is optional: if the client's settings API differs, only the page is lost.
-    local ok, category = pcall(ns.Options.Register, DB.cfg, DEFAULTS, evaluate, A.classToken())
+    local ok, category = pcall(ns.Options.Register, DB.cfg, DEFAULTS, function() evaluate(); applyWindow() end, A.classToken(),
+        A.hasColorPicker() and A.pickColor or nil,
+        function(text) colorNote = text; log.Add(text) end, A.hasSwatchPicker())
+    if not ok then colorNote = "settings page failed: " .. tostring(category) end
     panel = ok and category or nil
+    -- So is the status window: a client whose frames differ only loses the window.
+    buildWindow()
+    touchWindow()
 end
 
 SLASH_CLOSESTVENDOR1 = "/cvn"
@@ -265,7 +472,7 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
     local lines, action = ns.Commands.Run(DB.cfg, msg, A.classToken())
     for _, line in ipairs(lines) do say(line) end
     if action and action[1] == "open" then
-        if panel and pcall(ns.Options.Open, panel) then return end
+        if openSettings() then return end
         say(L["The settings page is not available here; use the commands above."])
         return
     end
@@ -283,7 +490,38 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
         if problem then say(problem) end
         return
     end
+    if action and action[1] == "hud" and action[2] == "pick" then
+        -- The picker works wherever the game has one, settings page or not.
+        local r, g, b = ns.Status.Color(DB.cfg.hudColor)
+        local opened = A.hasColorPicker() and A.pickColor(r or 0, g or 0, b or 0, function(nr, ng, nb)
+            DB.cfg.hudColor = ns.Status.Hex(nr, ng, nb)
+            applyWindow()
+        end)
+        if not opened then
+            say(L["This game has no color picker; use /cvn hud color #rrggbb, or black or reset."])
+        end
+        return
+    end
+    if action and action[1] == "demo" then
+        -- A made-up window and one made-up warning for a few seconds; DB.cfg is only read.
+        if not controller then return end
+        local roll = ns.Status.Roller(A.now())
+        local snap, fake = ns.Status.Demo(roll, DB.cfg)
+        local started = controller.Demo(roll, function()
+            if tracker then pcall(tracker.Demo, nil) end
+            refreshWindow()
+        end)
+        if started and tracker then
+            pcall(tracker.Demo, ns.Status.Visible(ns.Status.Rows(snap, fake), fake))
+        end
+        return
+    end
+    if action and action[1] == "hud" and action[2] == "reset" then
+        for k in pairs(DB.hud) do DB.hud[k] = nil end
+        log.Add("status window position reset")
+    end
     evaluate() -- a changed threshold may apply right away
+    applyWindow() -- and so may a window setting or a row mode
 end
 
 ns.frame = CreateFrame("Frame")
@@ -299,12 +537,20 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "MERCHANT_SHOW" then
         if DB then learnMerchant() end
         if controller then controller.OnMerchantShow() end
-        if DB then ns.Ammo.OnMerchant(DB.cfg, AMMO_ENV) end
+        if DB then
+            local _, spent = ns.Ammo.OnMerchant(DB.cfg, AMMO_ENV)
+            ammoSpent = spent or 0
+            ns.Reagents.OnMerchant(DB.cfg, REAGENT_ENV)
+        end
     elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
         local trades = DB and learnTrainer()
         if trades and controller then controller.OnTrainerShow(trades) end
+    elseif event == "AUCTION_HOUSE_SHOW" then
+        if DB then learnAuctioneer() end
     elseif event == "SKILL_LINES_CHANGED" then
+        skillCache = nil
         if controller then controller.OnSkillChange() end
+        touchWindow()
     elseif event == "TRADE_SKILL_SHOW" or event == "UNIT_SPELLCAST_SUCCEEDED" then
         -- A craft is a successful cast while a tradeskill or craft window is open.
         local name = DB and A.craftProfession()
@@ -313,7 +559,9 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
             if event == "UNIT_SPELLCAST_SUCCEEDED" and controller then controller.OnCraft() end
         end
     else
+        if DB and (event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA") then learnHearth() end
         evaluate()
+        touchWindow()
     end
 end)
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA",
@@ -322,3 +570,5 @@ for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "Z
         "TRADE_SKILL_SHOW", "UNIT_SPELLCAST_SUCCEEDED", "SPELLS_CHANGED" }) do
     ns.frame:RegisterEvent(e)
 end
+-- Registering an event the client does not have is an error, and this one's name is unverified.
+pcall(ns.frame.RegisterEvent, ns.frame, "AUCTION_HOUSE_SHOW")

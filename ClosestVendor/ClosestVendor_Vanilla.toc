@@ -1,7 +1,7 @@
 ## Interface: 11509
 ## Title: Closest Vendor
 ## Notes: Designed for WoW Forever and Classic Era, this World of Warcraft addon directs you to the nearest relevant vendor whenever your gear needs repair or your bags are nearly full.
-## Version: 0.5.0
+## Version: 1.0.0
 ## Author: NullStatBonus
 ## SavedVariables: ClosestVendorDB
 ## OptionalDeps: TomTom, WaypointUI
@@ -15,6 +15,7 @@ Triggers.lua
 Ammo.lua
 Professions.lua
 Reagents.lua
+Status.lua
 Adapter.lua
 Search.lua
 Discovery.lua
@@ -24,5 +25,6 @@ Commands.lua
 Options.lua
 Log.lua
 Report.lua
+Tracker.lua
 Data\Vendors.lua
 Core.lua

@@ -123,7 +123,7 @@ The addon SHALL clear a vendor waypoint when a merchant window opens at a vendor
 - **THEN** the trainer waypoint stays
 
 ### Requirement: Settings panel
-The addon SHALL add a "Closest Vendor" page under Options, AddOns, with an on/off checkbox and a threshold slider for bags, durability, ammo and reagents, and professions. The ammo checkbox SHALL be labelled "Ammo and reagents" and SHALL switch both. Changes SHALL edit the same saved settings as the slash commands, take effect at once, and the panel SHALL honor the same limits as the commands. `/cvn config` SHALL open the page.
+The addon SHALL add a "Closest Vendor" page under Options, AddOns. The main page SHALL hold, under "Warnings", an on/off checkbox and a threshold slider for bags, durability, ammo and reagents, and professions, with the ammo checkbox labelled "Ammo and reagents" switching both; and, under "Navigation", the target choice, the target preference, the on-screen message checkbox, the dungeon and raid anchor, and the auction house checkbox. Three subcategories SHALL follow: "Reagents" (a warning checkbox for each of the player's class reagents, then the reagent buying controls: buy, ask first and the amount to carry), "Ammo" (buy, ask first, arrow and bullet grade), and "Status window" (first the Lock checkbox, then scale, opacity, and a visibility dropdown `low`, `always` or `never` for each row that applies to the player). Changes SHALL edit the same saved settings as the slash commands, take effect at once, and the panel SHALL honor the same limits as the commands. `/cvn config` SHALL open the main page. If subcategories are unavailable, all controls SHALL appear on the one page under section headers.
 
 #### Scenario: Change a threshold in the panel
 - **WHEN** the player moves the bag slider to 4
@@ -152,6 +152,22 @@ The addon SHALL add a "Closest Vendor" page under Options, AddOns, with an on/of
 #### Scenario: Panel unavailable
 - **WHEN** the client lacks the settings API
 - **THEN** the addon still loads and the slash commands work
+
+#### Scenario: Subcategories
+- **WHEN** the client supports subcategories
+- **THEN** Reagents, Ammo and Status window appear under Closest Vendor
+
+#### Scenario: Subcategories unavailable
+- **WHEN** the client lacks subcategories
+- **THEN** every control appears on the one page under section headers
+
+#### Scenario: Lock first
+- **WHEN** the Status window page opens
+- **THEN** the Lock window position checkbox is its first control
+
+#### Scenario: Only the player's rows
+- **WHEN** a warrior opens the Status window page
+- **THEN** no reagent rows are listed
 
 ### Requirement: Test commands
 The addon SHALL provide `/cvn test sell`, `/cvn test repair`, `/cvn test arrows` and `/cvn test bullets`, which ask the same question as a real trigger for the nearest sell or repair vendor, regardless of bag space, durability, combat state or trigger settings, and SHALL set the destination if the player accepts.

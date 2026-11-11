@@ -1,7 +1,9 @@
 -- Pure slash-command handling: no WoW globals.
 -- Run() edits cfg and returns the lines to print, plus an optional action for the caller:
 -- {"test", kind} with kind "sell", "repair", "arrow", "bullet" or "reagent"; {"open"} for the settings page;
--- {"debug", on}; {"log"} to show the report; {"log", "clear"}.
+-- {"debug", on}; {"log"} to show the report; {"log", "clear"}; {"hud", "pick"} for /cvn hud color with no colour (open the colour picker); {"hud", "reset"} to put the status
+-- window back at its default position (lock, scale, opacity, text opacity, colour and row modes are
+-- plain settings); {"demo"} for /cvn demo, which is not in the help on purpose.
 -- Run(cfg, msg, class): class is the player's class token ("MAGE"), needed by the reagent commands.
 local _, ns = ...
 
@@ -11,7 +13,8 @@ local M = {}
 ns.Commands = M
 
 -- Allowed whole-number range of each threshold: used by the commands and the settings panel.
-M.LIMITS = { bag = { 0, 200 }, dur = { 1, 100 }, ammo = { 0, 2000 }, trade = { 0, 300 }, reagent = { 1, 40 } }
+M.LIMITS = { bag = { 0, 200 }, dur = { 1, 100 }, ammo = { 0, 2000 }, trade = { 0, 300 }, reagent = { 1, 40 },
+    hudScale = { 50, 200 }, hudAlpha = { 0, 100 }, hudTextAlpha = { 20, 100 }, reagentBuyTarget = { 0, 100 } }
 
 -- Chat treats "|" as an escape character, so no printed line may contain one.
 local HELP = {
@@ -22,9 +25,16 @@ local HELP = {
     L["/cvn reagents  list your class reagents; /cvn reagent on/off <name>  switch one"],
     L["/cvn buy on/off  buy ammo at merchants; /cvn buy ask/auto  ask first or buy at once"],
     L["/cvn arrows, /cvn bullets  equipped, best or cheapest: which ammo to buy"],
+    L["/cvn reagentbuy on/off  buy class reagents at merchants; /cvn reagentbuy ask/auto  ask first or buy at once; /cvn reagentbuy <0-100>  how many of each to carry"],
     L["/cvn choice ask/auto  target on another map: ask which, or navigate without asking"],
     L["/cvn prefer map/distance  prefer the target on your map or the closest"],
     L["/cvn notice on/off  on-screen message when a target is chosen without asking"],
+    L["/cvn hud lock/unlock/reset  lock, unlock or reset the status window; /cvn hud scale <50-200>  its size in percent"],
+    L["/cvn hud opacity <0-100>  how solid the status window background is (0 shows only text and icons); /cvn hud textopacity <20-100>  how solid its text and icons are"],
+    L["/cvn hud color  open the color picker; /cvn hud color <#rrggbb/black/reset>  set the status window background color (black unless you change it)"],
+    L["/cvn hud row <ammo/reagents/professions/bags/durability> low/always/never  when that group of status window rows shows"],
+    L["/cvn anchor hearth/last  where a row click searches from inside a dungeon or raid"],
+    L["/cvn ah on/off  let a row click go to the auction house when it is closer than a vendor"],
     L["/cvn test sell, repair, arrows, bullets, reagent  ask the question now"],
     L["/cvn debug on/off  record what the addon sees; /cvn log  show the report; /cvn log clear  empty it"],
 }
@@ -45,6 +55,22 @@ local function reagentNamesOff(cfg)
     return names
 end
 
+local function modeName(mode)
+    if mode == "always" then return L["always"] end
+    if mode == "never" then return L["never"] end
+    return L["only when low"]
+end
+
+-- The status window row groups whose mode the player changed, as "name: mode", in window order.
+local function changedRows(cfg)
+    local out = {}
+    for _, group in ipairs(ns.Status.GROUPS) do
+        local mode = ns.Status.Mode(cfg, group)
+        if mode ~= ns.Status.DEFAULT_MODE then out[#out + 1] = L["%s: %s"]:format(ns.Status.KeyName(group), modeName(mode)) end
+    end
+    return out
+end
+
 local function status(cfg)
     local lines = {
         L["Bags: %s, trigger at %d free slot(s) or fewer"]:format(cfg.bagEnabled and L["on"] or L["off"], cfg.bagThreshold),
@@ -60,7 +86,81 @@ local function status(cfg)
     table.insert(lines, 4, L["Reagents: %s, trigger at %d or fewer"]:format(cfg.ammoEnabled and L["on"] or L["off"], cfg.reagentThreshold))
     local off = reagentNamesOff(cfg)
     if #off > 0 then table.insert(lines, 5, L["Reagents switched off: %s"]:format(table.concat(off, ", "))) end
+    table.insert(lines, #off > 0 and 6 or 5, L["Reagent buying: %s, %s, up to %d of each"]:format(
+        cfg.reagentBuyEnabled and L["on"] or L["off"], cfg.reagentBuyPrompt ~= false and L["asks first"] or L["buys at once"],
+        cfg.reagentBuyTarget or 20))
+    lines[#lines + 1] = L["Status window: %s, scale %d%%, background %d%% of color #%s, text and icons %d%%"]:format(
+        cfg.hudLocked and L["locked"] or L["unlocked"], cfg.hudScale or 100, cfg.hudAlpha or 80,
+        ns.Status.Color(cfg.hudColor) and cfg.hudColor or ns.Status.BLACK, cfg.hudTextAlpha or 100)
+    local rows = changedRows(cfg)
+    if #rows > 0 then lines[#lines + 1] = L["Status window rows changed: %s"]:format(table.concat(rows, ", ")) end
+    lines[#lines + 1] = L["A row click inside a dungeon or raid searches from: %s"]:format(
+        cfg.instanceAnchor == "last" and L["your last position outside"] or L["your hearthstone point"])
+    lines[#lines + 1] = L["Auction house routing: %s"]:format(cfg.ahEnabled and L["on"] or L["off"])
     return lines
+end
+
+-- A whole number from lo to hi after the hud word, or nothing.
+local function percent(rest, lo, hi)
+    local v = tonumber(rest:match("^%S+%s+(%S+)$"))
+    if v and v % 1 == 0 and v >= lo and v <= hi then return v end
+end
+
+-- /cvn hud ...: lock, unlock, reset, scale, opacity and textopacity <percent>, color <colour>,
+-- row <group> <mode>.
+local function hudCommand(cfg, arg, rest)
+    if arg == "lock" or arg == "unlock" then
+        cfg.hudLocked = (arg == "lock")
+        return status(cfg)
+    end
+    if arg == "reset" then return { L["Status window moved back to its default position."] }, { "hud", "reset" } end
+    if arg == "scale" then
+        local lo, hi = M.LIMITS.hudScale[1], M.LIMITS.hudScale[2]
+        local v = percent(rest, lo, hi)
+        if not v then return { L["Window scale must be a whole number from %d to %d."]:format(lo, hi) } end
+        cfg.hudScale = v
+        return status(cfg)
+    end
+    if arg == "opacity" then
+        local lo, hi = M.LIMITS.hudAlpha[1], M.LIMITS.hudAlpha[2]
+        local v = percent(rest, lo, hi)
+        if not v then return { L["Background opacity must be a whole number from %d to %d."]:format(lo, hi) } end
+        cfg.hudAlpha = v
+        return status(cfg)
+    end
+    if arg == "textopacity" then
+        local lo, hi = M.LIMITS.hudTextAlpha[1], M.LIMITS.hudTextAlpha[2]
+        local v = percent(rest, lo, hi)
+        if not v then return { L["Text opacity must be a whole number from %d to %d."]:format(lo, hi) } end
+        cfg.hudTextAlpha = v
+        return status(cfg)
+    end
+    if (arg == "color" or arg == "colour") and rest:match("^%S+%s*$") then
+        return {}, { "hud", "pick" } -- no colour given: open the game's colour picker
+    end
+    if arg == "color" or arg == "colour" then
+        local hex = ns.Status.ParseColor(rest:match("^%S+%s+(%S+)$"))
+        if not hex then
+            return { L["Give the color as #rrggbb (six hex digits, for example #101820), or black or reset for the default."] }
+        end
+        cfg.hudColor = hex
+        return status(cfg)
+    end
+    if arg == "row" then
+        local name, mode = rest:match("^%S+%s+(.-)%s*(%S+)$")
+        if not name or name == "" or not ns.Status.MODES[mode] then
+            return { L["Name a row group and choose low, always or never, for example /cvn hud row bags always."] }
+        end
+        local key = ns.Status.Find(name)
+        if not key then
+            return { L["No status window row group named %s. Use ammo, reagents, professions, bags or durability."]:format(name) }
+        end
+        if type(cfg.hudRow) ~= "table" then cfg.hudRow = {} end
+        -- Only a changed mode is kept: a group not in the table has the default.
+        cfg.hudRow[key] = mode ~= ns.Status.DEFAULT_MODE and mode or nil
+        return { L["Status window row %s: %s"]:format(ns.Status.KeyName(key), modeName(mode)) }
+    end
+    return { L["Choose lock, unlock, reset, scale, opacity, textopacity, color or row."] }
 end
 
 -- /cvn reagent ...: the threshold, or one reagent on or off by name.
@@ -80,6 +180,26 @@ local function reagentCommand(cfg, arg, name, class)
         return { L["Reagent threshold must be a whole number from %d to %d."]:format(lo, hi) }
     end
     cfg.reagentThreshold = v
+    return status(cfg)
+end
+
+-- /cvn reagentbuy on/off, ask/auto or the amount of each reagent to carry (0 buys none).
+local function reagentBuyCommand(cfg, arg, class)
+    if #ns.Reagents.ForClass(class) == 0 then return { L["Your class does not use reagents."] } end
+    if arg == "on" or arg == "off" then
+        cfg.reagentBuyEnabled = (arg == "on")
+        return status(cfg)
+    end
+    if arg == "ask" or arg == "auto" then
+        cfg.reagentBuyPrompt = (arg == "ask")
+        return status(cfg)
+    end
+    local v = tonumber(arg)
+    local lo, hi = M.LIMITS.reagentBuyTarget[1], M.LIMITS.reagentBuyTarget[2]
+    if not v or v % 1 ~= 0 or v < lo or v > hi then
+        return { L["Reagent amount must be a whole number from %d to %d, or on, off, ask or auto."]:format(lo, hi) }
+    end
+    cfg.reagentBuyTarget = v
     return status(cfg)
 end
 
@@ -115,6 +235,7 @@ function M.Run(cfg, msg, class)
     local arg = rest:match("^%S*")
     if cmd == "" then return status(cfg) end
     if cmd == "reagents" then return reagentList(cfg, class) end
+    if cmd == "reagentbuy" then return reagentBuyCommand(cfg, arg, class) end
     if cmd == "reagent" and arg ~= "" then return reagentCommand(cfg, arg, rest:match("^%S*%s*(.*)$"), class) end
     if cmd == "bags" and arg ~= "" then return setting(cfg, "bag", arg, M.LIMITS.bag[1], M.LIMITS.bag[2], L["Bag threshold"]) end
     if cmd == "debug" and (arg == "on" or arg == "off") then
@@ -155,6 +276,22 @@ function M.Run(cfg, msg, class)
     if cmd == "notice" then
         if arg == "on" or arg == "off" then
             cfg.autoNotice = (arg == "on")
+            return status(cfg)
+        end
+        return { L["Choose on or off."] }
+    end
+    if cmd == "demo" then return {}, { "demo" } end
+    if cmd == "hud" then return hudCommand(cfg, arg, rest) end
+    if cmd == "anchor" then
+        if arg == "hearth" or arg == "last" then
+            cfg.instanceAnchor = arg
+            return status(cfg)
+        end
+        return { L["Choose hearth or last."] }
+    end
+    if cmd == "ah" then
+        if arg == "on" or arg == "off" then
+            cfg.ahEnabled = (arg == "on")
             return status(cfg)
         end
         return { L["Choose on or off."] }

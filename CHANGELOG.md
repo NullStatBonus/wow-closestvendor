@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0
+
+This is a major version bump made by request; nothing saved by earlier versions breaks.
+
+- Status window: a small movable window showing ammo, class reagents, bag space, durability and professions. Each group (Ammo, Reagents, Bags, Durability, Professions) is set to Only when low, Always or Never; display-only items (Soul Shards, Blinding Powder, Conjured Food and Water) show when Reagents is Always. Click a row to navigate to the closest vendor with no question, even in combat. Drag the title to move it (Shift-drag when unlocked), lock it, and reset it.
+- Window appearance: background opacity 0 to 100% (at 0 only text and icons are drawn), text and icon opacity 20 to 100%, scale 50 to 200%, and a background color chosen with the game's color picker. Black by default, so it is kind to OLED screens.
+- Reagent buying: stock up to a set amount (0 to 100) of each reagent your class uses when a merchant window opens, with an ask-first option, like ammo buying.
+- Instances: no questions or pins inside dungeons, raids and battlegrounds, and a pin made there searches from your hearthstone point or your last position outside (`/cvn anchor hearth|last`).
+- Auction house: optional routing to the closest auctioneer when it is nearer than a vendor (`/cvn ah on|off`); auctioneers are shipped and learned.
+- Settings are split into the main page (Warnings, Navigation) and Reagents, Ammo and Status window pages.
+- Commands: `/cvn hud lock|unlock|reset|scale|opacity|textopacity|color|row`, `/cvn anchor`, `/cvn ah`, `/cvn reagentbuy`.
+- The debug report lists the new settings and says whether the color picker and settings button exist.
+
 ## 0.5.0
 
 - Class reagents: reminds Mages, Rogues, Priests, Paladins, Shamans and Druids when a reagent they use is low (5 or fewer by default) and offers to navigate to the closest vendor that sells it. Only reagents for spells you know are watched, and rank-based reagents (druid seeds, priest candles) follow your highest rank.

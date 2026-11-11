@@ -10,10 +10,12 @@ local S = {}
 ns.Search = S
 
 -- need: nil (any vendor), "repair", "arrow", "bullet", or { reagent = item } (an entry of the
--- Reagents table) for a vendor that sells that reagent.
+-- Reagents table) for a vendor that sells that reagent, or "auction" (any record: the caller passes
+-- an auctioneer bucket, same record shape).
 local function eligible(v, need)
     if need == nil then return true end
     if type(need) == "table" then return ns.Reagents.Has(v[11], need.reagent) end
+    if need == "auction" then return true end
     if need == "repair" then return v[7] and true or false end
     local code = v[8] or 0
     if need == "arrow" then return code == 1 or code == 3 end
@@ -36,6 +38,13 @@ function S.Nearest(bucket, px, py, need, playerFaction, mapId)
         end
     end
     return best, onMap
+end
+
+-- Nearest from a place instead of from bare coordinates: at is { continent, x, y, map } (world x,y;
+-- map may be nil), the player's position or an anchor such as the hearthstone point. buckets is
+-- { [continentId] = bucket }. Returns what Nearest returns; nothing for an unknown continent.
+function S.NearestFrom(buckets, at, need, playerFaction)
+    return S.Nearest(buckets[at.continent] or {}, at.x, at.y, need, playerFaction, at.map)
 end
 
 -- Trainer record: { npcId, name, uiMapID, mx, my, faction, trades (set of profession names), wx, wy }.

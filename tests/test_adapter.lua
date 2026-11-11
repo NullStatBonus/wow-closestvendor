@@ -162,6 +162,16 @@ eq(mer.name, "Fresh Vendor", "name")
 eq(mer.faction, 2, "faction")
 eq(mer.repair, true, "repair")
 eq(mer.ammo, 3, "sells arrows and bullets")
+-- auctioneer.
+local ah = boot(merchantGame()).auctioneer()
+eq(ah.id, 1234, "auctioneer id from the GUID")
+eq(ah.name, "Fresh Vendor", "auctioneer name")
+eq(ah.faction, 2, "auctioneer faction")
+eq(boot(merchantGame({ UnitGUID = function() return "Player-0-0-0-0-0-0" end })).auctioneer(), nil, "not a creature")
+eq(boot(merchantGame({ UnitGUID = boom })).auctioneer(), nil, "GUID throws")
+eq(boot({}).auctioneer(), nil, "functions missing")
+eq(boot(merchantGame({ UnitFactionGroup = function() return nil end })).auctioneer().faction, 0, "neutral auctioneer")
+
 eq(boot(merchantGame({ GetMerchantNumItems = function() return 2 end,
     GetMerchantItemLink = function(i) return "item:" .. ({ 400, 401 })[i] .. ":0" end })).merchant().ammo, 0, "other item classes with an ammo subclass number are not ammo")
 eq(boot(merchantGame({ UnitGUID = function() return nil end })).merchant(), nil, "no GUID")
@@ -360,6 +370,72 @@ for _, modern in ipairs({ false, true }) do
     eq(A.ammoSpace(ARROW, "bullet"), 0, label .. "bags readable but no pouch: no room")
 end
 eq(boot({}).merchantAmmo(), nil, "no merchant API: unknown")
+
+-- Reagent buying on both API shapes: the merchant's class reagents (never display-only items or
+-- items paid with more than gold), the general bag slots and the stack size.
+local reagentLines = { { "Arcane Powder", 100, 1, -1, false, 17020 }, { "Soul Shard", 1, 1, -1, false, 6265 },
+    { "Rune of Portals", 5, 1, -1, true, 17032 }, { "Rough Arrow", 100, 200, -1, false, ARROW }, { "Rune of Teleportation", 1000, 1, 5, false, 17031 } }
+local function reagentGame(modern, over)
+    local g = ammoGame(modern)
+    g.GetMerchantNumItems = function() return #reagentLines end
+    g.GetMerchantItemLink = function(i) return "|cff|Hitem:" .. reagentLines[i][6] .. "::|h[x]|h|r" end
+    g.GetMerchantItemMaxStack = function() return 20 end
+    local function info(i)
+        local m = reagentLines[i]
+        return m[1], m[2], m[3], m[4], m[5]
+    end
+    if modern then
+        g.C_MerchantFrame = { GetItemInfo = function(i)
+            local n, p, b, s, x = info(i)
+            return { name = n, price = p, stackCount = b, numAvailable = s, hasExtendedCost = x }
+        end }
+    else
+        g.GetMerchantItemInfo = function(i) local n, p, b, s, x = info(i); return n, "tex", p, b, s, true, x end
+    end
+    -- Backpack (bag 0): general, slots { AP x5, empty }; bag 1 a quiver (left out); bag 2 general, { empty }.
+    local bags = { [0] = { { 17020, 5 }, false }, [2] = { false } }
+    local function numSlots(b) if b == 1 then return 3 end return bags[b] and #bags[b] or 0 end
+    local function free(b) if b == 1 then return 1, 1 end return 1, 0 end
+    local function slot(b, s) local x = bags[b] and bags[b][s]; return x or nil end
+    if modern then
+        g.C_Container = { GetContainerNumSlots = numSlots, GetContainerNumFreeSlots = free,
+            GetContainerItemInfo = function(b, s) local x = slot(b, s); return x and { itemID = x[1], stackCount = x[2] } end }
+    else
+        g.GetContainerNumSlots, g.GetContainerNumFreeSlots = numSlots, free
+        g.GetContainerItemInfo = function(b, s) local x = slot(b, s); if x then return "tex", x[2] end end
+        g.GetContainerItemID = function(b, s) local x = slot(b, s); return x and x[1] end
+    end
+    for k, v in pairs(over or {}) do g[k] = v end
+    return g
+end
+for _, modern in ipairs({ false, true }) do
+    local label = modern and "newer client: " or "Classic Era: "
+    local A = boot(reagentGame(modern))
+    local offers = A.merchantReagents()
+    local ids = {}
+    for _, o in ipairs(offers) do ids[#ids + 1] = o.id end
+    eq(table.concat(ids, ","), "17020,17031", label .. "class reagents only: no display-only item, no extended cost, no ammo")
+    local o = offers[2]
+    eq(o.index .. "/" .. o.name .. "/" .. o.price .. "/" .. o.batch .. "/" .. o.stock .. "/" .. o.maxBuy, "5/Rune of Teleportation/1000/1/5/20", label .. "offer fields")
+    local s = A.bagSlots()
+    eq(#s, 3, label .. "backpack and the general bag, not the quiver")
+    eq(s[1][1] .. "x" .. s[1][2] .. "," .. tostring(s[2]) .. "," .. tostring(s[3]), "17020x5,false,false", label .. "slot contents")
+    eq(A.stackSize(17020), 200, label .. "stack size from item info")
+end
+eq(boot({}).merchantReagents(), nil, "no merchant API: unknown")
+eq(boot(reagentGame(false, { GetMerchantItemMaxStack = false })).merchantReagents()[1].maxBuy, nil, "no max-stack function: maxBuy unknown")
+eq(boot(reagentGame(false, { GetMerchantItemMaxStack = boom })).merchantReagents()[1].maxBuy, nil, "max stack throws: unknown")
+eq(boot({}).bagSlots(), nil, "no bag API: unknown")
+eq(boot(reagentGame(false, { GetContainerNumFreeSlots = function(b) if b == 0 then error("x") end return 1, 0 end })).bagSlots(), nil, "backpack unreadable: unknown")
+eq(#boot(reagentGame(false, { GetContainerNumFreeSlots = function(b) if b == 2 then error("x") end return 1, b == 1 and 1 or 0 end })).bagSlots(), 2, "a bag of unknown kind is left out")
+eq(boot(reagentGame(false, { GetContainerItemInfo = boom, GetContainerItemID = boom })).bagSlots(), nil, "a slot unreadable: unknown")
+eq(boot({}).stackSize(17020), nil, "no item info: stack unknown")
+eq(boot({ GetItemInfo = function() return "n" end }).stackSize(17020), nil, "item info without a stack: unknown")
+local calls = {}
+local Ab = boot({ BuyMerchantItem = function(...) calls[#calls + 1] = select("#", ...) .. ":" .. table.concat({ ... }, ",") end })
+Ab.buyMerchantItem(3); Ab.buyMerchantItem(4, 17)
+eq(table.concat(calls, " "), "1:3 2:4,17", "one batch, or a quantity of single items")
+eq(boot({ BuyMerchantItem = boom }).buyMerchantItem(1, 5), nil, "buying throws: no error")
 eq(boot(ammoGame(false)).level(), nil, "no UnitLevel: unknown")
 
 -- screenMessage: silent text in a frame of our own, about five seconds, replaced by a newer message.
@@ -417,5 +493,86 @@ eq(#eN, 1, "and not again")
 local aT, eT = boot({ UIParent = {}, CreateFrame = boom })
 eq(aT.screenMessage("x"), nil, "throwing CreateFrame: nothing, no error raised")
 eq(#eT, 1, "the failure is reported")
+
+-- instanceType: none, party, raid or pvp; unknown is nil, never "none".
+local function inst(inside, kind) return boot({ IsInInstance = function() return inside, kind end }).instanceType() end
+eq(inst(false, "none"), "none", "open world")
+eq(inst(true, "party"), "party", "dungeon")
+eq(inst(true, "raid"), "raid", "raid")
+eq(inst(true, "pvp"), "pvp", "battleground")
+eq(inst(true, "arena"), "pvp", "an arena counts as pvp")
+eq(inst(true, "scenario"), "party", "another kind of instance counts as a dungeon")
+eq(inst(false, nil), "none", "not inside and no kind given: open world")
+eq(inst(nil, nil), nil, "the game says nothing: unknown")
+local aI, eI = boot({})
+eq(aI.instanceType(), nil, "missing IsInInstance: unknown")
+eq(#eI, 1, "missing reported once")
+eq(boot({ IsInInstance = boom }).instanceType(), nil, "throwing: unknown")
+
+-- bindLocation: the name, or nil.
+eq(boot({ GetBindLocation = function() return "Goldshire" end }).bindLocation(), "Goldshire", "bind name")
+eq(boot({ GetBindLocation = function() return "" end }).bindLocation(), nil, "empty name: unknown")
+eq(boot({ GetBindLocation = function() return nil end }).bindLocation(), nil, "no name: unknown")
+eq(boot({ GetBindLocation = boom }).bindLocation(), nil, "throwing: unknown")
+eq(boot({}).bindLocation(), nil, "missing: unknown")
+
+-- shiftDown.
+eq(boot({ IsShiftKeyDown = function() return true end }).shiftDown(), true, "shift held")
+eq(boot({ IsShiftKeyDown = function() return 1 end }).shiftDown(), true, "numeric true")
+eq(boot({ IsShiftKeyDown = function() return false end }).shiftDown(), false, "shift not held")
+eq(boot({ IsShiftKeyDown = boom }).shiftDown(), nil, "throwing: unknown")
+eq(boot({}).shiftDown(), nil, "missing: unknown")
+
+-- Colour picker: newer clients take one table, older ones are set up field by field. Missing or
+-- throwing: nothing opens, nil, one report.
+local function picker(newStyle, throws)
+    local f = { shown = false, rgb = { 0, 0, 0 } }
+    function f:GetColorRGB() return self.rgb[1], self.rgb[2], self.rgb[3] end
+    if newStyle then
+        function f:SetupColorPickerAndShow(info)
+            if throws then error("kaboom", 0) end
+            self.info, self.shown = info, true
+            self.rgb = { info.r, info.g, info.b }
+        end
+    else
+        function f:SetColorRGB(r, g, b) if throws then error("kaboom", 0) end self.rgb = { r, g, b } end
+        function f:Show() self.shown = true end
+    end
+    return f
+end
+eq(boot({ ColorPickerFrame = picker(true) }).hasColorPicker(), true, "colour picker present")
+eq(boot({}).hasColorPicker(), nil, "no colour picker: nil")
+eq(boot({ CreateSettingsButtonInitializer = function() end }).hasSettingsButton(), true, "settings button maker present")
+eq(boot({}).hasSettingsButton(), nil, "no settings button maker: nil")
+eq(boot({ ColorPickerFrame = { SetupColorPickerAndShow = function() end, GetPreviousValues = function() end } }).hasSwatchPicker(), true, "picker takes the settings swatch's calls")
+eq(boot({ ColorPickerFrame = { SetupColorPickerAndShow = function() end } }).hasSwatchPicker(), nil, "no GetPreviousValues: nil")
+eq(boot({ ColorPickerFrame = { GetPreviousValues = function() end } }).hasSwatchPicker(), nil, "no SetupColorPickerAndShow: nil")
+eq(boot({}).hasSwatchPicker(), nil, "no picker: nil")
+for _, newStyle in ipairs({ true, false }) do
+    local frame = picker(newStyle)
+    local Ap = boot({ ColorPickerFrame = frame })
+    local got = {}
+    eq(Ap.pickColor(0.2, 0.4, 0.6, function(r, g, b) got[#got + 1] = r .. "," .. g .. "," .. b end), true, "picker opened: " .. tostring(newStyle))
+    eq(frame.shown, true, "and shown")
+    eq(table.concat(frame.rgb, ","), "0.2,0.4,0.6", "at the colour given")
+    local swatch = newStyle and frame.info.swatchFunc or frame.func
+    local cancel = newStyle and frame.info.cancelFunc or frame.cancelFunc
+    local hasOpacity; if newStyle then hasOpacity = frame.info.hasOpacity else hasOpacity = frame.hasOpacity end
+    eq(hasOpacity, false, "no opacity in the picker: that is its own setting")
+    frame.rgb = { 1, 0, 0.5 }; swatch()
+    eq(got[1], "1,0,0.5", "a colour tried is passed on")
+    cancel()
+    eq(got[2], "0.2,0.4,0.6", "cancel goes back to the starting colour")
+    frame.GetColorRGB = boom; swatch()
+    eq(#got, 2, "a picker that cannot say its colour changes nothing")
+end
+local Am, errm = boot({})
+eq(Am.pickColor(0, 0, 0, function() end), nil, "no picker: nil")
+eq(errm[1], "ColorPickerFrame: missing", "and reported")
+for _, newStyle in ipairs({ true, false }) do
+    local At, errt = boot({ ColorPickerFrame = picker(newStyle, true) })
+    eq(At.pickColor(0, 0, 0, function() end), nil, "throwing picker: nil")
+    eq(errt[1], "ColorPickerFrame: kaboom", "and reported")
+end
 
 H.done()

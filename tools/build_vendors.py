@@ -135,7 +135,41 @@ def pfquest_records(meta, units, names, assignment_csv, items, reagents=None):
     return records, stats
 
 
-def render(records, source_note):
+def auctioneer_records(meta, units, names, assignment_csv):
+    """Auctioneers from pfQuest's `auctioneer` meta list that have a coordinate, a name and a map:
+    [{id, name, map, mx, my, faction}] (faction as for vendors; "AH" and other neutrals are 0)."""
+    listed = parse_meta_list(meta, "auctioneer")
+    coords = parse_first_coords(units, set(listed))
+    name_of = parse_names(names)
+    area_map = area_to_uimap(assignment_csv)
+    records = []
+    for uid in sorted(listed):
+        if uid not in coords or uid not in name_of or coords[uid][2] not in area_map:
+            continue
+        x, y, zone = coords[uid]
+        records.append({"id": uid, "name": name_of[uid], "map": area_map[zone], "mx": x / 100, "my": y / 100,
+                        "faction": FACTION.get(listed[uid], 0)})
+    return records
+
+
+def render_auctioneers(records):
+    """The ns.ShippedAuctioneers table text: {npcId, name, uiMapID, mx, my, faction}."""
+    seen, lines = set(), []
+    for r in sorted(records, key=lambda r: r["id"]):
+        if r["id"] in seen:
+            raise ValueError(f"duplicate auctioneer id {r['id']}")
+        seen.add(r["id"])
+        if not (0 <= r["mx"] <= 1 and 0 <= r["my"] <= 1):
+            raise ValueError(f"auctioneer {r['id']}: coordinates outside 0-1")
+        if r["faction"] not in (0, 1, 2):
+            raise ValueError(f"auctioneer {r['id']}: bad faction")
+        lines.append("    {%d, %s, %d, %.4f, %.4f, %d}," % (
+            r["id"], lua_str(r["name"]), r["map"], r["mx"], r["my"], r["faction"]))
+    return ("-- Auctioneer: {npcId, name, uiMapID, mx, my, faction (0 both, 1 Alliance, 2 Horde)}\n"
+            "ns.ShippedAuctioneers = {\n" + "\n".join(lines) + "\n}\n")
+
+
+def render(records, source_note, auctioneers=None):
     """Write the data file text for normalized records (source independent)."""
     seen, lines = set(), []
     for r in sorted(records, key=lambda r: r["id"]):
@@ -160,12 +194,15 @@ def render(records, source_note):
         "-- Record: {npcId, name, uiMapID, mx, my, faction (0 both, 1 Alliance, 2 Horde), repair, ammo (0 none, 1 arrows, 2 bullets, 3 both), reagents (bitmask, see Reagents.lua)}\n"
         "local _, ns = ...\n"
         "ns.ShippedVendors = {\n")
-    return header + "\n".join(lines) + "\n}\n"
+    text = header + "\n".join(lines) + "\n}\n"
+    return text + "\n" + render_auctioneers(auctioneers or [])
 
 
 def build(meta, units, names, assignment_csv, items, source_note):
     records, stats = pfquest_records(meta, units, names, assignment_csv, items)
-    return render(records, source_note), stats
+    auctioneers = auctioneer_records(meta, units, names, assignment_csv)
+    stats["auctioneers"] = len(auctioneers)
+    return render(records, source_note, auctioneers), stats
 
 
 def main():

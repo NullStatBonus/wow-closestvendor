@@ -51,7 +51,7 @@ for _, v in ipairs(list) do
     if v[9] > 0 then sellers = sellers + 1 end
     local rest = v[9]
     for _, item in ipairs(ns2.Reagents.ITEMS) do
-        if ns2.Reagents.Has(v[9], item) then
+        if item.vendor ~= false and ns2.Reagents.Has(v[9], item) then
             perItem[item.id] = (perItem[item.id] or 0) + 1
             rest = rest - 2 ^ item.bit
         end
@@ -60,8 +60,38 @@ for _, v in ipairs(list) do
 end
 assert(sellers > 10 and sellers < #list / 4, "reagent seller count implausible: " .. sellers)
 for _, item in ipairs(ns2.Reagents.ITEMS) do
-    assert((perItem[item.id] or 0) > 0, "no shipped vendor sells " .. item.name)
+    if item.vendor ~= false then
+        assert((perItem[item.id] or 0) > 0, "no shipped vendor sells " .. item.name)
+    end
 end
+
+-- Shipped auctioneers: {npcId, name, uiMapID, mx, my, faction}, ascending ids, and a plausible count.
+local function validateAH(list)
+    if type(list) ~= "table" or #list == 0 then return "empty or missing auctioneers" end
+    local prev = 0
+    for i, v in ipairs(list) do
+        local where = "auctioneer " .. i
+        if type(v[1]) ~= "number" or v[1] <= prev then return where .. ": id not ascending/unique" end
+        prev = v[1]
+        if type(v[2]) ~= "string" or v[2] == "" then return where .. ": bad name" end
+        if type(v[3]) ~= "number" or v[3] <= 0 or v[3] % 1 ~= 0 then return where .. ": bad uiMapID" end
+        if type(v[4]) ~= "number" or v[4] < 0 or v[4] > 1 then return where .. ": mx out of range" end
+        if type(v[5]) ~= "number" or v[5] < 0 or v[5] > 1 then return where .. ": my out of range" end
+        if v[6] ~= 0 and v[6] ~= 1 and v[6] ~= 2 then return where .. ": bad faction" end
+        if #v ~= 6 then return where .. ": expected 6 fields, got " .. #v end
+    end
+end
+local ah = ns.ShippedAuctioneers
+assert(validateAH(ah) == nil, validateAH(ah))
+assert(#ah >= 20 and #ah <= 60, "auctioneer count implausible: " .. #ah)
+local f = { 0, 0, 0 }
+for _, v in ipairs(ah) do f[v[6] + 1] = f[v[6] + 1] + 1 end
+assert(f[1] > 0 and f[2] > 0 and f[3] > 0, "auctioneers missing a faction group")
+assert(validateAH({ { 1, "A", 1429, 0.5, 0.5, 1 } }) == nil, "auctioneer baseline must pass")
+assert(validateAH({ { 1, "A", 1429, 1.5, 0.5, 1 } }) ~= nil, "auctioneer mx range undetected")
+assert(validateAH({ { 1, "A", 1429, 0.5, 0.5, 3 } }) ~= nil, "auctioneer faction undetected")
+assert(validateAH({ { 1, "A", 1429, 0.5, 0.5, 1 }, { 1, "B", 1429, 0.5, 0.5, 1 } }) ~= nil, "auctioneer duplicate undetected")
+assert(validateAH({}) ~= nil, "empty auctioneers undetected")
 
 -- The check must actually fail on bad data.
 local function bad(mut)

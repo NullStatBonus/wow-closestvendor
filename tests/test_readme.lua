@@ -6,6 +6,7 @@ local eq = H.eq
 local ns = {}
 H.locale(ns)
 loadfile("ClosestVendor/Reagents.lua")("ClosestVendor", ns)
+loadfile("ClosestVendor/Status.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Commands.lua")("ClosestVendor", ns)
 
 local f = assert(io.open("README.md", "r"))

@@ -101,4 +101,20 @@ D.RecordTrainer(T, { 10, "B", 1, 0, 0, 0 }, list)
 list[1] = "Changed"
 eq(T[10][7].Mining, true, "stored set does not alias the caller's list")
 
+-- Auctioneers: six-field records, learned wins over shipped in Merge.
+local AH = {}
+eq(D.RecordAuctioneer(AH, { 8670, "Auctioneer Chilton", 1453, 0.53, 0.6, 1 }), true, "auctioneer stored")
+eq(#AH[8670], 6, "six fields")
+eq(D.RecordAuctioneer(AH, { 8670, "Auctioneer Chilton", 1453, 0.53, 0.6, 1 }), false, "same auctioneer: no change")
+eq(D.RecordAuctioneer(AH, { 8670, "Auctioneer Chilton", 1453, 0.54, 0.6, 1 }), true, "moved auctioneer updates")
+eq(count(AH), 1, "still one record")
+eq(D.RecordAuctioneer(AH, nil), false, "nil record")
+eq(D.RecordAuctioneer(AH, { 0, "Zero", 1, 0, 0, 0 }), false, "zero id")
+eq(D.RecordAuctioneer(AH, { "x", "Str", 1, 0, 0, 0 }), false, "non-numeric id")
+local am = D.Merge({ { 8670, "Shipped", 1453, 0.1, 0.1, 1 }, { 8669, "Other", 1438, 0.2, 0.2, 1 } }, AH)
+eq(count(am), 2, "merged auctioneers")
+local got
+for _, v in ipairs(am) do if v[1] == 8670 then got = v end end
+eq(got[2], "Auctioneer Chilton", "learned auctioneer wins over the shipped one")
+
 H.done()

@@ -6,6 +6,15 @@ META = '''pfDB["meta"] = {
   ["repair"] = {
     [20] = "A",
   },
+  ["auctioneer"] = {
+    [80] = "AH",
+    [81] = "A",
+    [82] = "H",
+    [83] = "A",
+    [84] = "A",
+    [85] = "A",
+    [86] = "A",
+  },
   ["vendor"] = {
     [10] = "H",
     [20] = "A",
@@ -63,6 +72,34 @@ UNITS = '''pfDB["units"]["data"] = {
       [1] = { 7, 8, 12, 0 },
     },
   },
+  [80] = {
+    ["coords"] = {
+      [1] = { 30, 40.5, 12, 0 },
+    },
+  },
+  [81] = {
+    ["coords"] = {
+      [1] = { 10, 20, 14, 0 },
+    },
+  },
+  [82] = {
+    ["coords"] = {
+      [1] = { 60, 70, 12, 0 },
+    },
+  },
+  [83] = {
+    ["coords"] = {},
+  },
+  [84] = {
+    ["coords"] = {
+      [1] = { 1, 2, 999, 0 },
+    },
+  },
+  [86] = {
+    ["coords"] = {
+      [1] = { 3, 4, 12, 0 },
+    },
+  },
 }
 '''
 
@@ -74,6 +111,11 @@ NAMES = r'''pfDB["units"]["enUS"] = {
   [40] = "Both Factions",
   [50] = "Unmapped Zone",
   [70] = "Normal Seller",
+  [80] = "Neutral Auctioneer",
+  [81] = "Alliance Auctioneer",
+  [82] = "Horde Auctioneer",
+  [83] = "No Coords Auctioneer",
+  [84] = "Unmapped Auctioneer",
 }
 '''
 
@@ -144,7 +186,7 @@ class Build(unittest.TestCase):
         self.assertNotIn("Unmapped Zone", text)
         self.assertNotIn("{60,", text)  # no name
         self.assertEqual((stats["no_coords"], stats["no_map"], stats["no_name"]), (1, 1, 1))
-        self.assertEqual(stats["kept"], 4)
+        self.assertEqual(stats["kept"], 4)  # 80-84 are not in the vendor lists
 
     def test_sorted_and_byte_identical(self):
         a, _ = self.run_build()
@@ -209,6 +251,46 @@ class Build(unittest.TestCase):
             with self.assertRaises(ValueError):
                 b.render([dict(ok, reagents=bad)], "x")
         self.assertIn("false, 0, 7},", b.render([dict(ok, reagents=7)], "x"))
+
+    def test_auctioneers_written(self):
+        text, stats = self.run_build()
+        self.assertIn("ns.ShippedAuctioneers = {", text)
+        self.assertIn('{80, "Neutral Auctioneer", 37, 0.3000, 0.4050, 0},', text)  # neutral: both factions
+        self.assertIn('{81, "Alliance Auctioneer", 85, 0.1000, 0.2000, 1},', text)
+        self.assertIn('{82, "Horde Auctioneer", 37, 0.6000, 0.7000, 2},', text)
+        self.assertEqual(stats["auctioneers"], 3)
+
+    def test_auctioneers_without_coords_name_or_map_dropped(self):
+        text, _ = self.run_build()
+        for name in ("No Coords Auctioneer", "Unmapped Auctioneer"):
+            self.assertNotIn(name, text)
+        self.assertNotIn("{86,", text)  # no name
+        self.assertNotIn("{85,", text)  # listed, but no unit record at all
+        # vendors are not auctioneers, and the other way round
+        self.assertNotIn("{80, \"Neutral Auctioneer\", 37, 0.3000, 0.4050, 0, false", text)
+        self.assertNotIn("Horde Seller", text.split("ns.ShippedAuctioneers")[1])
+
+    def test_auctioneers_byte_identical_and_sorted(self):
+        a, _ = self.run_build()
+        c, _ = self.run_build()
+        self.assertEqual(a, c)
+        part = a.split("ns.ShippedAuctioneers = {")[1]
+        ids = [int(l.split("{")[1].split(",")[0]) for l in part.splitlines() if l.startswith("    {")]
+        self.assertEqual(ids, sorted(ids))
+        self.assertEqual(len(ids), 3)
+
+    def test_render_rejects_bad_auctioneers(self):
+        ok = {"id": 1, "name": "A", "map": 1, "mx": 0.5, "my": 0.5, "faction": 0}
+        for bad in ({"mx": 1.5}, {"my": -0.1}, {"faction": 3}):
+            with self.assertRaises(ValueError):
+                b.render_auctioneers([dict(ok, **bad)])
+        with self.assertRaises(ValueError):
+            b.render_auctioneers([ok, dict(ok)])
+
+    def test_reagent_table_ignores_display_only(self):
+        ids = [i for i, _, _ in b.load_reagents()]
+        for display in (6265, 5530, 5349, 5350):
+            self.assertNotIn(display, ids)
 
     def test_ambiguous_area_is_an_error(self):
         with self.assertRaises(ValueError):

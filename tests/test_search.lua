@@ -111,4 +111,29 @@ o, m = S.Nearest(rv, 0, 0, { reagent = powder }, ALLIANCE, 10)
 eq(name(o), "Powder Near", "overall nearest seller is on another map")
 eq(name(m), "Both Home", "nearest seller on the player's map")
 
+-- From an anchor: the search starts at the given place (its continent, position and map), not at
+-- the player.
+local buckets = { [1] = mv, [2] = { { 9, "Other Continent", 30, 0, 0, 0, false, 0, 1, 0 } } }
+o, m = S.NearestFrom(buckets, { continent = 1, x = 0, y = 0, map = 10 }, nil, ALLIANCE)
+eq(name(o), "Border Other", "nearest to the anchor")
+eq(name(m), "Home Far", "nearest on the anchor's map")
+o, m = S.NearestFrom(buckets, { continent = 1, x = 95, y = 0, map = 10 }, nil, ALLIANCE)
+eq(name(o), "Home Farther", "a different anchor gives a different vendor")
+eq(o == m, true, "which is on the anchor's map")
+eq(name(S.NearestFrom(buckets, { continent = 2, x = 0, y = 0 }, nil, ALLIANCE)), "Other Continent", "the anchor's continent is searched")
+o, m = S.NearestFrom(buckets, { continent = 1, x = 0, y = 0 }, nil, ALLIANCE)
+eq(m, nil, "an anchor without a map gives no map result")
+eq(S.NearestFrom(buckets, { continent = 7, x = 0, y = 0 }, nil, ALLIANCE), nil, "unknown continent: nothing")
+eq(S.NearestFrom(buckets, { continent = 1, x = 0, y = 0 }, "repair", ALLIANCE), nil, "the need still filters")
+
+-- Need "auction": every eligible-by-faction record, nearest wins.
+local AUC = {
+    { 1, "Far AH",   10, 0.9, 0.1, 0, nil, 0, 90, 0 },
+    { 2, "Near AH",  10, 0.1, 0.1, 0, nil, 0, 10, 0 },
+    { 3, "Horde AH", 10, 0.0, 0.1, 2, nil, 0, 1, 0 },
+}
+eq(name(S.Nearest(AUC, 0, 0, "auction", ALLIANCE)), "Near AH", "nearest auctioneer, other faction skipped")
+eq(name(S.NearestFrom({ [1] = AUC }, { continent = 1, x = 95, y = 0 }, "auction", ALLIANCE)), "Far AH", "from an anchor")
+eq(S.Nearest({}, 0, 0, "auction", ALLIANCE), nil, "none known")
+
 H.done()
