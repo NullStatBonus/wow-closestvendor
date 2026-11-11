@@ -82,6 +82,9 @@ local function boot(opts)
             return id, "type", "sub", "", 0, i[1], i[2]
         end,
         GetItemCount = function(id) return g.counts and g.counts[id] or 0 end,
+        UnitClass = function() return "Mage", g.class or "MAGE", 8 end,
+        IsPlayerSpell = function(id) return g.spells ~= nil and g.spells[id] == true end,
+        GetItemInfo = function(id) return g.itemNames and g.itemNames[id] end,
         GetMerchantNumItems = function() return #(g.stock or {}) end,
         GetMerchantItemLink = function(i) return "|cff|Hitem:" .. g.stock[i] .. ":0:0|h[Thing]|h|r" end,
         GetNumSkillLines = function() return #(g.skillLines or {}) end,
@@ -116,7 +119,7 @@ local function boot(opts)
     env._G = env
 
     local ns = {}
-    for _, f in ipairs({ "Locales/enUS", "Triggers", "Ammo", "Professions", "Adapter", "Search", "Discovery", "Nav", "Controller", "Commands", "Options", "Log", "Report" }) do
+    for _, f in ipairs({ "Locales/enUS", "Triggers", "Ammo", "Professions", "Reagents", "Adapter", "Search", "Discovery", "Nav", "Controller", "Commands", "Options", "Log", "Report" }) do
         setmetatable(ns, nil)
         local chunk = assert(loadfile("ClosestVendor/" .. f .. ".lua"))
         setfenv(chunk, env)
@@ -594,6 +597,7 @@ local APIS = {
     { "GetNumSkillLines", false }, { "GetSkillLineInfo", false }, { "TradeSkillFrame", false }, { "GetTradeSkillLine", false },
     { "IsTradeskillTrainer", false }, { "GetNumTrainerServices", false }, { "GetTrainerServiceSkillLine", false },
     { "StaticPopup_Visible", false },
+    { "UnitClass", "bags" }, { "IsPlayerSpell", "bags" }, { "GetItemInfo", "bags" },
 }
 for _, spec in ipairs(APIS) do
     for _, mode in ipairs({ "missing", "throws" }) do
@@ -609,14 +613,14 @@ for _, spec in ipairs(APIS) do
             g.skillLines = { { "Mining", 70, 75 } }; g.tradeWindow = "Mining"; g.trainer = { "Mining" }
             for _, ev in ipairs({ "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA", "BAG_UPDATE_DELAYED", "UPDATE_INVENTORY_DURABILITY",
                                   "PLAYER_EQUIPMENT_CHANGED", "PLAYER_REGEN_ENABLED", "MERCHANT_SHOW", "TRAINER_SHOW", "TRAINER_UPDATE",
-                                  "SKILL_LINES_CHANGED", "TRADE_SKILL_SHOW" }) do
+                                  "SKILL_LINES_CHANGED", "TRADE_SKILL_SHOW", "SPELLS_CHANGED" }) do
                 g.onEvent(ev)
             end
             g.skillLines = { { "Mining", 71, 75 } }
             g.onEvent("SKILL_LINES_CHANGED")
             g.onEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
             g.onEvent("UNIT_INVENTORY_CHANGED", "player")
-            for _, cmd in ipairs({ "", "bags 3", "trade 5", "test sell", "test repair", "test arrows", "test bullets", "config" }) do
+            for _, cmd in ipairs({ "", "bags 3", "trade 5", "test sell", "test repair", "test arrows", "test bullets", "test reagent", "config" }) do
                 g.env.SlashCmdList.CLOSESTVENDOR(cmd)
             end
         end)
@@ -983,7 +987,7 @@ g.free = 1
 g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "auto: no question")
 eq(g.tomtom[1], "Home Shop", "auto: pinned the map target")
-local note = "Navigating to Home Shop (Test Zone, 566 yards). The other choice was Other Shop (Test Zone, 50 yards)."
+local note = "Navigating to Home Shop (Test Zone, 566 yards) to sell items and free bag space. The other choice was Other Shop (Test Zone, 50 yards)."
 eq(lastPrinted(g):find(note, 1, true) ~= nil, true, "auto: chat names both targets with zone and distance: " .. lastPrinted(g))
 local box
 for _, f in ipairs(g.frames) do if f.fontString and f.name == nil and f.scripts.OnUpdate then box = f end end
@@ -997,5 +1001,89 @@ g.onEvent("BAG_UPDATE_DELAYED")
 g.free = 1
 g.onEvent("BAG_UPDATE_DELAYED")
 eq(box.shown, false, "notice off: nothing more on screen")
+
+-- 31. Class reagents: watched when the spell is known, asked about at or below the threshold, learned
+-- from merchants, switched off one by one, covered by the master switch.
+local function mage(over)
+    local gg = boot({ tomtom = true })
+    gg.ns.ShippedVendors = {
+        { 81, "Plain Shop",   100, 0.51, 0.5, 0, false, 0, 0 },
+        { 82, "Reagent Shop", 100, 0.70, 0.5, 0, false, 0, 1 }, -- sells Arcane Powder (bit 0)
+    }
+    gg.spells = { [23028] = true } -- Arcane Brilliance
+    gg.counts = { [17020] = 3 }
+    for k, v in pairs(over or {}) do gg[k] = v end
+    login(gg)
+    gg.autoAccept = false
+    return gg
+end
+g = mage()
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup ~= nil, true, "a low reagent asks")
+eq(has(g.popup.text, "Arcane Powder"), true, "names the reagent: " .. g.popup.text)
+eq(has(g.popup.text, "3 left") and has(g.popup.text, "Reagent Shop"), true, "count and the seller, not the nearest shop")
+eq(has(g.popup.text, "Plain Shop"), false, "the nearest vendor that does not sell it is not offered")
+g.popup.accept()
+eq(g.tomtom[1], "Reagent Shop", "Yes navigates to the seller")
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.shown, 1, "not asked again")
+
+-- The game's own item name is used when it has one.
+g = mage({ itemNames = { [17020] = "Pulver der Arkanen" } })
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(has(g.popup.text, "Pulver der Arkanen"), true, "uses the client's item name")
+
+-- Plenty, an unknown spell, another class, a switched-off reagent and the master switch all stay quiet.
+g = mage({ counts = { [17020] = 40 } }); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "plenty")
+g = mage({ spells = {} }); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "spell not known")
+g = mage({ class = "WARRIOR" }); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "a class without reagents")
+g = mage(); g.env.ClosestVendorDB.cfg.reagentOff[17020] = true; g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "switched off")
+g = mage(); g.env.SlashCmdList.CLOSESTVENDOR("ammo off"); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "master switch off")
+
+-- Learning the spell later is noticed.
+g = mage({ spells = {} }); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "not yet")
+g.spells[23028] = true
+g.onEvent("SPELLS_CHANGED")
+eq(g.popup ~= nil, true, "asks once the spell is learned")
+
+-- Unreadable counts are not "none".
+g = mage(); breakApi(g, "GetItemCount", "throws"); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "an unreadable reagent count is not treated as none")
+
+-- A settings default exists and the off-list is created for old saved data.
+g = boot({ tomtom = true, db = { cfg = { ammoThreshold = 100 } } }); login(g)
+eq(g.env.ClosestVendorDB.cfg.reagentThreshold, 5, "default reagent threshold")
+eq(type(g.env.ClosestVendorDB.cfg.reagentOff), "table", "off-list exists")
+eq(g.env.ClosestVendorDB.cfg.ammoThreshold, 100, "saved settings kept")
+
+-- Merchants: the reagents they sell are learned, and a learned record keeps them.
+g = mage(); g.autoAccept = true
+g.npc = { guid = "Creature-0-4372-0-55-1234-0000A1B2C3", name = "New Shop" }
+g.pos = { map = 100, x = 0.51, y = 0.5 }
+g.stock = { 300, 17020, 17032 }
+g.onEvent("MERCHANT_SHOW")
+eq(g.env.ClosestVendorDB.learned[1234][9], 1 + 4, "reagent mask learned")
+g = mage(); g.autoAccept = true
+g.npc = { guid = "Creature-0-4372-0-55-82-0000A1B2C3", name = "Reagent Shop" }
+g.pos = { map = 100, x = 0.7, y = 0.5 }
+g.stock = { 17020 }
+g.onEvent("MERCHANT_SHOW")
+eq(g.env.ClosestVendorDB.learned[82][9], 1, "a shipped reagent vendor keeps its reagent when opened")
+g.counts[17020] = 2; g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.shown, 1, "and is still found as a seller")
+eq(has(g.popup.text, "Reagent Shop"), true, "learned record still offered: " .. g.popup.text)
+
+-- The debug report lists the threshold, the watched reagents and the switched-off ones.
+g = mage(); g.env.ClosestVendorDB.cfg.reagentOff[17031] = true
+g.env.SlashCmdList.CLOSESTVENDOR("log")
+local rwin
+for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then rwin = f end end
+eq(has(rwin.box.text, "reagents: class MAGE, threshold 5, watching: Arcane Powder:3, switched off: Rune of Teleportation"), true, "report line")
 
 H.done()

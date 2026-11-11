@@ -21,6 +21,7 @@ function M.new()
     end
     function S.CreateCheckbox(category, setting, tip)
         local i = { setting = setting, tip = tip }
+        function i:SetParentInitializer(parent, pred) self.parent, self.pred = parent, pred end
         rec.checkboxes[#rec.checkboxes + 1] = i
         return i
     end

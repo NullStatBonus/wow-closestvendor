@@ -16,22 +16,24 @@ class Docs(unittest.TestCase):
         self.listing = read("docs", "listing.md")
         self.readme = read("README.md")
         core = read("ClosestVendor", "Core.lua")
-        self.defaults = {k: int(v) for k, v in re.findall(r"(bagThreshold|durThreshold|ammoThreshold|tradeThreshold) = (\d+)", core)}
+        self.defaults = {k: int(v) for k, v in re.findall(r"(bagThreshold|durThreshold|ammoThreshold|tradeThreshold|reagentThreshold) = (\d+)", core)}
 
     def test_defaults_are_found(self):
-        self.assertEqual(self.defaults, {"bagThreshold": 2, "durThreshold": 20, "ammoThreshold": 200, "tradeThreshold": 10})
+        self.assertEqual(self.defaults, {"bagThreshold": 2, "durThreshold": 20, "ammoThreshold": 200, "tradeThreshold": 10, "reagentThreshold": 5})
 
     def test_listing_quotes_the_real_defaults(self):
         self.assertIn(f"{self.defaults['bagThreshold']} free slots or fewer", self.listing)
         self.assertIn(f"below {self.defaults['durThreshold']}% durability", self.listing)
         self.assertIn(f"{self.defaults['ammoThreshold']} or fewer", self.listing)
         self.assertIn(f"{self.defaults['tradeThreshold']} points or fewer", self.listing)
+        self.assertIn(f"at {self.defaults['reagentThreshold']} or fewer", self.listing)
 
     def test_readme_quotes_the_real_defaults(self):
         self.assertIn(f"(default **{self.defaults['bagThreshold']}**)", self.readme)
         self.assertIn(f"(default **{self.defaults['durThreshold']}%**)", self.readme)
         self.assertIn(f"(default **{self.defaults['ammoThreshold']}**)", self.readme)
         self.assertIn(f"(default **{self.defaults['tradeThreshold']}**)", self.readme)
+        self.assertIn(f"(default **{self.defaults['reagentThreshold']}**)", self.readme)
 
     def test_vendor_count_claim_matches_the_data(self):
         n = len(re.findall(r"^    \{\d+, ", read("ClosestVendor", "Data", "Vendors.lua"), re.M))
@@ -48,7 +50,7 @@ class Docs(unittest.TestCase):
     def test_listing_mentions_every_documented_command(self):
         block = re.search(r"## Commands\s+```\n(.*?)```", self.readme, re.S).group(1)
         words = {line.split()[1] for line in block.splitlines() if line.startswith("/cvn ") and len(line.split()) > 1}
-        self.assertTrue({"bags", "dur", "ammo", "trade", "test", "config", "debug", "log"} <= words)
+        self.assertTrue({"bags", "dur", "ammo", "reagent", "reagents", "trade", "test", "config", "debug", "log"} <= words)
         for word in sorted(words - {"debug", "log", "on", "off"}):
             self.assertIn(f"/cvn {word}", self.listing, word)
         self.assertIn("/cvn debug on", self.listing)

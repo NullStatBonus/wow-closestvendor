@@ -11,7 +11,7 @@ What the automated tests cannot check: the real game. Run it on WoW Forever (and
 
 ## 1. Settings page and commands
 
-- [ ] Esc, Options, AddOns, **Closest Vendor** exists, with a checkbox and a slider for Bag space, Durability and Ammo, plus Buy ammo and Ask before buying ammo checkboxes and Arrows to buy / Bullets to buy dropdowns.
+- [ ] Esc, Options, AddOns, **Closest Vendor** exists, with a checkbox and a slider for Bag space, Durability and Ammo and reagents (with the reagent slider and one checkbox per reagent of your class under it), plus Buy ammo and Ask before buying ammo checkboxes and Arrows to buy / Bullets to buy dropdowns.
 - [ ] Moving a slider changes the number shown by `/cvn`; `/cvn ammo 500` moves the ammo slider to 500 when the page is reopened.
 - [ ] Clearing a checkbox greys out its slider and stops that trigger asking.
 - [ ] `/cvn config` opens the page.
@@ -114,7 +114,28 @@ Stand near a zone edge, or in a zone where the nearest vendor is across the bord
 - [ ] The settings page dropdowns match `/cvn choice` and `/cvn prefer`, and `/cvn` shows both.
 - [ ] `/cvn log` lists the settings (target choice) and, with debug on, which target was shown or pinned.
 
+## 12. Reagents
+
+Use a character whose class has reagents (mage, rogue, priest, paladin, shaman, druid), with `/cvn debug on`. Spell and item IDs were checked against the Era and Forever data tables; this section checks them in the real client.
+
+- [ ] `/cvn` shows a "Reagents: on, trigger at 5 or fewer" line. `/cvn log` shows `reagents: class ..., threshold 5, watching: ..., switched off: none` with the reagents you expect for the spells you know.
+- [ ] Spell gating: a reagent for a spell you do not know is not in `watching` (a low-level mage: no Rune of Portals); learning the spell adds it without a reload (note whether `SPELLS_CHANGED` fired in the log).
+- [ ] Rank gating: a druid knowing Rebirth rank 3 watches Ashwood Seed only, not the rank 1 and 2 seeds; a priest knowing Prayer of Fortitude rank 2 watches Sacred Candle, not Holy Candle. Check each class's list against its spellbook, and whether lower ranks still report as known (`/dump IsPlayerSpell(<id>)`).
+- [ ] Use reagents down to 5 (cast the spell): the question appears once, names the reagent and the count, says "sells <reagent>" so it is clear what to buy, and the vendor is one that sells it. Yes sets the pin.
+- [ ] Counts: Rune of Teleportation 1 vs 5 vs 6 in bags and the threshold boundary (5 asks, 6 does not). Reagents in the bank are not counted.
+- [ ] Open a vendor that sells the reagent: the question and the pin go away. Open any other vendor with a reagent question open: same.
+- [ ] Two reagents low (for example Arcane Powder and Rune of Teleportation): one question, the second only after the first is answered or the merchant opened.
+- [ ] Order: with a reagent low and gear worn below the threshold, the repair question comes first and the reagent question after it resolves; with a reagent low and full bags, the reagent question comes before the sell question. (No class has both ammo and reagents, so ammo versus reagents is covered by the automated tests.)
+- [ ] `/cvn reagent 10`, the settings slider and `/cvn` agree; 0 and 41 are refused with a message about 1 to 40.
+- [ ] `/cvn reagents` lists your class's reagents, all on. `/cvn reagent off arcane powder` turns one off (no more questions for it); `/cvn reagent on arcane powder` brings it back. An unknown or another class's reagent name gets a message.
+- [ ] The settings page lists only your class's reagents, all on by default, each with a checkbox that matches `/cvn reagents`; clearing "Ammo and reagents" greys the ammo slider, the reagent slider and the reagent checkboxes and silences both ammo and reagents.
+- [ ] Hunter, warrior and warlock: no reagent checkboxes, `/cvn reagents` says there are none, no reagent question ever.
+- [ ] `/cvn test reagent` asks about the first watched reagent whatever the count; with nothing watched it says so in chat.
+- [ ] Vendor data: open a reagent vendor you have not opened before (a druid or priest supplier): afterwards `/cvn log` or `/cvn test reagent` can pick it. Open a shipped reagent vendor: it is still picked (the learned record keeps its reagents).
+- [ ] `/cvn choice auto`: a low reagent pins at once, one chat line and the on-screen text read "Navigating to <vendor> (<zone>, N yards) to buy <reagent>."; the other-map choice works as for ammo. Every automatic pin says why: "... to buy ammo.", "... to repair your gear.", "... to sell items and free bag space.", "... to train <profession>."
+- [ ] Check the shipped data: 5 to 10 reagent vendors in cities and camps are where the pin says, and sell the item (`GetMerchantItemInfo`).
+
 ## Not covered yet
 
 - Walking distance (vendors are chosen by straight-line distance).
-- Classes' own reagents (mage powders, rogue poisons and so on).
+- Buying reagents for you, and warlock shards and rogue poisons.

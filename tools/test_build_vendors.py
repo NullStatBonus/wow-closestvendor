@@ -96,6 +96,17 @@ ITEMS = '''pfDB["items"]["data"] = {
       [70] = 0,
     },
   },
+  [17020] = {
+    ["V"] = {
+      [10] = 0,
+      [20] = 0,
+    },
+  },
+  [17032] = {
+    ["V"] = {
+      [20] = 0,
+    },
+  },
 }
 '''
 
@@ -120,12 +131,12 @@ class Build(unittest.TestCase):
 
     def test_first_coordinate_divided_to_0_1(self):
         text, _ = self.run_build()
-        self.assertIn('{10, "Horde Seller", 37, 0.5050, 0.2500, 2, false, 1},', text)
+        self.assertIn('{10, "Horde Seller", 37, 0.5050, 0.2500, 2, false, 1, 1},', text)
 
     def test_repair_flag_and_faction(self):
         text, _ = self.run_build()
-        self.assertIn('{20, "Remy \\"Two Times\\" Smith", 85, 0.8000, 0.9025, 1, true, 3},', text)
-        self.assertIn('{40, "Both Factions", 37, 0.0500, 0.0600, 0, false, 2},', text)
+        self.assertIn('{20, "Remy \\"Two Times\\" Smith", 85, 0.8000, 0.9025, 1, true, 3, 5},', text)
+        self.assertIn('{40, "Both Factions", 37, 0.0500, 0.0600, 0, false, 2, 0},', text)
 
     def test_drops_missing_coords_name_or_map(self):
         text, stats = self.run_build()
@@ -151,7 +162,7 @@ class Build(unittest.TestCase):
         text = b.render(recs, "Source: some other dataset")
         self.assertIn("-- Source: some other dataset", text)
         self.assertLess(text.index("{3,"), text.index("{9,"))  # sorted
-        self.assertIn('{9, "From Elsewhere", 2482, 0.5000, 0.2500, 0, true, 3},', text)
+        self.assertIn('{9, "From Elsewhere", 2482, 0.5000, 0.2500, 0, true, 3, 0},', text)
 
     def test_render_rejects_bad_records(self):
         ok = {"id": 1, "name": "A", "map": 1, "mx": 0.5, "my": 0.5, "faction": 0, "repair": False, "ammo": 0}
@@ -163,9 +174,9 @@ class Build(unittest.TestCase):
 
     def test_ammo_codes(self):
         text, _ = self.run_build()
-        self.assertIn("37, 0.5050, 0.2500, 2, false, 1}", text)  # 10: arrows only
-        self.assertIn("1, true, 3}", text)                       # 20: arrows and bullets
-        self.assertIn("0, false, 2}", text)                      # 40: bullets only
+        self.assertIn("37, 0.5050, 0.2500, 2, false, 1, 1}", text)  # 10: arrows only
+        self.assertIn("1, true, 3, 5}", text)                       # 20: arrows and bullets
+        self.assertIn("0, false, 2, 0}", text)                      # 40: bullets only
 
     def test_non_ammo_items_do_not_count(self):
         # 70 sells item 9999 (not ammo): listed vendor, no ammo.
@@ -177,6 +188,27 @@ class Build(unittest.TestCase):
         # [2515] = {} is empty and sits between two items with sellers.
         self.assertEqual(b.parse_item_sellers(ITEMS, (2515,)), set())
         self.assertEqual(b.parse_item_sellers(ITEMS, (2516,)), {20, 40})
+
+    def test_reagent_mask(self):
+        # 10 sells Arcane Powder (bit 0); 20 also Rune of Portals (bit 2); 40 sells neither.
+        text, stats = self.run_build()
+        self.assertIn('{10, "Horde Seller", 37, 0.5050, 0.2500, 2, false, 1, 1},', text)
+        self.assertIn("1, true, 3, 5},", text)
+        self.assertIn('{40, "Both Factions", 37, 0.0500, 0.0600, 0, false, 2, 0},', text)
+        self.assertNotIn("Arcane Powder", stats["reagents_without_seller"])
+        self.assertIn("Flash Powder", stats["reagents_without_seller"])  # no seller in the fixture
+
+    def test_reagent_table_is_read_from_the_addon_file(self):
+        table = b.load_reagents()
+        self.assertEqual(dict((i, bit) for i, bit, _ in table)[17020], 0)
+        self.assertEqual(len({bit for _, bit, _ in table}), len(table))
+
+    def test_render_rejects_bad_reagent_mask(self):
+        ok = {"id": 1, "name": "A", "map": 1, "mx": 0.5, "my": 0.5, "faction": 0, "repair": False, "ammo": 0}
+        for bad in (-1, 1 << 30, "x"):
+            with self.assertRaises(ValueError):
+                b.render([dict(ok, reagents=bad)], "x")
+        self.assertIn("false, 0, 7},", b.render([dict(ok, reagents=7)], "x"))
 
     def test_ambiguous_area_is_an_error(self):
         with self.assertRaises(ValueError):

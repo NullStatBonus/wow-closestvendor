@@ -1,4 +1,5 @@
 local ns = {}
+loadfile("ClosestVendor/Reagents.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Search.lua")("ClosestVendor", ns)
 local S = ns.Search
 local bucket = dofile("tests/fixtures/vendors.lua")
@@ -91,5 +92,23 @@ eq(name(o), "Other Miner", "overall nearest trainer")
 eq(name(m), "Home Miner", "nearest trainer for the profession on the map")
 o, m = S.NearestTrainer(tm, 0, 0, "Mining", ALLIANCE)
 eq(m, nil, "no map id: no map result")
+
+
+-- Reagents: only vendors whose mask has that reagent; faction rules and the map result still apply.
+local powder, portals = ns.Reagents.ById(17020), ns.Reagents.ById(17032)
+local rv = {
+    { 1, "Plain",       10, 0, 0, 0, false, 0, 5, 0, 0 },
+    { 2, "Powder Near", 20, 0, 0, 0, false, 0, 20, 0, 1 },        -- bit 0
+    { 3, "Both Home",   10, 0, 0, 0, false, 0, 60, 0, 1 + 4 },    -- bits 0 and 2
+    { 4, "Horde Rune",  10, 0, 0, 2, false, 0, 8, 0, 4 },
+    { 5, "Old Shape",   10, 0, 0, 0, false, 0, 3, 0 },             -- no mask at all
+}
+eq(name(S.Nearest(rv, 0, 0, { reagent = powder }, ALLIANCE)), "Powder Near", "nearest powder seller")
+eq(name(S.Nearest(rv, 0, 0, { reagent = portals }, ALLIANCE)), "Both Home", "hostile and non-sellers skipped")
+eq(name(S.Nearest(rv, 0, 0, { reagent = portals }, HORDE)), "Horde Rune", "horde takes the horde seller")
+eq(S.Nearest({ rv[1], rv[5] }, 0, 0, { reagent = powder }, ALLIANCE), nil, "none sell it")
+o, m = S.Nearest(rv, 0, 0, { reagent = powder }, ALLIANCE, 10)
+eq(name(o), "Powder Near", "overall nearest seller is on another map")
+eq(name(m), "Both Home", "nearest seller on the player's map")
 
 H.done()

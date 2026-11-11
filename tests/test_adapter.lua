@@ -8,7 +8,7 @@ local function boot(game)
     local errors = {}
     local env = setmetatable(game or {}, { __index = _G })
     local ns = {}
-    for _, f in ipairs({ "Triggers", "Ammo", "Adapter" }) do
+    for _, f in ipairs({ "Triggers", "Ammo", "Reagents", "Adapter" }) do
         local chunk = assert(loadfile("ClosestVendor/" .. f .. ".lua"))
         setfenv(chunk, env)
         chunk("ClosestVendor", ns)
@@ -173,6 +173,37 @@ eq(boot(merchantGame({ GetMerchantNumItems = boom })).merchant().ammo, 0, "stock
 eq(boot(merchantGame({ CanMerchantRepair = boom })).merchant().repair, false, "repair check throws: false")
 eq(boot(merchantGame({ GetMerchantItemLink = function(i) if i == 2 then error("x") end return "item:300:0" end })).merchant().ammo, 0, "one unreadable item skipped")
 eq(boot({}).merchant(), nil, "nothing available")
+
+-- Reagents sold: the mask covers the class reagents offered, whatever their item class.
+eq(mer.reagents, 0, "no reagents offered")
+local rg = boot(merchantGame({
+    GetMerchantNumItems = function() return 4 end,
+    GetMerchantItemLink = function(i) return "item:" .. ({ 17020, 17032, 300, 17020 })[i] .. ":0" end,
+    GetItemInfoInstant = function(id) return id, "", "", "", 0, 0, 0 end,
+})).merchant()
+eq(rg.reagents, 1 + 4, "arcane powder (bit 0) and portals (bit 2), a duplicate counted once")
+eq(rg.ammo, 0, "reagents are not ammo")
+eq(boot(merchantGame({ GetMerchantNumItems = boom })).merchant().reagents, 0, "stock unreadable: no reagents")
+eq(boot(merchantGame({ GetMerchantNumItems = function() return 2 end,
+    GetMerchantItemLink = function(i) if i == 1 then error("x") end return "item:17031:0" end,
+    GetItemInfoInstant = function(id) return id, "", "", "", 0, 0, 0 end })).merchant().reagents, 2, "one unreadable item skipped")
+
+-- Class, spells, counts and names.
+eq(boot({ UnitClass = function() return "Mage", "MAGE", 8 end }).classToken(), "MAGE", "class token")
+eq(boot({ UnitClass = function() return "Mage", nil end }).classToken(), nil, "no token")
+eq(boot({ UnitClass = boom }).classToken(), nil, "class throws")
+eq(boot({}).classToken(), nil, "class missing")
+eq(boot({ IsPlayerSpell = function(id) return id == 10059 end }).knowsSpell(10059), true, "IsPlayerSpell true")
+eq(boot({ IsPlayerSpell = function(id) return id == 10059 end }).knowsSpell(1), false, "IsPlayerSpell false")
+eq(boot({ IsSpellKnown = function(id) return id == 7 end }).knowsSpell(7), true, "falls back to IsSpellKnown")
+eq(boot({ IsPlayerSpell = boom }).knowsSpell(7), nil, "spell check throws: unknown, not false")
+eq(boot({}).knowsSpell(7), nil, "no spell API: unknown")
+eq(boot({ C_Item = { GetItemCount = function(id) return id == 17020 and 12 or 0 end } }).itemCount(17020), 12, "item count")
+eq(boot({ GetItemCount = boom }).itemCount(17020), nil, "count throws: unknown")
+eq(boot({}).itemCount(17020), nil, "no count API: unknown")
+eq(boot({ GetItemInfo = function() return "Arcane Powder" end }).itemName(17020), "Arcane Powder", "item name")
+eq(boot({ GetItemInfo = function() return nil end }).itemName(17020), nil, "name not cached")
+eq(boot({}).itemName(17020), nil, "no item API")
 
 -- now.
 eq(boot({ GetTime = function() return 123.5 end }).now(), 123.5, "game time")

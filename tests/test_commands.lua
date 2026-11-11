@@ -4,11 +4,13 @@ local eq = H.eq
 
 local ns = {}
 H.locale(ns)
+loadfile("ClosestVendor/Reagents.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Commands.lua")("ClosestVendor", ns)
 local M = ns.Commands
 
 local function fresh() return { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
-    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true } end
+    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true,
+    reagentThreshold = 5, reagentOff = {} } end
 local function has(lines, text) return table.concat(lines, "\n"):find(text, 1, true) ~= nil end
 
 -- Status.
@@ -100,7 +102,7 @@ eq(action, nil, "other commands return no action")
 for _, bad in ipairs({ "test", "test x", "test sell2", "test arrowss" }) do
     local lines2, action2 = M.Run(fresh(), bad)
     eq(action2, nil, bad .. ": no action")
-    eq(has(lines2, "/cvn test arrows"), true, bad .. ": help lists the test command")
+    eq(has(lines2, "/cvn test sell, repair, arrows, bullets, reagent"), true, bad .. ": help lists the test command")
 end
 
 -- Debug log and report commands return actions and leave the settings alone.
@@ -196,5 +198,53 @@ eq(c.autoNotice, true, "bad value leaves the setting")
 eq(has(out, "Choose on or off."), true, "bad value names the choices")
 eq(has(M.Run(c, "notice"), "Choose on or off."), true, "missing value names the choices")
 eq(has(M.Run(c, "help"), "/cvn notice"), true, "help lists notice")
+
+-- Reagents: threshold, listing, switching one by name, the test command.
+c = fresh()
+eq(has(M.Run(c, ""), "Reagents: on, trigger at 5 or fewer"), true, "status shows the reagent threshold")
+eq(has(M.Run(c, ""), "switched off"), false, "nothing switched off: no line")
+out = M.Run(c, "reagent 12")
+eq(c.reagentThreshold, 12, "reagent threshold set")
+eq(has(out, "trigger at 12"), true, "reply shows it")
+M.Run(c, "reagent 1"); eq(c.reagentThreshold, 1, "minimum accepted")
+M.Run(c, "reagent 40"); eq(c.reagentThreshold, 40, "maximum accepted")
+for _, bad in ipairs({ "0", "41", "-1", "2.5", "abc" }) do
+    c.reagentThreshold = 7
+    out = M.Run(c, "reagent " .. bad)
+    eq(c.reagentThreshold, 7, "reagent " .. bad .. " rejected")
+    eq(has(out, "from 1 to 40"), true, "range stated for " .. bad)
+end
+eq(M.LIMITS.reagent[1] == 1 and M.LIMITS.reagent[2] == 40, true, "limits for the settings page")
+eq(has(M.Run(c, "ammo off"), "Reagents: off"), true, "the master switch shows as reagents off")
+
+c = fresh()
+out = M.Run(c, "reagents", "MAGE")
+eq(has(out, "Arcane Powder: on") and has(out, "Rune of Teleportation: on") and has(out, "Rune of Portals: on"), true, "lists the mage reagents, all on")
+eq(has(out, "Symbol of Kings"), false, "only the class's reagents")
+out = M.Run(c, "reagent off arcane powder", "MAGE")
+eq(c.reagentOff[17020], true, "switched off by name")
+eq(has(out, "Arcane Powder: off"), true, "confirmed")
+eq(has(M.Run(c, "reagents", "MAGE"), "Arcane Powder: off"), true, "the list shows it off")
+eq(has(M.Run(c, "reagents", "MAGE"), "Rune of Portals: on"), true, "others stay on")
+eq(has(M.Run(c, ""), "Reagents switched off: Arcane Powder"), true, "status lists what is off")
+M.Run(c, "reagent on  ARCANE   powder", "MAGE")
+eq(c.reagentOff[17020], nil, "switched back on, case and spaces ignored")
+M.Run(c, "reagent off 17032", "MAGE")
+eq(c.reagentOff[17032], true, "by item id")
+out = M.Run(c, "reagent off nonsense", "MAGE")
+eq(has(out, "No reagent named nonsense"), true, "unknown name says so")
+eq(c.reagentOff[17031], nil, "and changes nothing")
+eq(has(M.Run(c, "reagent off ankh", "MAGE"), "No reagent named"), true, "another class's reagent is unknown")
+eq(has(M.Run(c, "reagent off", "MAGE"), "Name a reagent"), true, "no name given")
+eq(has(M.Run(c, "reagent off ankh", "WARRIOR"), "no reagents"), true, "a class without reagents")
+eq(has(M.Run(c, "reagents", "WARRIOR"), "no reagents"), true, "listing for a class without reagents")
+eq(has(M.Run(c, "reagents", nil), "no reagents"), true, "unknown class")
+local old = fresh(); old.reagentOff = nil
+M.Run(old, "reagent off arcane powder", "MAGE")
+eq(old.reagentOff[17020], true, "an old settings table gets its off-list")
+
+local out2, action = M.Run(fresh(), "test reagent")
+eq(action[1] == "test" and action[2] == "reagent", true, "test reagent action")
+eq(has(out2, "reagent"), true, "test reagent line")
 
 H.done()

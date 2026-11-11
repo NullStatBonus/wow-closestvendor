@@ -253,28 +253,56 @@ function A.npc()
     return id, name
 end
 
--- 0 none, 1 arrows, 2 bullets, 3 both: what the open merchant window sells.
-local function merchantAmmoCode()
-    local arrows, bullets = 0, 0
+-- What the open merchant window sells: an ammo code (0 none, 1 arrows, 2 bullets, 3 both) and a
+-- reagent mask (bits of the Reagents table). One pass over the offered items.
+local function merchantScan()
+    local arrows, bullets, reagents = 0, 0, {}
     local count = call("GetMerchantNumItems", GetMerchantNumItems) or 0
     for i = 1, count do
         local link = call("GetMerchantItemLink", GetMerchantItemLink, i)
         local id = type(link) == "string" and tonumber(link:match("item:(%d+)"))
         if id then
+            if ns.Reagents.ById(id) then reagents[id] = true end
             local c, sc = A.itemClass(id)
             if c == 6 and sc == 2 then arrows = 1 elseif c == 6 and sc == 3 then bullets = 2 end
         end
     end
-    return arrows + bullets
+    return arrows + bullets, ns.Reagents.Mask(reagents)
 end
 
--- The merchant window that just opened: { id, name, faction, repair, ammo }, or nil if the
--- merchant cannot be identified as a creature.
+-- The merchant window that just opened: { id, name, faction, repair, ammo, reagents }, or nil if
+-- the merchant cannot be identified as a creature.
 function A.merchant()
     local id, name = A.npc()
     if not id then return end
+    local ammo, reagents = merchantScan()
     return { id = id, name = name, faction = A.factionId("npc"),
-             repair = call("CanMerchantRepair", CanMerchantRepair) and true or false, ammo = merchantAmmoCode() }
+             repair = call("CanMerchantRepair", CanMerchantRepair) and true or false, ammo = ammo, reagents = reagents }
+end
+
+-- Class reagents -------------------------------------------------------------------------------
+
+-- The player's class token ("MAGE"), or nil.
+function A.classToken()
+    local _, token = call("UnitClass", UnitClass, "player")
+    return type(token) == "string" and token or nil
+end
+
+-- True or false whether the player knows the spell; nil when the game cannot say.
+function A.knowsSpell(id)
+    local f = IsPlayerSpell or IsSpellKnown
+    local known = call("IsPlayerSpell", f, id)
+    if known == nil then return nil end
+    return known and true or false
+end
+
+-- How many of the item the player carries (bags included); nil when unknown.
+function A.itemCount(id) return itemCount(id) end
+
+-- The game's name for an item, or nil when it is not cached yet.
+function A.itemName(id)
+    local name = call("GetItemInfo", (C_Item and C_Item.GetItemInfo) or GetItemInfo, id)
+    return type(name) == "string" and name or nil
 end
 
 -- Buying ammo -----------------------------------------------------------------------------------

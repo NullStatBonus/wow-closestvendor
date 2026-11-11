@@ -13,15 +13,47 @@ local ROWS = {
     { key = "dur", label = L["Durability"], slider = L["Ask when an item is below (%)"],
       tip = L["Ask about the nearest repair vendor when any equipped item falls below this durability."], step = 1,
       format = function(v) return v .. "%" end },
-    { key = "ammo", label = L["Ammo"], slider = L["Ask when ammo is at or below"],
-      tip = L["Ask about the nearest vendor selling your ammo when the equipped ammo drops to this number or fewer."], step = 50 },
+    { key = "ammo", label = L["Ammo and reagents"], slider = L["Ask when ammo is at or below"],
+      tip = L["Ask about the nearest vendor selling your ammo when the equipped ammo drops to this number or fewer. Turning this off also stops the reagent questions."], step = 50 },
     { key = "trade", label = L["Professions"], slider = L["Ask when a skill is this close to its limit"],
       tip = L["Ask about the nearest trainer when a profession is this many points or fewer from its current skill limit."], step = 1 },
 }
 
+-- The reagent slider and one checkbox per reagent of the player's class. The saved setting is a list
+-- of reagents switched off, so a checkbox shows "on" when the item is not in it: a small proxy table
+-- turns that around, and anything not switched off (including reagents added later) is on.
+local function registerReagents(category, cfg, defaults, onChange, class, masterCheckbox, masterSetting)
+    local amount = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_REAGENT_THRESHOLD", "reagentThreshold", cfg,
+        Settings.VarType.Number, L["Ask when a reagent is at or below"], defaults.reagentThreshold)
+    local limits = ns.Commands.LIMITS.reagent
+    local options = Settings.CreateSliderOptions(limits[1], limits[2], 1)
+    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+    local slider = Settings.CreateSlider(category, amount, options,
+        L["Ask about the nearest vendor selling a class reagent when you have this many or fewer."])
+    amount:SetValueChangedCallback(onChange)
+    local function underMaster(initializer)
+        if initializer.SetParentInitializer then
+            initializer:SetParentInitializer(masterCheckbox, function() return masterSetting:GetValue() end)
+        end
+    end
+    underMaster(slider)
+    cfg.reagentOff = cfg.reagentOff or {}
+    local proxy = setmetatable({}, {
+        __index = function(_, id) return not cfg.reagentOff[id] end,
+        __newindex = function(_, id, on) cfg.reagentOff[id] = (not on) or nil end,
+    })
+    for _, item in ipairs(ns.Reagents.ForClass(class)) do
+        local setting = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_REAGENT_" .. item.id, item.id, proxy,
+            Settings.VarType.Boolean, L["Reagent: %s"]:format(item.name), true)
+        underMaster(Settings.CreateCheckbox(category, setting, L["Ask about this reagent when it runs low."]))
+        setting:SetValueChangedCallback(onChange)
+    end
+end
+
 -- cfg: saved settings table. defaults: default value per cfg key. onChange: called after any change.
+-- class: the player's class token, for the reagent list (no list without it).
 -- Returns the category, or nothing if the client has no usable settings API.
-function O.Register(cfg, defaults, onChange)
+function O.Register(cfg, defaults, onChange, class)
     if not (Settings and Settings.RegisterVerticalLayoutCategory and Settings.RegisterAddOnSetting
             and Settings.CreateCheckbox and Settings.CreateSlider and Settings.CreateSliderOptions) then
         return
@@ -46,6 +78,7 @@ function O.Register(cfg, defaults, onChange)
 
         on:SetValueChangedCallback(onChange)
         amount:SetValueChangedCallback(onChange)
+        if row.key == "ammo" then registerReagents(category, cfg, defaults, onChange, class, checkbox, on) end
     end
     -- Ammo buying. The grade dropdowns need a newer part of the API; without it use /cvn arrows and /cvn bullets.
     local buy = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AMMOBUY_ENABLED", "ammoBuyEnabled", cfg,

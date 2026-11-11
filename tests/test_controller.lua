@@ -4,7 +4,7 @@ local eq = H.eq
 
 local ns = {}
 H.locale(ns)
-for _, f in ipairs({ "Triggers", "Professions", "Search", "Controller" }) do
+for _, f in ipairs({ "Triggers", "Professions", "Reagents", "Search", "Controller" }) do
     loadfile("ClosestVendor/" .. f .. ".lua")("ClosestVendor", ns)
 end
 
@@ -23,7 +23,8 @@ local function world(over)
     for k, v in pairs(over or {}) do w[k] = v end
     local env = {
         cfg = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true,
-                 tradeThreshold = 10, tradeEnabled = true },
+                 tradeThreshold = 10, tradeEnabled = true, reagentThreshold = 5 },
+        reagents = function() return w.reagents end,
         skills = function() return w.skills end,
         known = w.known,
         trainerBuckets = w.trainers or {},
@@ -288,6 +289,16 @@ w.c.Evaluate()
 eq(#w.prompts, 2, "ammo asked once repair resolved")
 eq(w.prompts[2].kind, "arrow", "then arrows")
 
+-- Auto notice says what to buy for ammo (also from /cvn test).
+w = world({ ammoKind = "arrow", ammoCount = 10, cfg = { vendorMode = "auto" } })
+w.c.Evaluate()
+eq(w.says[1] and w.says[1]:find(" to buy ammo.", 1, true) ~= nil, true, "auto notice names ammo")
+w = world({ cfg = { vendorMode = "auto" } })
+w.c.Test("bullet")
+eq(w.says[1] and w.says[1]:find(" to buy ammo.", 1, true) ~= nil, true, "test bullets: notice names ammo")
+w = world({ dur = 5, cfg = { vendorMode = "auto" } })
+w.c.Evaluate()
+eq(w.says[1] and w.says[1]:find(" to repair your gear.", 1, true) ~= nil, true, "auto notice says repair")
 -- Test(): ammo kinds ask for that ammo regardless of weapon or count.
 w = world({ ammoKind = nil, autoAccept = false })
 eq(w.c.Test("arrow"), nil, "test arrows")
@@ -655,7 +666,7 @@ eq(#w.prompts, 0, "auto: no question")
 eq(w.setCount, 1, "auto: pinned")
 eq(w.last[2], "Home Seller", "auto, prefer map")
 eq(#w.says, 1, "auto: one chat line")
-eq(w.says[1], "Navigating to Home Seller (50 yards). The other choice was Other Seller (10 yards).", "auto: names both targets, no zones known")
+eq(w.says[1], "Navigating to Home Seller (50 yards) to sell items and free bag space. The other choice was Other Seller (10 yards).", "auto: names both targets, no zones known")
 eq(w.notes[1], w.says[1], "auto: the on-screen message is the same text")
 w = mapped({ cfg = { vendorMode = "auto", vendorPrefer = "distance" } })
 w.c.Evaluate()
@@ -714,14 +725,14 @@ eq(T("trainer", MTR[2], "A", 5, "Mining", { other = MTR[1], dist = 1, otherDist 
 -- Auto notice: zones, one candidate, the other candidate, the switch, no notify function, trainers.
 w = mapped({ cfg = { vendorMode = "auto" }, zones = { [100] = "Elwynn", [200] = "Westfall" } })
 w.c.Evaluate()
-eq(w.says[1], "Navigating to Home Seller (Elwynn, 50 yards). The other choice was Other Seller (Westfall, 10 yards).", "notice has zones and distances for both")
+eq(w.says[1], "Navigating to Home Seller (Elwynn, 50 yards) to sell items and free bag space. The other choice was Other Seller (Westfall, 10 yards).", "notice has zones and distances for both")
 eq(#w.notes, 1, "one on-screen message")
 w = mapped({ cfg = { vendorMode = "auto", vendorPrefer = "distance" }, zones = { [100] = "Elwynn", [200] = "Westfall" } })
 w.c.Evaluate()
-eq(w.says[1], "Navigating to Other Seller (Westfall, 10 yards). The other choice was Home Seller (Elwynn, 50 yards).", "distance preference names the pinned one first")
+eq(w.says[1], "Navigating to Other Seller (Westfall, 10 yards) to sell items and free bag space. The other choice was Home Seller (Elwynn, 50 yards).", "distance preference names the pinned one first")
 w = mapped({ pos = { 1, 60, 0, 100 }, cfg = { vendorMode = "auto" }, zones = { [100] = "Elwynn" } })
 w.c.Evaluate()
-eq(w.says[1], "Navigating to Home Seller (Elwynn, 10 yards).", "single candidate: no other choice")
+eq(w.says[1], "Navigating to Home Seller (Elwynn, 10 yards) to sell items and free bag space.", "single candidate: no other choice")
 w = mapped({ cfg = { vendorMode = "auto", autoNotice = false } })
 w.c.Evaluate()
 eq(#w.notes, 0, "notice off: no on-screen message")
@@ -732,10 +743,151 @@ w.c.Evaluate()
 eq(#w.says, 1, "no notify function: chat only, no error")
 w = mtrade({ cfg = { vendorMode = "auto" }, zones = { [100] = "Elwynn", [200] = "Westfall" } })
 w.c.OnCraft()
-eq(w.says[1], "Navigating to Home Miner (Elwynn, 50 yards). The other choice was Other Miner (Westfall, 10 yards).", "trainer notice")
+eq(w.says[1], "Navigating to Home Miner (Elwynn, 50 yards) to train Mining. The other choice was Other Miner (Westfall, 10 yards).", "trainer notice")
 eq(w.notes[1], w.says[1], "trainer on-screen message")
 w = mapped({ autoAccept = false })
 w.c.Evaluate()
 eq(#w.notes, 0, "ask mode: no on-screen message")
+
+-- Reagents ---------------------------------------------------------------------------------------------------
+local POWDER, PORTALS = ns.Reagents.ById(17020), ns.Reagents.ById(17032)
+-- { npcId, name, uiMapID, mx, my, faction, repair, ammo, wx, wy, reagents }
+local RV = {
+    { 1, "Plain Seller",  100, 0.1, 0.1, 0, false, 0, 5, 0, 0 },
+    { 2, "Powder Seller", 100, 0.3, 0.1, 0, false, 0, 30, 0, 1 },
+    { 3, "Rune Seller",   100, 0.6, 0.1, 0, false, 0, 60, 0, 4 },
+}
+local function reagent(over)
+    local o = { buckets = { [1] = RV }, reagents = { { item = POWDER, count = 3, name = "Arcane Powder" } } }
+    for k, v in pairs(over or {}) do o[k] = v end
+    return world(o)
+end
+
+-- A low reagent asks about the nearest vendor that sells it; Yes sets the pin.
+w = reagent()
+w.c.Evaluate()
+eq(#w.prompts, 1, "reagent question asked")
+eq(w.prompts[1].kind, "reagent", "kind")
+eq(w.prompts[1].vendor[2], "Powder Seller", "nearest seller of that reagent, not the nearest vendor")
+eq(w.prompts[1].count, 3, "count passed")
+eq(w.prompts[1].trade, "Arcane Powder", "reagent name passed")
+eq(w.setCount, 1, "Yes sets the pin")
+eq(w.last[2], "Powder Seller", "pin is the seller")
+w.c.Evaluate()
+eq(#w.prompts, 1, "not asked again while low")
+
+-- The threshold is inclusive; above it nothing is asked; combat holds it back.
+w = reagent({ reagents = { { item = POWDER, count = 5, name = "Arcane Powder" } } })
+w.c.Evaluate()
+eq(#w.prompts, 1, "at the threshold: asks")
+w = reagent({ reagents = { { item = POWDER, count = 6, name = "Arcane Powder" } } })
+w.c.Evaluate()
+eq(#w.prompts, 0, "above the threshold: nothing")
+w = reagent({ cfg = { reagentThreshold = 10 }, reagents = { { item = POWDER, count = 10, name = "Arcane Powder" } } })
+w.c.Evaluate()
+eq(#w.prompts, 1, "a higher reagent threshold applies")
+w = reagent({ combat = true })
+w.c.Evaluate()
+eq(#w.prompts, 0, "no question in combat")
+w.combat = false
+w.c.Evaluate()
+eq(#w.prompts, 1, "asked after combat")
+
+-- The master switch (ammoEnabled) turns reagent questions off.
+w = reagent({ cfg = { ammoEnabled = false } })
+w.c.Evaluate()
+eq(#w.prompts, 0, "master switch off")
+
+-- Recovering withdraws the pin and the question.
+w = reagent()
+w.c.Evaluate()
+w.reagents[1].count = 40
+w.c.Evaluate()
+eq(w.clearCount, 1, "pin cleared when the reagent is restocked")
+
+-- Two reagents low: one question, the second after the first resolves.
+w = reagent({ autoAccept = false, reagents = { { item = POWDER, count = 1, name = "Arcane Powder" }, { item = PORTALS, count = 2, name = "Rune of Portals" } } })
+w.c.Evaluate()
+eq(#w.prompts, 1, "one question")
+eq(w.prompts[1].trade, "Arcane Powder", "first in list order")
+w.c.Evaluate()
+eq(#w.prompts, 1, "second waits")
+w.c.OnMerchantShow()
+w.c.Evaluate()
+eq(#w.prompts, 2, "second asked after the merchant")
+eq(w.prompts[2].trade, "Rune of Portals", "second reagent")
+eq(w.prompts[2].vendor[2], "Rune Seller", "its own seller")
+
+-- No known seller: one chat line, never a dialog, not repeated.
+w = reagent({ buckets = { [1] = { RV[1] } } })
+w.c.Evaluate()
+eq(#w.prompts, 0, "no seller: no question")
+eq(#w.says, 1, "one chat line")
+eq(w.says[1]:find("Arcane Powder", 1, true) ~= nil, true, "names the reagent")
+w.reagents[1].count = 40
+w.c.Evaluate()
+w.reagents[1].count = 2
+w.c.Evaluate()
+eq(#w.says, 1, "told once per reagent")
+
+-- No map position: kept and retried; if the reagent recovers meanwhile, dropped.
+w = reagent({ pos = false })
+w.c.Evaluate()
+eq(w.c.pending, "reagent", "kept pending")
+w.pos = { 1, 0, 0 }
+w.c.Evaluate()
+eq(#w.prompts, 1, "placed once there is a position")
+w = reagent({ pos = false })
+w.c.Evaluate()
+w.reagents[1].count = 40
+w.c.Evaluate()
+eq(w.c.pending, nil, "dropped when restocked")
+
+-- Another map: both targets offered, like any vendor question.
+local RM = {
+    { 1, "Other Map Seller", 200, 0.1, 0.1, 0, false, 0, 20, 0, 1 },
+    { 2, "Home Seller",      100, 0.5, 0.1, 0, false, 0, 60, 0, 1 },
+}
+w = reagent({ buckets = { [1] = RM }, pos = { 1, 0, 0, 100 }, zones = { [100] = "Home", [200] = "Away" } })
+w.c.Evaluate()
+eq(w.prompts[1].vendor[2], "Home Seller", "the one on the player's map first")
+eq(w.prompts[1].two.other[2], "Other Map Seller", "the closer one second")
+eq(w.setCount, 1, "first choice taken")
+
+-- Auto mode: pinned at once, with the notice.
+w = reagent({ cfg = { vendorMode = "auto" } })
+w.c.Evaluate()
+eq(#w.prompts, 0, "auto: no question")
+eq(w.setCount, 1, "auto: pinned")
+eq(#w.notes, 1, "auto: on-screen notice")
+eq(w.notes[1], "Navigating to Powder Seller (30 yards) to buy Arcane Powder.", "auto: the notice says what to buy")
+eq(w.says[1], w.notes[1], "auto: and so does the chat line")
+w = reagent({ cfg = { vendorMode = "auto" }, buckets = { [1] = RM }, pos = { 1, 0, 0, 100 }, zones = { [100] = "Home", [200] = "Away" } })
+w.c.Evaluate()
+eq(w.notes[1], "Navigating to Home Seller (Home, 60 yards) to buy Arcane Powder. The other choice was Other Map Seller (Away, 20 yards).", "auto, two candidates: what to buy and the other choice")
+
+-- Reagent questions never override a vendor request that is open (repair first).
+w = reagent({ dur = 5, autoAccept = false, buckets = { [1] = { RV[2], { 4, "Repairer", 100, 0.5, 0.1, 0, true, 0, 40, 0, 0 } } } })
+w.c.Evaluate()
+eq(w.prompts[1].kind, "repair", "repair first")
+w.c.Evaluate()
+eq(#w.prompts, 1, "reagent waits for the repair question")
+
+-- Text.
+eq(ns.Controller.PromptText("reagent", RV[2], nil, 3, "Arcane Powder"):find("low on Arcane Powder (3 left)", 1, true) ~= nil, true, "single text")
+eq(ns.Controller.PromptText("reagent", RV[2], "Home", 3, "Arcane Powder", { other = RV[3], dist = 5, otherDist = 9 }, "Away"):find("Which vendor that sells Arcane Powder", 1, true) ~= nil, true, "two-target text names what to buy")
+eq(ns.Controller.PromptText("reagent", RV[2], nil, 3, "Arcane Powder"):find("closest vendor that sells Arcane Powder, Powder Seller?", 1, true) ~= nil, true, "single text names what to buy")
+
+-- /cvn test reagent.
+w = reagent({ reagents = { { item = POWDER, count = 80, name = "Arcane Powder" } } })
+eq(w.c.Test("reagent"), nil, "test asks even when plentiful")
+eq(w.prompts[1].vendor[2], "Powder Seller", "test question")
+w = reagent({ reagents = {} })
+eq(w.c.Test("reagent") ~= nil, true, "nothing watched: a message")
+eq(#w.prompts, 0, "and no dialog")
+w = reagent({ buckets = { [1] = { RV[1] } } })
+eq(w.c.Test("reagent"):find("Arcane Powder", 1, true) ~= nil, true, "no seller: says so")
+w = reagent({ pos = false })
+eq(w.c.Test("reagent"):find("No map position", 1, true) ~= nil, true, "no position")
 
 H.done()

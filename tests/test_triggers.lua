@@ -183,4 +183,48 @@ t.Update(1, nil, false, nil)
 t.OnMerchantShow()
 eq(t.Active(), nil, "cleared by a merchant")
 
+-- Reagents: one request per low item, in the order given, and never while ammo or repair is open.
+local function ract(a) return a and (a[2] and (a[1] .. ":" .. a[2] .. (a[3] and (":" .. a[3]) or "")) or a[1]) or "nil" end
+t = T.New(cfg())
+eq(ract(t.Update(10, nil, false, nil, nil)), "nil", "no reagents: nothing")
+eq(ract(t.Update(10, nil, false, nil, {})), "nil", "empty list: nothing")
+eq(ract(t.Update(10, nil, false, nil, { 17020 })), "go:reagent:17020", "a low reagent asks")
+eq(t.Active(), "reagent", "reagent request active")
+eq(ract(t.Update(10, nil, false, nil, { 17020 })), "nil", "not asked again while low")
+eq(ract(t.Update(10, nil, false, nil, { 17020, 17032 })), "nil", "a second reagent waits for the first")
+eq(ract(t.OnMerchantShow()), "clear", "a merchant resolves the first")
+eq(ract(t.Update(10, nil, false, nil, { 17020, 17032 })), "go:reagent:17032", "then the second asks")
+eq(ract(t.Update(10, nil, false, nil, { 17020 })), "clear", "the active reagent recovered: withdrawn")
+eq(ract(t.Update(10, nil, false, nil, {})), "nil", "all recovered")
+eq(ract(t.Update(10, nil, false, nil, { 17020 })), "go:reagent:17020", "falls low again: asked again")
+
+-- Combat holds it back; the master switch (ammoEnabled) turns reagents off with ammo.
+t = T.New(cfg())
+eq(ract(t.Update(10, nil, true, nil, { 17020 })), "nil", "no question in combat")
+eq(ract(t.Update(10, nil, false, nil, { 17020 })), "go:reagent:17020", "asked after combat")
+local off = cfg(); off.ammoEnabled = false
+t = T.New(off)
+eq(ract(t.Update(10, nil, false, nil, { 17020 })), "nil", "master switch off: no reagent question")
+eq(ract(t.Update(10, nil, false, 10, { 17020 })), "nil", "and no ammo question")
+
+-- Priority: repair, ammo, reagent, sell. A reagent trip does not cover selling.
+t = T.New(cfg())
+eq(ract(t.Update(1, nil, false, nil, { 17020 })), "go:reagent:17020", "reagent before sell")
+eq(ract(t.Update(1, nil, false, nil, { 17020 })), "nil", "sell does not replace reagent")
+eq(ract(t.OnMerchantShow()), "clear", "merchant")
+eq(ract(t.Update(1, nil, false, nil, { 17020 })), "go:sell", "sell asked after the reagent resolved")
+t = T.New(cfg())
+eq(ract(t.Update(10, nil, false, 10, { 17020 })), "go:ammo", "ammo before reagent")
+eq(ract(t.Update(10, nil, false, 10, { 17020 })), "nil", "reagent waits for ammo")
+eq(ract(t.OnMerchantShow()), "clear", "ammo vendor")
+eq(ract(t.Update(10, nil, false, 10, { 17020 })), "go:reagent:17020", "reagent after ammo")
+t = T.New(cfg())
+eq(ract(t.Update(10, 5, false, nil, { 17020 })), "go:repair", "repair before reagent")
+eq(ract(t.Update(10, 5, false, nil, { 17020 })), "nil", "reagent waits for repair")
+t = T.New(cfg())
+eq(ract(t.Update(10, nil, false, nil, { 17020 })), "go:reagent:17020", "reagent open")
+eq(ract(t.Update(10, nil, false, 10, { 17020 })), "go:ammo", "ammo replaces an open reagent question")
+eq(ract(t.OnMerchantShow()), "clear", "ammo vendor visited")
+eq(ract(t.Update(10, nil, false, 300, { 17020 })), "go:reagent:17020", "the displaced reagent is asked again")
+
 H.done()
