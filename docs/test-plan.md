@@ -1,216 +1,463 @@
 # In-game test plan
 
-What the automated tests cannot check: the real game. Run it on WoW Forever (and on Classic Era when convenient) before a release, after a change to `Adapter.lua`, `Core.lua`, `Report.lua` or `Options.lua`, and when a new game build comes out. Tick items off and note the client build.
+These checks cover what the automated tests cannot check: the real game.
+
+Run them on WoW Forever. Run them on Classic Era when you can.
+
+Run them before a release. Run them after a change to `Adapter.lua`, `Core.lua`, `Report.lua` or `Options.lua`. Run them when a new game build comes out.
+
+Tick each item. Write down the client build.
+
+Each check has an action and an expected result. A line that starts with "Note" asks you to record what the game does. Those items are unknown: verify them in game.
 
 ## 0. Setup
 
-1. Copy `ClosestVendor/` into the AddOns folder; start the game. `/console scriptErrors 1`, then `/reload`.
-2. No Lua error popup appears on login. The addon is listed (Esc, AddOns).
-3. Optional extras to test with: TomTom, WaypointUI (Forever).
-4. For ammo: a hunter (or warrior or rogue) with a bow, crossbow or gun equipped and some ammo in the ammo slot.
+1. Copy `ClosestVendor/` into the AddOns folder. Start the game. Enter `/console scriptErrors 1`. Then enter `/reload`.
+2. Expected: no Lua error popup appears on login. The addon is in the list (Esc, AddOns).
+3. Optional: install TomTom. Optional: install WaypointUI (WoW Forever).
+4. For ammo tests, use a hunter, warrior or rogue. Equip a bow, crossbow or gun. Put some ammo in the ammo slot.
 
 ## 1. Settings page and commands
 
-- [ ] Esc, Options, AddOns, **Closest Vendor** exists, with a checkbox and a slider for Bag space, Durability and Ammo and reagents (with the reagent slider and one checkbox per reagent of your class under it), plus Buy ammo and Ask before buying ammo checkboxes and Arrows to buy / Bullets to buy dropdowns.
-- [ ] Moving a slider changes the number shown by `/cvn`; `/cvn ammo 500` moves the ammo slider to 500 when the page is reopened.
-- [ ] Clearing a checkbox greys out its slider and stops that trigger asking.
-- [ ] `/cvn config` opens the page.
-- [ ] `/cvn` and `/cvn help` print readable lines: no stray symbols, no missing text.
-- [ ] Settings changed with `/cvn` and on the page survive `/reload` and a full restart.
+- [ ] Open Esc, Options, AddOns, **Closest Vendor**. Expected: the page exists.
+- [ ] On the settings page, find Bag space, Durability, and Ammo and reagents. Expected: each has one checkbox and one slider.
+- [ ] Look under the Ammo and reagents slider. Expected: the reagent slider is there, with one checkbox for each reagent of your class.
+- [ ] Look at the rest of the settings page. Expected: the Buy ammo and Ask before buying ammo checkboxes are there. The Arrows to buy and Bullets to buy dropdowns are there.
+- [ ] Move a slider. Expected: `/cvn` shows the new number.
+- [ ] Enter `/cvn ammo 500`. Reopen the settings page. Expected: the ammo slider is at 500.
+- [ ] Clear a checkbox. Expected: its slider is greyed out. That trigger stops asking.
+- [ ] Enter `/cvn config`. Expected: the settings page opens.
+- [ ] Enter `/cvn`. Enter `/cvn help`. Expected: both print readable lines. No stray symbols. No missing text.
+- [ ] Change settings with `/cvn` and on the settings page. Enter `/reload`. Expected: the settings stay.
+- [ ] Change settings again. Restart the game. Expected: the settings stay.
 
 ## 2. The question
 
-- [ ] `/cvn test sell`, `/cvn test repair`, `/cvn test arrows`, `/cvn test bullets` each show the question with a vendor name and zone. **Yes** sets the pin (see section 3); **No** or Esc does nothing.
-- [ ] Fill your bags to the threshold (default: 2 free slots or fewer): the sell question appears once and does not repeat on later bag changes.
-- [ ] Wear one item below the durability threshold (default 20%): the repair question appears once.
-- [ ] Answer **Yes** to a real question (not a test): navigation starts at the vendor named in it.
-- [ ] Answer **No**: it does not ask again until the condition clears (sell something / repair) and then comes back.
-- [ ] Sell or repair while the question is open: the question closes by itself.
-- [ ] With both repair and sell conditions true: repair is asked first.
-- [ ] The question never appears in combat; it appears after combat ends.
+- [ ] Enter `/cvn test sell`, `/cvn test repair`, `/cvn test arrows` and `/cvn test bullets`. Expected: each shows the question with a vendor name and a zone.
+- [ ] In a test question, click **Yes**. Expected: the addon sets the waypoint (see section 3).
+- [ ] In a test question, click **No** or press Esc. Expected: nothing happens.
+- [ ] Fill your bags to the threshold. The default is 2 free slots or fewer. Expected: the sell question appears once.
+- [ ] Change your bags again. Expected: the sell question does not repeat.
+- [ ] Wear one item below the durability threshold. The default is 20%. Expected: the repair question appears once.
+- [ ] Click **Yes** in a real question (not a test). Expected: navigation starts to the vendor named in the question.
+- [ ] Click **No**. Expected: the addon does not ask again until the condition clears (you sell something or repair). Then the question comes back.
+- [ ] Open a question. Sell or repair while it is open. Expected: the question closes by itself.
+- [ ] Make both the repair condition and the sell condition true. Expected: the repair question comes first.
+- [ ] Meet a condition during combat. Expected: no question appears in combat.
+- [ ] End combat. Expected: the question appears after combat ends.
 
 ## 3. Navigation
 
-- [ ] With TomTom: the arrow points at the vendor and is removed when you open any vendor window.
-- [ ] With WaypointUI (Forever): the destination shows; it is removed on arrival or when you open a vendor.
-- [ ] With neither (Forever): the map waypoint shows and is super-tracked.
-- [ ] With neither (Era): a chat line with the vendor, zone and coordinates.
-- [ ] `/cvn log` (section 5) reports the navigation method it used.
+- [ ] With TomTom: trigger a question and click **Yes**. Expected: the arrow points at the vendor.
+- [ ] With TomTom: open any vendor window. Expected: the addon removes the arrow.
+- [ ] With WaypointUI (WoW Forever): trigger a question and click **Yes**. Expected: the destination shows.
+- [ ] With WaypointUI: arrive, or open a vendor. Expected: the addon removes the destination.
+- [ ] With neither addon (WoW Forever): click **Yes**. Expected: the map waypoint shows and is super-tracked.
+- [ ] With neither addon (Classic Era): click **Yes**. Expected: a chat line shows the vendor, the zone and the coordinates.
+- [ ] Enter `/cvn log` (see section 7). Expected: the report names the navigation method it used.
 
 ## 4. Vendors and learning
 
-- [ ] Open a vendor the addon did not know (a new Forever zone, e.g. Mount Hyjal or Zephras Isle): afterwards `/cvn test sell` can pick it.
-- [ ] Open a repair vendor: `/cvn test repair` can pick it. Open an ammo vendor: `/cvn test arrows` / `bullets` can pick it.
-- [ ] Spot-check about 10 known vendors against their real positions (cities, remote camps, faction-specific). Note any that are off, and whether a "vendor" refuses to buy some items.
+- [ ] Open a vendor the addon does not know. Use a new WoW Forever zone, for example Mount Hyjal or Zephras Isle. Then enter `/cvn test sell`. Expected: the test can pick that vendor.
+- [ ] Open a repair vendor. Then enter `/cvn test repair`. Expected: the test can pick that vendor.
+- [ ] Open an ammo vendor. Then enter `/cvn test arrows` or `/cvn test bullets`. Expected: the test can pick that vendor.
+- [ ] Compare about 10 known vendors with their real positions. Include cities, remote camps and faction-specific vendors. Note each vendor that is in the wrong place.
+- [ ] While you compare vendors, note each "vendor" that refuses to buy some items.
 
 ## 5. Ammo
 
-- [ ] With a bow and fewer arrows than the threshold: the arrows question appears. With a gun and bullets: the bullets question.
-- [ ] Use ammo down to the threshold by shooting: the question appears when you cross it. Turn `/cvn debug on` first and note **which events fired** as the count dropped (`BAG_UPDATE_DELAYED`, `UNIT_INVENTORY_CHANGED`, `PLAYER_EQUIPMENT_CHANGED`) in the report.
-- [ ] Equip the wrong kind of ammo for the weapon: it counts as no ammo and asks. Equip a thrown weapon or a wand: it never asks.
+- [ ] Equip a bow. Have fewer arrows than the threshold. Expected: the arrows question appears.
+- [ ] Equip a gun. Have fewer bullets than the threshold. Expected: the bullets question appears.
+- [ ] Enter `/cvn debug on`. Shoot ammo down to the threshold. Expected: the question appears when you cross the threshold.
+- [ ] In the report, note which events fired as the ammo count dropped. Look for `BAG_UPDATE_DELAYED`, `UNIT_INVENTORY_CHANGED` and `PLAYER_EQUIPMENT_CHANGED`.
+- [ ] Equip the wrong kind of ammo for the weapon. Expected: the addon counts it as no ammo and asks.
+- [ ] Equip a thrown weapon. Expected: the addon never asks.
+- [ ] Equip a wand. Expected: the addon never asks.
 
 ## 6. Professions
 
-- [ ] Open a profession trainer (any): `/cvn log` after `/cvn debug on` shows the trainer window event and the report lists `trainers: 1 learned` and the profession. Open a class trainer: nothing is recorded.
-- [ ] Reach the threshold (default 10 points from the limit, e.g. 65/75 Mining) and gather: the trainer question appears on the skill-up, names the profession, the points left and the trainer, and **Yes** sets the pin.
-- [ ] Craft with a tradeskill window open near the limit: the question appears after every craft, also when no skill-up happened. Note which events fired for a single craft and for a Craft All (Forever): `UNIT_SPELLCAST_SUCCEEDED` once per item?
-- [ ] Answer **No**: the next skill-up or craft asks again. Leave the question open and craft again: it is not shown a second time.
-- [ ] At the tier limit (e.g. 75/75) it still asks; at 300/300 (or the final tier) it never asks. On Forever, check whether any profession can go above 300 and what `maxRank` the skill list shows.
-- [ ] Open the trainer window for that profession: the pin disappears. Open a vendor window on the way: the trainer pin stays.
-- [ ] A profession you never opened a trainer or crafting window for stays silent; weapon skills never ask. A known profession with no trainer on this continent prints one chat line, once.
-- [ ] Does opening a tradeskill window teach the addon the profession (report line `professions seen`)? Does the trainer window have its services loaded at `TRAINER_SHOW`, or only after `TRAINER_UPDATE` (the log shows which event recorded it)?
-- [ ] `/cvn trade 25`, `/cvn trade off`, the settings page slider agree.
+- [ ] Enter `/cvn debug on`. Open a profession trainer (any). Enter `/cvn log`. Expected: the log shows the trainer window event.
+- [ ] Check the report. Expected: it lists `trainers: 1 learned` and the profession.
+- [ ] Open a class trainer. Expected: the addon records nothing.
+- [ ] Reach the threshold. The default is 10 points from the limit, for example 65/75 Mining. Gather. Expected: the trainer question appears on the skill-up.
+- [ ] Read the trainer question. Expected: it names the profession, the points left and the trainer.
+- [ ] In the trainer question, click **Yes**. Expected: the addon sets the waypoint.
+- [ ] Craft with a tradeskill window open, near the limit. Expected: the question appears after every craft. It also appears when no skill-up happened.
+- [ ] Note which events fired for a single craft.
+- [ ] Note which events fired for a Craft All (WoW Forever). Check whether `UNIT_SPELLCAST_SUCCEEDED` fires once for each item.
+- [ ] Answer **No**. Then get a skill-up or craft again. Expected: the addon asks again.
+- [ ] Leave the question open. Craft again. Expected: the addon does not show the question a second time.
+- [ ] Reach the tier limit, for example 75/75. Expected: the addon still asks.
+- [ ] Reach 300/300 (or the final tier). Expected: the addon never asks.
+- [ ] On WoW Forever, check whether any profession can go above 300. Note the `maxRank` the skill list shows.
+- [ ] Open the trainer window for that profession. Expected: the waypoint goes away.
+- [ ] Open a vendor window on the way to the trainer. Expected: the trainer waypoint stays.
+- [ ] Use a profession for which you never opened a trainer or a crafting window. Expected: the addon stays silent.
+- [ ] Use a weapon skill. Expected: the addon never asks.
+- [ ] Use a known profession that has no trainer on this continent. Expected: the addon prints one chat line, once.
+- [ ] Open a tradeskill window. Note whether the addon learns the profession (report line `professions seen`).
+- [ ] Open a trainer window. Note whether it has its services loaded at `TRAINER_SHOW`, or only after `TRAINER_UPDATE`. The log shows which event recorded it.
+- [ ] Enter `/cvn trade 25` and `/cvn trade off`. Expected: the commands and the settings page slider agree.
 
 ## 7. Report and debug log
 
-- [ ] `/cvn log` with the log off opens a window with the version, game build, locale, navigation method, vendor counts and settings, and says how to turn the log on.
-- [ ] `/cvn debug on`, then trigger a question: `/cvn log` lists the events, the decision with the bag/durability/ammo values behind it, the vendor found, and whether it was shown and accepted.
-- [ ] The text is selected; Ctrl+C copies it all; Esc closes the window.
-- [ ] `/cvn log clear` empties it; `/cvn debug off` stops recording.
+- [ ] With the log off, enter `/cvn log`. Expected: a window opens.
+- [ ] Read the window. Expected: it shows the version, the game build, the locale, the navigation method, the vendor counts and the settings.
+- [ ] Read the window. Expected: it says how to turn the log on.
+- [ ] Enter `/cvn debug on`. Trigger a question. Enter `/cvn log`. Expected: the log lists the events.
+- [ ] Read the log. Expected: it shows the decision with the bag, durability and ammo values behind it.
+- [ ] Read the log. Expected: it shows the vendor found. It shows whether the question was shown and accepted.
+- [ ] Open the log window. Expected: the text is selected.
+- [ ] Press Ctrl+C. Expected: the window copies all the text.
+- [ ] Press Esc. Expected: the window closes.
+- [ ] Enter `/cvn log clear`. Expected: the log is empty.
+- [ ] Enter `/cvn debug off`. Expected: the log stops recording.
 
 ## 8. Safety
 
-- [ ] Inside a dungeon or battleground: no error, no question, no pin. After leaving, normal behavior returns.
-- [ ] Loading with TomTom or WaypointUI disabled, then enabling and `/reload`: no error either way.
-- [ ] On a client where a function is missing, a line like `game call failed: <name>` appears once in the log, and the addon keeps working.
+- [ ] Enter a dungeon or a battleground. Expected: no error, no question and no waypoint.
+- [ ] Leave the dungeon or battleground. Expected: normal behavior returns.
+- [ ] Load the game with TomTom disabled. Then enable TomTom and enter `/reload`. Expected: no error either way.
+- [ ] Load the game with WaypointUI disabled. Then enable WaypointUI and enter `/reload`. Expected: no error either way.
+- [ ] Use a client where a game function is missing. Expected: a line such as `game call failed: <name>` appears once in the log. The addon keeps working.
 
 ## 9. Languages
 
-- [ ] On a non-English client the addon's sentences are English and spell/zone names are the game's.
-- [ ] With a translation file installed (docs/localization.md): `/cvn`, the question and the settings page show it.
+- [ ] Use a non-English client. Expected: the addon sentences are in English. Spell names and zone names are the game's.
+- [ ] Install a translation file (see docs/localization.md). Enter `/cvn`. Expected: the output shows the translation.
+- [ ] With the translation file installed, trigger a question. Expected: the question shows the translation.
+- [ ] With the translation file installed, open the settings page. Expected: the page shows the translation.
 
 ## 10. Buying ammo
 
-Use a hunter with a bow (or a gun) and a quiver (or ammo pouch). Turn `/cvn debug on` first.
+Use a hunter with a bow (or a gun) and a quiver (or ammo pouch). Enter `/cvn debug on` first.
 
-- [ ] With the quiver partly full and `/cvn buy auto` (default): opening an ammo vendor buys until the quiver is full, with no dialog. One chat line gives the count and cost.
-- [ ] Check the count bought matches the room left. Note how many `BuyMerchantItem` calls were needed and the vendor's batch size (the report shows it). This confirms the one-call-per-batch assumption.
-- [ ] Opening the vendor with a full quiver buys nothing.
-- [ ] No quiver or pouch: nothing is bought. Wand or thrown weapon: nothing is bought.
-- [ ] `/cvn buy ask`: a dialog shows the count and price; nothing is bought until **Yes**; **No** buys nothing.
-- [ ] `/cvn buy off`: nothing is bought.
-- [ ] `/cvn arrows best` at a vendor selling several grades buys the highest grade your level allows; `/cvn arrows cheapest` buys the cheapest; `/cvn arrows equipped` buys what is in your ammo slot.
-- [ ] Setting arrows and bullets differently: a bow follows the arrow setting, a gun the bullet setting.
-- [ ] Equipped ammo that this vendor does not sell, with `equipped`: nothing is bought and a chat line says so. A vendor that sells no ammo at all stays silent.
-- [ ] Short on gold: only what you can afford is bought, and the chat line says so. With almost no gold, "You cannot afford any ammo here."
-- [ ] A quiver holding a different grade does not make it overbuy.
-- [ ] The Arrows and Bullets dropdowns on the settings page match `/cvn`.
+- [ ] Fill the quiver partly. Use `/cvn buy auto` (the default). Open an ammo vendor. Expected: the addon buys until the quiver is full, with no dialog.
+- [ ] Read the chat after that purchase. Expected: one chat line gives the count and the cost.
+- [ ] Check the count bought. Expected: it matches the room left.
+- [ ] Note how many `BuyMerchantItem` calls the addon needed. Note the batch size of the vendor (the report shows it). This confirms the one-call-per-batch assumption.
+- [ ] Open the vendor with a full quiver. Expected: the addon buys nothing.
+- [ ] Remove the quiver and the ammo pouch. Open an ammo vendor. Expected: the addon buys nothing.
+- [ ] Equip a wand or a thrown weapon. Open an ammo vendor. Expected: the addon buys nothing.
+- [ ] Enter `/cvn buy ask`. Open an ammo vendor. Expected: a dialog shows the count and the price.
+- [ ] In that dialog, do not click yet. Expected: the addon buys nothing until you click **Yes**.
+- [ ] In that dialog, click **No**. Expected: the addon buys nothing.
+- [ ] Enter `/cvn buy off`. Open an ammo vendor. Expected: the addon buys nothing.
+- [ ] Use a vendor that sells several grades of arrows. Enter `/cvn arrows best`. Expected: the addon buys the highest grade your level allows.
+- [ ] Enter `/cvn arrows cheapest`. Expected: the addon buys the cheapest grade.
+- [ ] Enter `/cvn arrows equipped`. Expected: the addon buys the ammo that is in your ammo slot.
+- [ ] Set the arrow setting and the bullet setting to different values. Expected: a bow follows the arrow setting. A gun follows the bullet setting.
+- [ ] Use `equipped` with ammo that this vendor does not sell. Expected: the addon buys nothing. A chat line says so.
+- [ ] Open a vendor that sells no ammo at all. Expected: the addon stays silent.
+- [ ] Have too little gold for a full purchase. Expected: the addon buys only what you can afford. The chat line says so.
+- [ ] Have almost no gold. Expected: the chat line says "You cannot afford any ammo here."
+- [ ] Use a quiver that holds a different grade of ammo. Expected: the addon does not overbuy.
+- [ ] Open the settings page. Expected: the Arrows and Bullets dropdowns match `/cvn`.
 
 ## 11. Targets on another map
 
-Stand near a zone edge, or in a zone where the nearest vendor is across the border. Use `/cvn test sell` (and `/cvn test repair`) so you can repeat it. Turn `/cvn debug on` first.
+Stand near a zone edge. Or stand in a zone where the closest vendor is across the border.
 
-- [ ] With a vendor on your map that is farther than one on another map: the question lists both, each with its zone and a distance in yards, and has three buttons. The first is the one on your map (`/cvn prefer map`, the default).
-- [ ] The first button sets the pin at the vendor on your map; the second at the closer one; Cancel and Esc set nothing.
-- [ ] `/cvn prefer distance`: the closer vendor is now the first button.
-- [ ] Stand where the nearest vendor is on your own map: the plain Yes / No question appears, with that vendor.
-- [ ] Stand on a map with no known vendor: the plain question names the nearest vendor on another map.
-- [ ] `/cvn choice auto`: no question. The pin is set at once, at the vendor on your map with `prefer map`, at the closer one with `prefer distance`, and one chat line names it.
-- [ ] `/cvn choice auto`: one chat line and the same text on screen, naming the pinned target with zone and distance in yards and, when there were two, the other choice. No sound beyond the map pin's own. The text stays about five seconds (count it), sits high and centered, and disappears. A second pin while it shows replaces the text and restarts the time. A game error (for example, try an action that fails) still looks and lasts as usual.
-- [ ] `/cvn notice off`: the on-screen text stops, the chat line stays. `/cvn notice on` brings it back. The settings page checkbox matches.
-- [ ] `/cvn choice auto` with only one candidate: pinned at once too. In combat, nothing is pinned.
-- [ ] Repeat with a profession near its cap: the trainer question and `auto` behave the same.
-- [ ] In a city, "your map" is the city. Note which vendors are offered.
-- [ ] The settings page dropdowns match `/cvn choice` and `/cvn prefer`, and `/cvn` shows both.
-- [ ] `/cvn log` lists the settings (target choice) and, with debug on, which target was shown or pinned.
+Use `/cvn test sell` (and `/cvn test repair`) so you can repeat the checks. Enter `/cvn debug on` first.
+
+- [ ] Find a vendor on your map that is farther than a vendor on another map. Trigger the question. Expected: the question lists both vendors. Each has its zone and a distance in yards.
+- [ ] Read the question. Expected: it has three buttons. The first button is the vendor on your map (`/cvn prefer map`, the default).
+- [ ] Click the first button. Expected: the addon sets the waypoint at the vendor on your map.
+- [ ] Click the second button. Expected: the addon sets the waypoint at the closer vendor.
+- [ ] Click Cancel. Expected: the addon sets no waypoint.
+- [ ] Press Esc. Expected: the addon sets no waypoint.
+- [ ] Enter `/cvn prefer distance`. Trigger the question. Expected: the closer vendor is now the first button.
+- [ ] Stand where the closest vendor is on your own map. Trigger the question. Expected: the plain Yes / No question appears, with that vendor.
+- [ ] Stand on a map with no known vendor. Trigger the question. Expected: the plain question names the closest vendor on another map.
+- [ ] Enter `/cvn choice auto`. Trigger a question. Expected: no question appears.
+- [ ] With `/cvn choice auto` and `prefer map`: expected: the addon sets the waypoint at once, at the vendor on your map.
+- [ ] With `/cvn choice auto` and `prefer distance`: expected: the addon sets the waypoint at once, at the closer vendor.
+- [ ] With `/cvn choice auto`: expected: one chat line names the target.
+- [ ] With `/cvn choice auto`: expected: the same text shows on screen. It names the target with its zone and its distance in yards. When there were two candidates, it also names the other choice.
+- [ ] Check the sound. Expected: there is no sound beyond the map waypoint's own sound.
+- [ ] Count the seconds the on-screen text stays. Expected: about five seconds. It sits high and centered. Then it disappears.
+- [ ] Set a second waypoint while the text shows. Expected: the new text replaces the old text. The time restarts.
+- [ ] Cause a game error, for example try an action that fails. Expected: the error text still looks the same and lasts as long as usual.
+- [ ] Enter `/cvn notice off`. Expected: the on-screen text stops. The chat line stays.
+- [ ] Enter `/cvn notice on`. Expected: the on-screen text comes back.
+- [ ] Open the settings page. Expected: the notice checkbox matches `/cvn notice`.
+- [ ] Use `/cvn choice auto` with only one candidate. Expected: the addon sets the waypoint at once.
+- [ ] Use `/cvn choice auto` in combat. Expected: the addon sets no waypoint.
+- [ ] Repeat the checks with a profession near its cap. Expected: the trainer question and `auto` behave the same.
+- [ ] Stand in a city. Expected: "your map" is the city. Note which vendors the addon offers.
+- [ ] Open the settings page. Expected: the dropdowns match `/cvn choice` and `/cvn prefer`.
+- [ ] Enter `/cvn`. Expected: it shows both settings.
+- [ ] Enter `/cvn log`. Expected: it lists the settings (target choice).
+- [ ] With debug on, enter `/cvn log`. Expected: it shows which target the addon showed or set.
 
 ## 12. Reagents
 
-Use a character whose class has reagents (mage, rogue, priest, paladin, shaman, druid), with `/cvn debug on`. Spell and item IDs were checked against the Era and Forever data tables; this section checks them in the real client.
+Use a character whose class has reagents: mage, rogue, priest, paladin, shaman or druid. Enter `/cvn debug on`.
 
-- [ ] `/cvn` shows a "Reagents: on, trigger at 5 or fewer" line. `/cvn log` shows `reagents: class ..., threshold 5, watching: ..., switched off: none` with the reagents you expect for the spells you know.
-- [ ] Spell gating: a reagent for a spell you do not know is not in `watching` (a low-level mage: no Rune of Portals); learning the spell adds it without a reload (note whether `SPELLS_CHANGED` fired in the log).
-- [ ] Rank gating: a druid knowing Rebirth rank 3 watches Ashwood Seed only, not the rank 1 and 2 seeds; a priest knowing Prayer of Fortitude rank 2 watches Sacred Candle, not Holy Candle. Check each class's list against its spellbook, and whether lower ranks still report as known (`/dump IsPlayerSpell(<id>)`).
-- [ ] Use reagents down to 5 (cast the spell): the question appears once, names the reagent and the count, says "sells <reagent>" so it is clear what to buy, and the vendor is one that sells it. Yes sets the pin.
-- [ ] Counts: Rune of Teleportation 1 vs 5 vs 6 in bags and the threshold boundary (5 asks, 6 does not). Reagents in the bank are not counted.
-- [ ] Open a vendor that sells the reagent: the question and the pin go away. Open any other vendor with a reagent question open: same.
-- [ ] Two reagents low (for example Arcane Powder and Rune of Teleportation): one question, the second only after the first is answered or the merchant opened.
-- [ ] Order: with a reagent low and gear worn below the threshold, the repair question comes first and the reagent question after it resolves; with a reagent low and full bags, the reagent question comes before the sell question. (No class has both ammo and reagents, so ammo versus reagents is covered by the automated tests.)
-- [ ] `/cvn reagent 10`, the settings slider and `/cvn` agree; 0 and 41 are refused with a message about 1 to 40.
-- [ ] `/cvn reagents` lists your class's reagents, all on. `/cvn reagent off arcane powder` turns one off (no more questions for it); `/cvn reagent on arcane powder` brings it back. An unknown or another class's reagent name gets a message.
-- [ ] The settings page lists only your class's reagents, all on by default, each with a checkbox that matches `/cvn reagents`; clearing "Ammo and reagents" greys the ammo slider, the reagent slider and the reagent checkboxes and silences both ammo and reagents.
-- [ ] Hunter, warrior and warlock: no reagent checkboxes, `/cvn reagents` says there are none, no reagent question ever.
-- [ ] `/cvn test reagent` asks about the first watched reagent whatever the count; with nothing watched it says so in chat.
-- [ ] Vendor data: open a reagent vendor you have not opened before (a druid or priest supplier): afterwards `/cvn log` or `/cvn test reagent` can pick it. Open a shipped reagent vendor: it is still picked (the learned record keeps its reagents).
-- [ ] `/cvn choice auto`: a low reagent pins at once, one chat line and the on-screen text read "Navigating to <vendor> (<zone>, N yards) to buy <reagent>."; the other-map choice works as for ammo. Every automatic pin says why: "... to buy ammo.", "... to repair your gear.", "... to sell items and free bag space.", "... to train <profession>."
-- [ ] Check the shipped data: 5 to 10 reagent vendors in cities and camps are where the pin says, and sell the item (`GetMerchantItemInfo`).
+The spell IDs and item IDs were checked against the Classic Era and WoW Forever data tables. This section checks them in the real client.
+
+- [ ] Enter `/cvn`. Expected: it shows the line "Reagents: on, trigger at 5 or fewer".
+- [ ] Enter `/cvn log`. Expected: it shows `reagents: class ..., threshold 5, watching: ..., switched off: none`. The `watching` list has the reagents you expect for the spells you know.
+- [ ] Spell gating: use a low-level mage. Expected: a reagent for a spell you do not know is not in `watching` (for example, no Rune of Portals).
+- [ ] Learn that spell. Expected: the addon adds the reagent without a reload.
+- [ ] Note whether `SPELLS_CHANGED` fired in the log.
+- [ ] Rank gating: use a druid who knows Rebirth rank 3. Expected: the druid watches Ashwood Seed only. The druid does not watch the rank 1 and rank 2 seeds.
+- [ ] Rank gating: use a priest who knows Prayer of Fortitude rank 2. Expected: the priest watches Sacred Candle, not Holy Candle.
+- [ ] Check each class list against its spellbook.
+- [ ] Check whether lower ranks still report as known (`/dump IsPlayerSpell(<id>)`).
+- [ ] Use reagents down to 5 (cast the spell). Expected: the question appears once.
+- [ ] Read the reagent question. Expected: it names the reagent and the count.
+- [ ] Read the reagent question. Expected: it says "sells <reagent>", so it is clear what to buy. The vendor is one that sells the reagent.
+- [ ] In the reagent question, click **Yes**. Expected: the addon sets the waypoint.
+- [ ] Counts: carry 1, 5 and 6 Runes of Teleportation in your bags. Expected: 5 asks. 6 does not ask. This tests the threshold boundary.
+- [ ] Put reagents in the bank. Expected: the addon does not count them.
+- [ ] Open a vendor that sells the reagent. Expected: the question and the waypoint go away.
+- [ ] Open a reagent question. Open any other vendor. Expected: the question and the waypoint go away.
+- [ ] Get two reagents low, for example Arcane Powder and Rune of Teleportation. Expected: the addon shows one question.
+- [ ] Answer the first question, or open the merchant. Expected: the second question appears only then.
+- [ ] Order: have a reagent low and gear worn below the threshold. Expected: the repair question comes first. The reagent question comes after the repair question resolves.
+- [ ] Order: have a reagent low and full bags. Expected: the reagent question comes before the sell question.
+- [ ] Note: no class has both ammo and reagents. The automated tests cover ammo versus reagents.
+- [ ] Enter `/cvn reagent 10`. Expected: the command, the settings slider and `/cvn` agree.
+- [ ] Enter `/cvn reagent 0` and `/cvn reagent 41`. Expected: the addon refuses both. A message says the range is 1 to 40.
+- [ ] Enter `/cvn reagents`. Expected: it lists the reagents of your class, all on.
+- [ ] Enter `/cvn reagent off arcane powder`. Expected: the addon turns that reagent off. It asks no more questions for it.
+- [ ] Enter `/cvn reagent on arcane powder`. Expected: the reagent comes back.
+- [ ] Enter `/cvn reagent` with an unknown reagent name, or a reagent of another class. Expected: a message appears.
+- [ ] Open the settings page. Expected: it lists only the reagents of your class. All are on by default. Each has a checkbox that matches `/cvn reagents`.
+- [ ] Clear "Ammo and reagents". Expected: the ammo slider, the reagent slider and the reagent checkboxes are greyed out.
+- [ ] With "Ammo and reagents" cleared, trigger an ammo question and a reagent question. Expected: the addon silences both.
+- [ ] Use a hunter, a warrior and a warlock. Expected: no reagent checkboxes.
+- [ ] As a hunter, warrior or warlock, enter `/cvn reagents`. Expected: it says there are none.
+- [ ] As a hunter, warrior or warlock, play normally. Expected: no reagent question ever appears.
+- [ ] Enter `/cvn test reagent`. Expected: it asks about the first watched reagent, whatever the count.
+- [ ] Enter `/cvn test reagent` with nothing watched. Expected: it says so in chat.
+- [ ] Vendor data: open a reagent vendor you have not opened before (a druid or priest supplier). Expected: `/cvn log` or `/cvn test reagent` can pick that vendor.
+- [ ] Open a shipped reagent vendor. Expected: the addon still picks it. The learned record keeps its reagents.
+- [ ] Enter `/cvn choice auto`. Get a reagent low. Expected: the addon sets the waypoint at once.
+- [ ] Read the chat line and the on-screen text. Expected: both read "Navigating to <vendor> (<zone>, N yards) to buy <reagent>."
+- [ ] Use the other-map choice. Expected: it works as for ammo.
+- [ ] Trigger each automatic waypoint. Expected: each one says why. The texts are "... to buy ammo.", "... to repair your gear.", "... to sell items and free bag space." and "... to train <profession>."
+- [ ] Check the shipped data. Pick 5 to 10 reagent vendors in cities and camps. Expected: each is where the waypoint says.
+- [ ] Check the same vendors with `GetMerchantItemInfo`. Expected: each sells the item.
 
 ## 13. Status window, instances and auction house
 
-Use `/cvn debug on`. The addon decides these from game calls the fake-API tests cannot reach, so confirm each in the real client. Note the client build.
+Enter `/cvn debug on`.
+
+The addon decides these from game calls that the fake-API tests cannot reach. Confirm each one in the real client. Write down the client build.
 
 ### 13.1 Settings layout
 
-- [ ] Esc, Options, AddOns, **Closest Vendor** shows the main page (Warnings, Navigation) with three subcategories under it: Reagents, Ammo, Status window. Every control from section 1 is still there, on the page it moved to, with its saved value. Note whether `Settings.RegisterVerticalLayoutSubcategory` exists on Forever and on Era; if not, everything is on one page under section headers. Section headers (Warnings, Navigation, ...) appear on the main page: they and the swatch use the layout the Register calls return, so if either is missing the log line names the page layout.
-- [ ] Status window page: Lock window position is first, then scale, background opacity (0-100), text and icon opacity (20-100), the background color swatch (only where the game has a color picker) and exactly five Only when low / Always / Never dropdowns, in this order: Ammo, Reagents, Bag space, Durability, Professions (no dropdown per profession or per reagent). As a Hunter, Rogue or Warrior the Ammo row works. As any other class it is greyed out and unselectable; hover it: "Your class does not use ammo." As a class with no reagents or display-only items (Hunter, Warrior) the Reagents row is greyed out with "Your class does not use reagents."; a Mage, a Warlock (Soul Shards) and a Rogue (Blinding Powder) can use it. Greyed rows never change `/cvn hud row` output. Note whether the row really greys on Era and Forever.
+- [ ] Open Esc, Options, AddOns, **Closest Vendor**. Expected: the main page shows (Warnings, Navigation).
+- [ ] Look under the main page. Expected: three subcategories show: Reagents, Ammo, Status window.
+- [ ] Check every control from section 1. Expected: each control is still there, on the page it moved to, with its saved value.
+- [ ] Note whether `Settings.RegisterVerticalLayoutSubcategory` exists on WoW Forever. Note the same for Classic Era. If it does not exist, expect everything on one page under section headers.
+- [ ] Look at the main page. Expected: section headers (Warnings, Navigation, ...) appear on it.
+- [ ] The headers and the swatch use the layout that the Register calls return. If either is missing, expected: the log line names the page layout.
+- [ ] Open the Status window page. Expected: Lock window position is first.
+- [ ] Look at the Status window page. Expected: after Lock window position come the scale, the background opacity (0-100) and the text and icon opacity (20-100).
+- [ ] Look at the Status window page. Expected: the background color swatch shows, only where the game has a color picker.
+- [ ] Look at the Status window page. Expected: exactly five Only when low / Always / Never dropdowns show, in this order: Ammo, Reagents, Bag space, Durability, Professions.
+- [ ] Look at the dropdowns. Expected: there is no dropdown for each profession or for each reagent.
+- [ ] As a Hunter, Rogue or Warrior, look at the Ammo row. Expected: the row works.
+- [ ] As any other class, look at the Ammo row. Expected: it is greyed out and unselectable.
+- [ ] As any other class, hover over the Ammo row. Expected: the text "Your class does not use ammo." shows.
+- [ ] As a class with no reagents or display-only items (Hunter, Warrior), look at the Reagents row. Expected: it is greyed out.
+- [ ] As a Hunter or Warrior, hover over the Reagents row. Expected: the text "Your class does not use reagents." shows.
+- [ ] As a Mage, look at the Reagents row. Expected: it works.
+- [ ] As a Warlock (Soul Shards), look at the Reagents row. Expected: it works.
+- [ ] As a Rogue (Blinding Powder), look at the Reagents row. Expected: it works.
+- [ ] Use a greyed row. Enter `/cvn hud row`. Expected: a greyed row never changes the output.
+- [ ] Note whether the row really greys on Classic Era. Note the same for WoW Forever.
 
 ### 13.2 The window
 
-- [ ] With nothing low and every row on the default, the window is not shown. Bring bags to the threshold: it appears with Bag space in red. Free the bags: it hides. It never shows empty.
-- [ ] `/cvn hud row bags always`: Bag space shows and is not red when above the threshold. `/cvn hud row bags never`: it is hidden even when low. `/cvn hud row bags low`: back to the default. `/cvn hud row Professions always` (any case) shows every profession line, `/cvn hud row reagents never` hides every reagent line; `/cvn hud row arcane powder always` or `/cvn hud row mining always` gets a message naming the five groups. `/cvn` lists the changed groups. With two professions, the Professions dropdown on the settings page moves both lines together.
-- [ ] Rows: ammo (hunter, warrior or rogue with a ranged weapon; Arrows or Bullets), class reagents with counts, Bag space, Durability, a profession near its cap as `skill/max`. A row the game cannot read is hidden, never 0. Counts match the bags.
-- [ ] Display-only: Soul Shards (warlock), Blinding Powder (rogue), Conjured Food and Conjured Water (mage) are hidden while Reagents is Only when low (never red); set Reagents to Always and they show, with counts matching the bags (food and water sum all ranks, check each item id in game).
-- [ ] The window refreshes after buying or using ammo, using a reagent, selling, repairing and a skill-up. Note any lag: ammo use may not fire frequent bag events, so it may lag by one event.
-- [ ] Drag the title: it moves; the position survives `/reload` and a restart. Shift-drag anywhere on the window moves it; dragging a row without Shift does not. Releasing a drag over a row does not click it.
-- [ ] Lock (checkbox or `/cvn hud lock`): title drag and Shift-drag both do nothing; `/cvn hud unlock` allows them again. `/cvn hud reset` returns the window to its default position.
-- [ ] `/cvn hud scale 150` makes it 1.5 times larger; 49 and 201 are refused; the scale slider matches. Change the UI scale in Video settings with the window moved far to a corner: it stays on screen or `/cvn hud reset` recovers it.
-- [ ] The cog button opens the Closest Vendor main page. Check the cog texture shows (not blank, not a missing-texture square); if not, the fallback is an asterisk. Check the window background draws without `BackdropTemplate` errors.
-- [ ] Click a low row (try ammo, a reagent, Bag space, Durability, a profession within its threshold): the closest vendor is pinned at once, no question, with the "Navigating to ... to buy/repair/sell/train ..." chat line and on-screen text. Same with `/cvn choice ask` and `auto`.
-- [ ] Click a row in combat: it still pins. Click a row while a question is open: the question closes and the pin is set; it is not asked again. A pin made from a click is not cleared by an unrelated trigger, but opening a merchant window clears it.
-- [ ] Click a display-only row: nothing happens. Click a profession row with no known trainer: chat says so.
+- [ ] Set every row to the default. Have nothing low. Expected: the status window is not shown.
+- [ ] Bring your bags to the threshold. Expected: the status window appears with Bag space in red.
+- [ ] Free the bags. Expected: the status window hides. It never shows empty.
+- [ ] Enter `/cvn hud row bags always`. Expected: Bag space shows. It is not red when it is above the threshold.
+- [ ] Enter `/cvn hud row bags never`. Expected: Bag space is hidden, even when it is low.
+- [ ] Enter `/cvn hud row bags low`. Expected: Bag space returns to the default.
+- [ ] Enter `/cvn hud row Professions always` (any case). Expected: every profession line shows.
+- [ ] Enter `/cvn hud row reagents never`. Expected: every reagent line is hidden.
+- [ ] Enter `/cvn hud row arcane powder always`. Expected: a message names the five groups.
+- [ ] Enter `/cvn hud row mining always`. Expected: a message names the five groups.
+- [ ] Change some groups. Enter `/cvn`. Expected: it lists the changed groups.
+- [ ] Use a character with two professions. Change the Professions dropdown on the settings page. Expected: both profession lines move together.
+- [ ] Check the ammo row (hunter, warrior or rogue with a ranged weapon). Expected: it shows Arrows or Bullets.
+- [ ] Check the reagent rows. Expected: they show the class reagents with counts.
+- [ ] Check the Bag space row and the Durability row. Expected: both show.
+- [ ] Check a profession near its cap. Expected: the row shows `skill/max`.
+- [ ] Use a row that the game cannot read. Expected: the row is hidden. It never shows 0.
+- [ ] Compare the counts with your bags. Expected: they match.
+- [ ] Display-only: use a warlock (Soul Shards), a rogue (Blinding Powder) and a mage (Conjured Food and Conjured Water). Set Reagents to Only when low. Expected: those rows are hidden. They are never red.
+- [ ] Set Reagents to Always. Expected: the display-only rows show.
+- [ ] Compare the display-only counts with your bags. Expected: they match. Food and water sum all ranks. Check each item ID in game.
+- [ ] Buy or use ammo. Expected: the window refreshes.
+- [ ] Use a reagent. Expected: the window refreshes.
+- [ ] Sell, repair, and get a skill-up. Expected: the window refreshes after each one.
+- [ ] Note any lag. Ammo use may not fire frequent bag events, so the window may lag by one event.
+- [ ] Drag the title. Expected: the window moves.
+- [ ] Enter `/reload`, then restart the game. Expected: the position survives both.
+- [ ] Shift-drag anywhere on the window. Expected: the window moves.
+- [ ] Drag a row without Shift. Expected: the window does not move.
+- [ ] Release a drag over a row. Expected: the release does not click the row.
+- [ ] Lock the window (checkbox or `/cvn hud lock`). Drag the title. Expected: nothing happens.
+- [ ] With the window locked, Shift-drag. Expected: nothing happens.
+- [ ] Enter `/cvn hud unlock`. Expected: the title drag and the Shift-drag work again.
+- [ ] Enter `/cvn hud reset`. Expected: the window returns to its default position.
+- [ ] Enter `/cvn hud scale 150`. Expected: the window is 1.5 times larger.
+- [ ] Enter `/cvn hud scale 49` and `/cvn hud scale 201`. Expected: the addon refuses both.
+- [ ] Open the settings page. Expected: the scale slider matches.
+- [ ] Move the window far to a corner. Change the UI scale in Video settings. Expected: the window stays on screen. Or `/cvn hud reset` recovers it.
+- [ ] Click the cog button. Expected: the Closest Vendor main page opens.
+- [ ] Check the cog texture. Expected: it shows. It is not blank. It is not a missing-texture square. If it fails, the fallback is an asterisk.
+- [ ] Check the window background. Expected: it draws without `BackdropTemplate` errors.
+- [ ] Click a low row. Try ammo, a reagent, Bag space, Durability, and a profession within its threshold. Expected: the addon sets a waypoint at the closest vendor at once, with no question.
+- [ ] After that click, read the chat and the screen. Expected: the chat line and the on-screen text say "Navigating to ... to buy/repair/sell/train ...".
+- [ ] Repeat the row clicks with `/cvn choice ask`. Then repeat with `/cvn choice auto`. Expected: the result is the same.
+- [ ] Click a row in combat. Expected: it still sets the waypoint.
+- [ ] Open a question. Click a row. Expected: the question closes and the waypoint is set. The addon does not ask again.
+- [ ] Set a waypoint with a row click. Trigger an unrelated trigger. Expected: the unrelated trigger does not clear the waypoint.
+- [ ] After a row click, open a merchant window. Expected: the waypoint clears.
+- [ ] Click a display-only row. Expected: nothing happens.
+- [ ] Click a profession row with no known trainer. Expected: chat says so.
 
 ### 13.3 Opacity and color
 
-- [ ] Defaults on a fresh install: background pure black at 80 percent, text and icons at 100 percent. `/cvn` shows "background 80% of color #000000, text and icons 100%".
-- [ ] Background opacity slider (or `/cvn hud opacity 0`) at 0: only the title, the cog and the line text show; no fill, no border, no faint rectangle, whatever color is set (try `/cvn hud color #ffffff` then opacity 0). The window can still be dragged by its title and its lines clicked. `/cvn hud opacity 101` and `-1` are refused.
-- [ ] Text and icon opacity slider (or `/cvn hud textopacity 40`): the title, the cog and every line dim together, also lines that appear later; the background keeps its own opacity. 19 and 101 are refused; the slider stops at 20.
-- [ ] Swatch look (Era and Forever): the Status window page has a Background color row with the label on the left and a small square bordered swatch on the right, lined up with the sliders' and dropdowns' controls, not a wide red button. Hovering it shows the tooltip (and the border turns gold); clicking the swatch or the label opens the picker. `/cvn log` says "background color control built as a swatch". Fallback look: where it says "built as a button; no swatch, missing: ..." instead, the row is a wide push button with a colored tile in it; copy that line into the bug report.
-- [ ] Color swatch: it shows the saved color (black on a fresh install). `/cvn hud color #101820` then reopening the page shows that color in the swatch; `/cvn hud color red` gets a message; `/cvn hud color black` and `reset` go back to black.
-- [ ] Color picker on Forever: clicking the swatch opens the game's color picker at the current color, any color allowed, with no opacity slider in it. Moving the wheel changes the window background live; OK keeps it (the swatch row shows it at once; the fallback button when the page is next shown), Cancel goes back to the starting color. Note whether `ColorPickerFrame:SetupColorPickerAndShow` exists on Forever and on Era. Where there is no picker (or no settings button), there is no swatch (no dead control), `/cvn hud color #rrggbb` still works, and nothing errors.
-- [ ] Finding the picker: the swatch is the Background color row (or, as fallback, button) on the Status window page (Options, AddOns, Closest Vendor, Status window), below the text opacity slider. `/cvn hud color` with no color opens the same game color picker at the current color, with or without the swatch; the window follows the wheel and Cancel restores it. Where the game has no picker, chat says so and suggests `/cvn hud color #rrggbb`. Note what each client does.
-- [ ] Report line: `/cvn log` has a line "color picker: available or missing, settings button: available or missing, background color control built as a swatch" (or "... built as a button; no swatch, missing: ..." naming `Settings.CreateColorSwatch`, the picker calls or the error) or "... not built, missing: ..." naming each missing piece (color picker, the page layout, `layout.AddInitializer`, `CreateSettingsButtonInitializer`, or the Settings API). With `/cvn debug on` before `/reload`, the same sentence is in the log. If the swatch is missing on Era or Forever, copy this line into the bug report.
-- [ ] OLED check: with background 0 and text opacity 40, leave the window up for a minute over a dark area. Nothing static is bright: no border, no fixed fill, a low line is marked only by red text. With a non-black color at opacity 0, the screen behind is untouched.
-- [ ] The values survive `/reload`; `/cvn log` shows "opacity N%, color #rrggbb, text opacity N%".
+- [ ] On a fresh install, look at the defaults. Expected: the background is pure black at 80 percent. Text and icons are at 100 percent.
+- [ ] Enter `/cvn`. Expected: it shows "background 80% of color #000000, text and icons 100%".
+- [ ] Set the background opacity to 0 (slider or `/cvn hud opacity 0`). Expected: only the title, the cog and the line text show.
+- [ ] At opacity 0, look for fill. Expected: no fill, no border and no faint rectangle. This holds for any color.
+- [ ] Enter `/cvn hud color #ffffff`. Then set opacity 0. Expected: the same result.
+- [ ] At opacity 0, drag the window by its title. Click its lines. Expected: both still work.
+- [ ] Enter `/cvn hud opacity 101` and `/cvn hud opacity -1`. Expected: the addon refuses both.
+- [ ] Set the text and icon opacity (slider or `/cvn hud textopacity 40`). Expected: the title, the cog and every line dim together.
+- [ ] After that, add a line that was not shown before. Expected: it is dim too.
+- [ ] Check the background. Expected: it keeps its own opacity.
+- [ ] Enter `/cvn hud textopacity 19` and `/cvn hud textopacity 101`. Expected: the addon refuses both.
+- [ ] Move the text opacity slider to its lowest value. Expected: it stops at 20.
+- [ ] Swatch look (Classic Era and WoW Forever): open the Status window page. Expected: a Background color row shows. The label is on the left. A small square swatch with a border is on the right.
+- [ ] Check the swatch position. Expected: it lines up with the controls of the sliders and the dropdowns. It is not a wide red button.
+- [ ] Hover over the swatch. Expected: the tooltip shows. The border turns gold.
+- [ ] Click the swatch. Expected: the picker opens.
+- [ ] Click the label. Expected: the picker opens.
+- [ ] Enter `/cvn log`. Expected: it says "background color control built as a swatch".
+- [ ] Fallback look: if the log says "built as a button; no swatch, missing: ..." instead, expect a wide push button with a colored tile in it.
+- [ ] In the fallback case, copy that log line into the bug report.
+- [ ] Color swatch: check a fresh install. Expected: the swatch shows the saved color, black.
+- [ ] Enter `/cvn hud color #101820`. Reopen the page. Expected: the swatch shows that color.
+- [ ] Enter `/cvn hud color red`. Expected: a message appears.
+- [ ] Enter `/cvn hud color black`. Expected: the color goes back to black.
+- [ ] Enter `/cvn hud color reset`. Expected: the color goes back to black.
+- [ ] Color picker on WoW Forever: click the swatch. Expected: the game color picker opens at the current color.
+- [ ] Look at the picker. Expected: any color is allowed. There is no opacity slider in it.
+- [ ] Move the wheel. Expected: the window background changes live.
+- [ ] Click OK. Expected: the window keeps the color. The swatch row shows it at once. In the fallback case, the button shows it when the page is next shown.
+- [ ] Click Cancel. Expected: the color goes back to the starting color.
+- [ ] Note whether `ColorPickerFrame:SetupColorPickerAndShow` exists on WoW Forever. Note the same for Classic Era.
+- [ ] Use a client with no picker (or no settings button). Expected: there is no swatch. There is no dead control.
+- [ ] On that client, enter `/cvn hud color #rrggbb`. Expected: it still works. Nothing errors.
+- [ ] Finding the picker: open Options, AddOns, Closest Vendor, Status window. Expected: the swatch is the Background color row (or, as fallback, the button). It is below the text opacity slider.
+- [ ] Enter `/cvn hud color` with no color. Expected: the same game color picker opens at the current color. This holds with or without the swatch.
+- [ ] Use the picker from `/cvn hud color`. Expected: the window follows the wheel. Cancel restores the color.
+- [ ] Use a client with no picker. Enter `/cvn hud color`. Expected: chat says so. It suggests `/cvn hud color #rrggbb`.
+- [ ] Note what each client does.
+- [ ] Report line: enter `/cvn log`. Expected: it has a line "color picker: available or missing, settings button: available or missing, background color control built as a swatch".
+- [ ] Alternative report line: "... built as a button; no swatch, missing: ..." names `Settings.CreateColorSwatch`, the picker calls or the error.
+- [ ] Alternative report line: "... not built, missing: ..." names each missing piece. The pieces are the color picker, the page layout, `layout.AddInitializer`, `CreateSettingsButtonInitializer` or the Settings API.
+- [ ] Enter `/cvn debug on` before `/reload`. Expected: the same sentence is in the log.
+- [ ] If the swatch is missing on Classic Era or WoW Forever, copy this line into the bug report.
+- [ ] OLED check: set the background to 0 and the text opacity to 40. Leave the window up for a minute over a dark area. Expected: nothing static is bright. There is no border and no fixed fill.
+- [ ] In the OLED check, look at a low line. Expected: only red text marks it.
+- [ ] Set a non-black color at opacity 0. Expected: the screen behind the window is untouched.
+- [ ] Enter `/reload`. Expected: the values survive.
+- [ ] Enter `/cvn log`. Expected: it shows "opacity N%, color #rrggbb, text opacity N%".
 
 ### 13.4 Instances
 
-- [ ] `/cvn log` after zoning into a dungeon, a raid and each battleground (Warsong Gulch, Arathi Basin, Alterac Valley) shows the instance type as party, raid or pvp; outdoors, none. Note what `IsInInstance()` returns on Forever.
-- [ ] Note whether each battleground reports a map position (`/dump C_Map.GetBestMapForUnit("player")` and `C_Map.GetPlayerMapPosition`).
-- [ ] Fill your bags to the threshold inside a battleground: no question appears there; after you leave, the sell question appears once (the old bug lost it for good). Same for repair in a dungeon.
-- [ ] Walk outside, enter a dungeon, click a row: the pin searches from the anchor (chat says so). Check `/cvn anchor last` against your last position outside and `/cvn anchor hearth` against your hearthstone point.
-- [ ] Battleground row click uses the last outdoor position whichever anchor is set.
-- [ ] TomTom: set a waypoint from inside an instance. If it is refused, chat says so; note what the map pin does on Forever.
+- [ ] Zone into a dungeon. Enter `/cvn log`. Expected: the instance type is party.
+- [ ] Zone into a raid. Enter `/cvn log`. Expected: the instance type is raid.
+- [ ] Zone into each battleground (Warsong Gulch, Arathi Basin, Alterac Valley). Enter `/cvn log`. Expected: the instance type is pvp.
+- [ ] Go outdoors. Enter `/cvn log`. Expected: the instance type is none.
+- [ ] Note what `IsInInstance()` returns on WoW Forever.
+- [ ] Note whether each battleground reports a map position. Use `/dump C_Map.GetBestMapForUnit("player")` and `C_Map.GetPlayerMapPosition`.
+- [ ] Fill your bags to the threshold inside a battleground. Expected: no question appears there.
+- [ ] Leave the battleground. Expected: the sell question appears once. The old bug lost it for good.
+- [ ] Wear gear below the repair threshold in a dungeon. Leave the dungeon. Expected: the repair question appears once.
+- [ ] Walk outside. Enter a dungeon. Click a row. Expected: the waypoint search starts from the anchor. Chat says so.
+- [ ] Enter `/cvn anchor last`. Expected: the anchor matches your last position outside.
+- [ ] Enter `/cvn anchor hearth`. Expected: the anchor matches your hearthstone point.
+- [ ] Click a row in a battleground. Expected: the search uses the last outdoor position. This holds for either anchor setting.
+- [ ] TomTom: set a waypoint from inside an instance. If TomTom refuses it, expected: chat says so.
+- [ ] Note what the map waypoint does on WoW Forever.
 
 ### 13.5 Anchors and the hearthstone point
 
-- [ ] `GetBindLocation()` text on Forever and Era (`/dump GetBindLocation()`): a place name. Set your hearthstone at a new inn and relog or change zone: `/cvn log` shows the new hearth point only when the name changed and you were standing in the inn area; a failed read keeps the old point.
-- [ ] Before the hearthstone point is known, `/cvn anchor hearth` falls back to the last outdoor position.
-- [ ] `/cvn anchor hearth` and `/cvn anchor last` match the Search from, inside an instance dropdown; anything else gets a message.
+- [ ] Enter `/dump GetBindLocation()` on WoW Forever. Expected: the text is a place name.
+- [ ] Enter `/dump GetBindLocation()` on Classic Era. Expected: the text is a place name.
+- [ ] Set your hearthstone at a new inn. Relog or change zone. Enter `/cvn log`. Expected: it shows the new hearthstone point. It shows it only when the name changed and you stood in the inn area.
+- [ ] Cause a failed read of the bind location. Expected: the addon keeps the old hearthstone point.
+- [ ] Before the hearthstone point is known, enter `/cvn anchor hearth`. Expected: the addon falls back to the last outdoor position.
+- [ ] Enter `/cvn anchor hearth` and `/cvn anchor last`. Expected: both match the "Search from, inside an instance" dropdown.
+- [ ] Enter `/cvn anchor` with any other value. Expected: a message appears.
 
 ### 13.6 Auction house
 
-- [ ] `/cvn ah on` matches the Route to the auction house checkbox; default is off. With it off a row click always picks a vendor.
-- [ ] With it on, standing near a major city auction house, click a tradeable row (a reagent or Bag space): the auctioneer is pinned when it is closer than the nearest vendor, and a vendor otherwise. Inside an instance the auction house is ignored.
-- [ ] Open an auction house you have never opened: note the event that fires on Forever (the addon listens for the auction house open event; confirm its name) and that the auctioneer is learned (`/cvn log` shows it) and survives a restart. A shipped auctioneer (28 with coordinates) is found where the pin says.
-- [ ] Item binding: confirm the tradeable and soulbound handling on 1.60 for the items shown (all current rows are tradeable).
+- [ ] Enter `/cvn ah on`. Expected: it matches the "Route to the auction house" checkbox.
+- [ ] Check the default. Expected: it is off.
+- [ ] With it off, click a row. Expected: the click always picks a vendor.
+- [ ] Turn it on. Stand near a major city auction house. Click a tradeable row (a reagent or Bag space). Expected: the addon sets the waypoint at the auctioneer when it is closer than the closest vendor.
+- [ ] Repeat that click when the vendor is closer. Expected: the addon sets the waypoint at the vendor.
+- [ ] Turn it on. Click a row inside an instance. Expected: the addon ignores the auction house.
+- [ ] Open an auction house you have never opened. Note the event that fires on WoW Forever. The addon listens for the auction house open event. Confirm its name.
+- [ ] After that, enter `/cvn log`. Expected: the log shows that the addon learned the auctioneer.
+- [ ] Restart the game. Expected: the learned auctioneer survives.
+- [ ] Go to a shipped auctioneer (28 with coordinates). Expected: it is where the waypoint says.
+- [ ] Item binding: confirm the tradeable and soulbound handling on 1.60 for the items shown. All current rows are tradeable.
 
 ### 13.7 Buying reagents
 
-Use a mage who knows Arcane Brilliance and Teleport (or another class with vendor reagents), a reagent vendor, and `/cvn debug on`.
+Use a mage who knows Arcane Brilliance and Teleport (or another class with vendor reagents). Use a reagent vendor. Enter `/cvn debug on`.
 
-- [ ] Defaults on a fresh install: `/cvn` shows "Reagent buying: off, asks first, up to 20 of each"; `/cvn log` has "reagent buying: off, asks first, up to 20 of each". Opening a reagent vendor buys nothing.
-- [ ] Settings page, Reagents: below the reagent checkboxes are Buy reagents, Ask before buying reagents and the amount slider (0-100, default 20). Ask and the slider are greyed while Buy reagents is off. They match `/cvn reagentbuy on/off`, `ask/auto` and `/cvn reagentbuy 35`; 101, -1 and 2.5 are refused with a message. As a Hunter, Warrior or Warlock all three are greyed out with "Your class does not use reagents." and `/cvn reagentbuy on` says the same.
-- [ ] Buys to N: `/cvn reagentbuy on`, `/cvn reagentbuy auto`, carry 7 Arcane Powder and 0 Runes of Teleportation, open the vendor: you end with exactly 20 of each, and one chat line names both with counts and the cost. Open it again: nothing more is bought, no chat line. Check the bag counts and the money spent match the line.
-- [ ] Single items in one call: with debug on, note in `/cvn log` how many items one `BuyMerchantItem(index, quantity)` call bought (the addon asks for up to `GetMerchantItemMaxStack` per call). If a call buys only one item, the count will fall short: copy the log into a bug report. Note whether `GetMerchantItemMaxStack` exists on Forever and on Era.
-- [ ] Ask first (`/cvn reagentbuy ask`, the default): a dialog lists the reagents, counts and total price; nothing is bought until Yes; No or Esc buys nothing. With an ammo purchase question at the same time (a rogue with a bow and `/cvn buy ask` at a vendor selling both arrows and Flash Powder), both dialogs show and neither replaces the other.
-- [ ] 0: `/cvn reagentbuy 0` buys nothing, no dialog.
-- [ ] No money: with less gold than one reagent costs, "You cannot afford any reagents here." With enough for part of the list, only that part is bought, in table order, and the line ends "(all you could afford)".
-- [ ] Full bags: with no free slot in ordinary bags (quivers, soul bags and profession bags do not count) and no partial stack of the reagent, "Your bags have no room for reagents." With one free slot, only what fits is bought and the line ends "(all that fits in your bags)". A partial stack of the reagent is topped up.
-- [ ] Switched-off and unknown: a reagent switched off on the Reagents page, or for a spell you do not know (a low-level mage: Rune of Portals), is not bought. Soul Shards, Blinding Powder and conjured items are never bought.
-- [ ] A rogue buying ammo and Flash Powder at once with `/cvn buy auto` and `/cvn reagentbuy auto`: with gold for only the ammo, no Flash Powder is bought (the ammo cost is taken off first).
-- [ ] Closing the merchant before answering Yes: note what the game does with the purchase (the dialog stays; the ammo dialog behaves the same).
+- [ ] On a fresh install, enter `/cvn`. Expected: it shows "Reagent buying: off, asks first, up to 20 of each".
+- [ ] On a fresh install, enter `/cvn log`. Expected: it has "reagent buying: off, asks first, up to 20 of each".
+- [ ] On a fresh install, open a reagent vendor. Expected: the addon buys nothing.
+- [ ] Open the settings page, Reagents. Expected: below the reagent checkboxes are Buy reagents, Ask before buying reagents and the amount slider (0-100, default 20).
+- [ ] Turn off Buy reagents. Expected: Ask and the slider are greyed out.
+- [ ] Enter `/cvn reagentbuy on` and `/cvn reagentbuy off`. Expected: they match the Buy reagents checkbox.
+- [ ] Enter `/cvn reagentbuy ask` and `/cvn reagentbuy auto`. Expected: they match the Ask before buying reagents checkbox.
+- [ ] Enter `/cvn reagentbuy 35`. Expected: it matches the amount slider.
+- [ ] Enter `/cvn reagentbuy 101`, `/cvn reagentbuy -1` and `/cvn reagentbuy 2.5`. Expected: the addon refuses each with a message.
+- [ ] As a Hunter, Warrior or Warlock, open the settings page. Expected: all three controls are greyed out. The text "Your class does not use reagents." shows.
+- [ ] As a Hunter, Warrior or Warlock, enter `/cvn reagentbuy on`. Expected: it says the same.
+- [ ] Buys to N: enter `/cvn reagentbuy on` and `/cvn reagentbuy auto`. Carry 7 Arcane Powder and 0 Runes of Teleportation. Open the vendor. Expected: you end with exactly 20 of each.
+- [ ] After that purchase, read the chat. Expected: one chat line names both reagents with counts and the cost.
+- [ ] Check the bag counts and the money spent. Expected: they match the chat line.
+- [ ] Open the vendor again. Expected: the addon buys nothing more. No chat line shows.
+- [ ] Single items in one call: with debug on, check `/cvn log`. Note how many items one `BuyMerchantItem(index, quantity)` call bought. The addon asks for up to `GetMerchantItemMaxStack` per call.
+- [ ] If one call buys only one item, the count falls short. Copy the log into a bug report.
+- [ ] Note whether `GetMerchantItemMaxStack` exists on WoW Forever. Note the same for Classic Era.
+- [ ] Ask first: enter `/cvn reagentbuy ask` (the default). Open the vendor. Expected: a dialog lists the reagents, the counts and the total price.
+- [ ] In that dialog, do not click yet. Expected: the addon buys nothing until you click **Yes**.
+- [ ] In that dialog, click **No** or press Esc. Expected: the addon buys nothing.
+- [ ] Use a rogue with a bow and `/cvn buy ask`. Open a vendor that sells both arrows and Flash Powder. Expected: both dialogs show. Neither replaces the other.
+- [ ] Enter `/cvn reagentbuy 0`. Open the vendor. Expected: the addon buys nothing. No dialog shows.
+- [ ] No money: have less gold than one reagent costs. Expected: the chat line says "You cannot afford any reagents here."
+- [ ] Partial money: have enough gold for part of the list. Expected: the addon buys only that part, in table order.
+- [ ] After a partial purchase, read the chat line. Expected: it ends with "(all you could afford)".
+- [ ] Full bags: have no free slot in ordinary bags and no partial stack of the reagent. Quivers, soul bags and profession bags do not count. Expected: the chat line says "Your bags have no room for reagents."
+- [ ] Have one free slot. Expected: the addon buys only what fits.
+- [ ] After that purchase, read the chat line. Expected: it ends with "(all that fits in your bags)".
+- [ ] Have a partial stack of the reagent. Expected: the addon tops it up.
+- [ ] Switched-off reagent: turn off a reagent on the Reagents page. Expected: the addon does not buy it.
+- [ ] Unknown spell: use a reagent for a spell you do not know (a low-level mage: Rune of Portals). Expected: the addon does not buy it.
+- [ ] Check Soul Shards, Blinding Powder and conjured items. Expected: the addon never buys them.
+- [ ] Use a rogue. Enter `/cvn buy auto` and `/cvn reagentbuy auto`. Buy ammo and Flash Powder at once. Have gold for only the ammo. Expected: the addon buys no Flash Powder. The ammo cost is taken off first.
+- [ ] Close the merchant before you answer Yes. Note what the game does with the purchase. The dialog stays. The ammo dialog behaves the same.
 
 ## Not covered yet
 
-- Walking distance (vendors are chosen by straight-line distance).
+- Walking distance. The addon chooses vendors by straight-line distance.
 - Warlock shards and rogue poisons.

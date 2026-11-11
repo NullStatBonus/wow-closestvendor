@@ -1,67 +1,226 @@
 # Closest Vendor
 
-Designed for WoW Forever and Classic Era, this World of Warcraft addon directs you to the nearest relevant vendor whenever your gear needs repair or your bags are nearly full.
+Closest Vendor is a World of Warcraft addon for WoW Forever and Classic Era.
+It shows you the closest vendor, trainer or auctioneer when you need one.
+It reacts when your gear needs repair, your bags are nearly full, or your ammo, reagents or skills are low.
 
-- Free bag slots at or below a threshold (default **2**): nearest vendor you can sell to.
-- Any equipped item below a durability threshold (default **20%**): nearest vendor that can repair.
-- Equipped ammo at or below a threshold (default **200**), with a bow, crossbow or gun: nearest vendor that sells that ammo (arrows or bullets).
-- A class reagent at or below a threshold (default **5**): nearest vendor that sells it. Mage (Arcane Powder, Rune of Teleportation, Rune of Portals), Rogue (Flash Powder), Priest (Holy Candle, Sacred Candle), Paladin (Symbol of Kings, Symbol of Divinity), Shaman (Ankh) and Druid (Rebirth seeds, Wild Berries, Wild Thornroot). A reagent is watched only once you know a spell that uses it, and each one can be switched off on its own.
-- A profession within a threshold (default **10**) points of its current skill limit: nearest trainer for that profession that you have opened before. It asks on every skill-up and every craft.
-- At any merchant, with a bow, crossbow or gun equipped, it buys ammo to fill your quiver or ammo pouch (no clicks by default). Grade for arrows and bullets is set separately: the same as your equipped ammo, the best your level allows, or the cheapest. It buys only what you can afford and tells you in chat.
-- At any merchant that sells your class reagents, it can stock you up to a set amount of each (default **20**), counting what is already in your bags. Off by default; it asks first, showing the reagents, counts and price, unless you switch that off. It buys only what you can afford and what fits in your bags, and tells you in chat.
-- Several at once: one question at a time, in the order repair, ammo, reagent, sell, trainer. A repair or ammo trip also covers selling.
+## Quick start
 
-When that happens it **asks first** (Yes / No). Yes shows the vendor through the first of these that is available:
+1. Copy the `ClosestVendor` folder into your AddOns folder (see [Install](#install)).
+2. Type `/cvn` in chat to see your current settings.
+3. Type `/cvn config` to open the settings page.
 
-1. **TomTom** (Forever and Era)
-2. **WaypointUI** (Forever)
-3. The built-in map waypoint (Forever)
-4. A chat message with the vendor name, zone and coordinates (Era without TomTom)
+## What it does
 
-Era has no built-in waypoint API, so on Era you need TomTom to get an arrow.
+The addon has a warning for each of these conditions.
+When a warning fires, the addon shows the closest vendor that fits.
 
-**When the closest vendor is on another map,** and a vendor on your own map is farther away, the question lists both with their zone and distance and has three buttons: the one on your map, the closest, and Cancel. Your preference (default: the one on your map) is the first button. If you would rather not be asked, `/cvn choice auto` sets the waypoint straight away using the same preference, prints one chat line and shows the same text on screen for about five seconds (silently, since the map pin already makes a sound). The line names the target with its zone and distance, and the other choice when there was one. `/cvn notice off` turns the on-screen text off. The same applies to trainers.
+- **Bags:** free bag slots are at or below the threshold (default **2**). The addon shows the closest vendor you can sell to.
+- **Durability:** an equipped item is below the threshold (default **20%**). The addon shows the closest vendor that can repair.
+- **Ammo:** equipped ammo is at or below the threshold (default **200**), and you use a bow, crossbow or gun. The addon shows the closest vendor that sells that ammo (arrows or bullets).
+- **Reagents:** a class reagent is at or below the threshold (default **5**). The addon shows the closest vendor that sells it.
+  - Mage: Arcane Powder, Rune of Teleportation, Rune of Portals.
+  - Rogue: Flash Powder.
+  - Priest: Holy Candle, Sacred Candle.
+  - Paladin: Symbol of Kings, Symbol of Divinity.
+  - Shaman: Ankh.
+  - Druid: Rebirth seeds, Wild Berries, Wild Thornroot.
+  - The addon watches a reagent only after you know a spell that uses it.
+  - You can turn off each reagent on its own.
+- **Professions:** a profession is within the threshold (default **10**) points of its current skill limit. The addon shows the closest trainer for that profession that you opened before. It asks on every skill-up and every craft.
+
+If more than one warning is active, the addon asks one question at a time.
+The order is: repair, ammo, reagent, sell, trainer.
+A repair trip or an ammo trip also covers selling.
+
+### Buying
+
+- **Ammo buying:** at any merchant, with a bow, crossbow or gun equipped, the addon buys ammo to fill your quiver or ammo pouch.
+  - It does not ask by default.
+  - You set the grade for arrows and bullets separately: the same as your equipped ammo, the best your level allows, or the cheapest.
+  - It buys only what you can afford.
+  - It tells you in chat what it bought.
+- **Reagent buying:** at any merchant that sells your class reagents, the addon can stock you up to a set amount of each (default **20**).
+  - It counts what is already in your bags.
+  - It is off by default.
+  - It asks first and shows the reagents, the counts and the price. You can turn the question off.
+  - It buys only what you can afford and what fits in your bags.
+  - It tells you in chat what it bought.
+
+### The question and the waypoint
+
+When a warning fires, the addon **asks first** (Yes / No).
+If you choose Yes, the addon shows the vendor with the first of these methods that is available:
+
+1. **TomTom** (WoW Forever and Classic Era)
+2. **WaypointUI** (WoW Forever)
+3. The built-in map waypoint (WoW Forever)
+4. A chat message with the vendor name, zone and coordinates (Classic Era without TomTom)
+
+Classic Era has no built-in waypoint API.
+On Classic Era, you need TomTom to get an arrow.
+
+### When the closest vendor is on another map
+
+This applies when a vendor on your own map is farther away than the closest vendor.
+The question then lists both vendors with their zone and distance.
+The question has three buttons: the vendor on your map, the closest vendor, and Cancel.
+
+- Your preference decides the first button. The default is the vendor on your map.
+- To skip the question, type `/cvn choice auto`. The addon then sets the waypoint at once with the same preference.
+- In auto mode, the addon prints one chat line. The line names the target with its zone and distance. It also names the other choice, if there was one.
+- In auto mode, the addon also shows the same text on screen for about five seconds. This text is silent, because the map pin already makes a sound.
+- To turn off the on-screen text, type `/cvn notice off`.
+- The same rules apply to trainers.
 
 ## Status window
 
-A small movable window lists what the addon tracks, one line per item: ammo (arrows or bullets, with a ranged weapon), each class reagent, bag space, durability and each profession close to its limit. A line turns red when that item is low, using the same threshold as its question. The window only shows when at least one line qualifies, and never shows empty. A value the game cannot read hides its line instead of showing 0.
+The status window is a small window that you can move.
+It lists what the addon tracks, one row for each item.
 
-- **Visibility per group:** the lines come in five groups (Ammo, Reagents, Bag space, Durability, Professions), and each group is **Only when low** (the default), **Always** or **Never**. One setting covers the whole group: every profession line follows Professions, every reagent line follows Reagents. Set it on the Status window settings page or with `/cvn hud row <group> low/always/never`.
-- **Click a line** to pin the closest vendor for that item at once, with no question and whatever your choice mode (ask or auto) is. It works in combat. The usual "Navigating to ... to buy ..." chat line and on-screen notice say why. A profession line works only while the profession is within its threshold, and a trainer must already be known.
-- **Move it** by dragging the title, or hold Shift and drag anywhere on the window. **Lock window position** (first control on the Status window page, or `/cvn hud lock`) stops all dragging, Shift-drag included. The position is saved; `/cvn hud reset` puts it back.
-- **Cog button** on the window opens the Closest Vendor settings page.
-- **Display-only lines** are part of the Reagents group but are never low, so they show only while Reagents is Always. They cannot be routed to, so clicking them does nothing: Soul Shards (Warlock), Blinding Powder (Rogue), Conjured Food and Conjured Water (Mage).
-- **Size and opacity:** window scale (50 to 200 percent, also `/cvn hud scale`), background opacity (0-100 percent, default 80, also `/cvn hud opacity`) and text and icon opacity (20-100 percent, default 100, also `/cvn hud textopacity`) are on the Status window page. At background opacity 0 no background is drawn at all, only the text and icons.
-- **Background color:** pure black by default. Where the game has its color picker, the Status window page shows a swatch of the current color; click it to pick any color. `/cvn hud color` with no color opens the color picker directly, wherever the game has one, even if the swatch is not on the page; `/cvn hud color #rrggbb` works everywhere (and is the only way where there is no picker), and `/cvn hud color black` (or `reset`) goes back to black.
-- **OLED-friendly:** the window has no border and no bright fixed fills, a low line is marked by its text color only, and the text and icons can be dimmed, so nothing static needs to stay bright on screen.
+- The rows are: ammo (arrows or bullets, with a ranged weapon), each class reagent, bag space, durability, and each profession close to its limit.
+- A row turns red when that item is low. It uses the same threshold as its warning.
+- The window shows only when at least one row qualifies.
+- The window never shows empty.
+- If the game cannot read a value, the addon hides that row. It does not show 0.
 
-### Dungeons, raids and battlegrounds
+### Visibility per group
 
-Inside an instance the addon waits instead of asking, so a full-bags question in a battleground is no longer lost: it comes back when you leave. It remembers your last position outside and learns your hearthstone point from your bind location. Clicking a line inside an instance searches near an anchor: battlegrounds use your last position outside; dungeons and raids use `/cvn anchor hearth` (the default, falling back to the last position when the hearthstone point is not known yet) or `/cvn anchor last`. A pin made this way says so in chat.
+- The rows come in five groups: Ammo, Reagents, Bag space, Durability and Professions.
+- Each group is set to **Only when low** (the default), **Always** or **Never**.
+- One setting covers the whole group. Every profession row follows Professions. Every reagent row follows Reagents.
+- Set it on the Status window settings page.
+- Or type `/cvn hud row <group> low/always/never`.
 
-### Auction house
+### Click a row
 
-Off by default (`/cvn ah on`). When on, clicking a line for an item that can be traded goes to the closest auctioneer instead of a vendor when the auctioneer is closer. It is ignored inside instances. The addon ships 28 auctioneers and learns more each time you open an auction house.
+- Click a row to pin the closest vendor for that item at once.
+- The addon does not ask a question. It ignores your choice mode (ask or auto).
+- It works in combat.
+- A chat line ("Navigating to ... to buy ...") and an on-screen notice say why.
+- A profession row works only while the profession is within its threshold.
+- For a profession row, the addon must already know a trainer.
+
+### Move and lock
+
+- Drag the title to move the window.
+- Or hold Shift and drag anywhere on the window.
+- **Lock window position** stops all dragging, Shift-drag included. It is the first control on the Status window page. Or type `/cvn hud lock`.
+- The addon saves the position.
+- Type `/cvn hud reset` to put the window back at its default position.
+- The cog button on the window opens the Closest Vendor settings page.
+
+### Display-only rows
+
+- These rows are part of the Reagents group.
+- They are never low. They show only while Reagents is set to Always.
+- You cannot route to them. A click does nothing.
+- The rows are: Soul Shards (Warlock), Blinding Powder (Rogue), Conjured Food and Conjured Water (Mage).
+
+### Size and opacity
+
+- Window scale is 50 to 200 percent. Or type `/cvn hud scale`.
+- Background opacity is 0-100 percent. The default is 80. Or type `/cvn hud opacity`.
+- Text and icon opacity is 20-100 percent. The default is 100. Or type `/cvn hud textopacity`.
+- All three are on the Status window page.
+- At background opacity 0, the addon draws no background. You see only the text and icons.
+
+### Background color
+
+- The default color is pure black.
+- If the game has its color picker, the Status window page shows a swatch of the current color. Click the swatch to pick any color.
+- Type `/cvn hud color` with no color to open the color picker directly. This works wherever the game has a picker, even if the swatch is not on the page.
+- Type `/cvn hud color #rrggbb` to set a color. This works everywhere. It is the only way where there is no picker.
+- Type `/cvn hud color black` (or `reset`) to go back to black.
+
+### OLED-friendly
+
+- The window has no border.
+- The window has no bright fixed fills.
+- Only the text color marks a low row.
+- You can dim the text and icons.
+- Nothing static needs to stay bright on screen.
+
+## Dungeons, raids and battlegrounds
+
+Inside an instance, the addon waits and does not ask.
+When you leave, the question comes back.
+This way, a full-bags question in a battleground is not lost.
+
+- The addon remembers your last position outside.
+- The addon learns your hearthstone point from your bind location.
+- If you click a row inside an instance, the addon searches near an anchor.
+- In a battleground, the anchor is your last position outside.
+- In a dungeon or raid, you choose the anchor:
+  - `/cvn anchor hearth` is the default. If the hearthstone point is not known yet, the addon uses the last position.
+  - `/cvn anchor last` uses your last position outside.
+- A pin made this way says so in chat.
+
+## Auction house
+
+- This feature is off by default. Type `/cvn ah on` to turn it on.
+- When it is on, click a row for an item that you can trade.
+- If an auctioneer is closer than a vendor, the addon goes to the auctioneer.
+- The addon ignores this feature inside instances.
+- The addon ships 28 auctioneers.
+- The addon learns more each time you open an auction house.
 
 ## Install
 
 Copy the `ClosestVendor` folder into your AddOns folder:
 
-- Forever: `World of Warcraft/<forever folder>/Interface/AddOns/`
+- WoW Forever: `World of Warcraft/<forever folder>/Interface/AddOns/`
 - Classic Era: `World of Warcraft/_classic_era_/Interface/AddOns/`
 
-The addon ships one TOC per game (`ClosestVendor_Vanilla.toc` for Era, `ClosestVendor_Camelot.toc` for Forever).
+The addon has one TOC file for each game:
+
+- `ClosestVendor_Vanilla.toc` for Classic Era.
+- `ClosestVendor_Camelot.toc` for WoW Forever.
 
 ## Settings page
 
-Options, AddOns, **Closest Vendor** is the main page, with three subcategories under it (on a client without subcategories everything is on the one page under section headings).
+To open it, go to Options, AddOns, **Closest Vendor**.
+This is the main page. It has three subcategories.
+On a client without subcategories, everything is on the one page under section headings.
 
-- **Closest Vendor** (main page): *Warnings* has a checkbox and a slider for each trigger (bags, durability, ammo and reagents, professions) and a checkbox for the on-screen notice. The ammo checkbox is the one switch for both ammo and reagents. *Navigation* has the dropdowns for when the closest target is on another map (ask which one or navigate without asking; prefer the target on your map or the closest), the search anchor inside instances, and the auction house checkbox.
-- **Reagents:** a slider for the reagent threshold and a checkbox for each reagent of your class, all on. Below them, reagent buying: **Buy reagents** (off by default), **Ask before buying reagents** (on by default) and a slider for how many of each reagent to carry (0-100, default 20; 0 buys none). For a class without vendor reagents these three are greyed out, with a tooltip saying why.
-- **Ammo:** two checkboxes (buy ammo, ask before buying) and a dropdown for arrows and one for bullets.
-- **Status window:** Lock window position (first), sliders for scale, background opacity and text and icon opacity, the background color (a swatch that opens the game's color picker, where the game has one), and an Only when low / Always / Never dropdown for each group of lines, in window order: Ammo, Reagents, Bag space, Durability, Professions. A group that does not apply to your class (Ammo, or Reagents for a class with no reagents) is still listed, greyed out, with a tooltip saying why.
+The settings page changes the same settings as the commands below.
+Type `/cvn config` to open the main page.
 
-It changes the same settings as the commands below, and `/cvn config` opens the main page.
+### Closest Vendor (main page)
+
+- **Warnings:** a checkbox and a slider for each warning (bags, durability, ammo and reagents, professions).
+- **Warnings:** a checkbox for the on-screen notice.
+- The ammo checkbox is the one switch for both ammo and reagents.
+- **Navigation:** a dropdown for when the closest target is on another map. You choose to ask which one, or to navigate without asking.
+- **Navigation:** a dropdown to prefer the target on your map or the closest target.
+- **Navigation:** a dropdown for the search anchor inside instances.
+- **Navigation:** a checkbox for the auction house.
+
+### Reagents
+
+- A slider for the reagent threshold.
+- A checkbox for each reagent of your class. All are on.
+- Below them are three controls for reagent buying:
+  - **Buy reagents** (off by default).
+  - **Ask before buying reagents** (on by default).
+  - A slider for how many of each reagent to carry (0-100, default 20). The value 0 buys none.
+- For a class without vendor reagents, these three controls are greyed out. A tooltip says why.
+
+### Ammo
+
+- A checkbox to buy ammo.
+- A checkbox to ask before buying.
+- A dropdown for arrows.
+- A dropdown for bullets.
+
+### Status window
+
+- **Lock window position** is the first control.
+- Sliders for scale, background opacity, and text and icon opacity.
+- The background color. It is a swatch that opens the game's color picker, where the game has one.
+- An Only when low / Always / Never dropdown for each group, in window order: Ammo, Reagents, Bag space, Durability, Professions.
+- A group that does not apply to your class is still listed. This is Ammo, or Reagents for a class with no reagents.
+- The addon greys out that group. A tooltip says why.
 
 ## Commands
 
@@ -121,57 +280,206 @@ It changes the same settings as the commands below, and `/cvn config` opens the 
 /cvn ah off
 ```
 
-- `/cvn` shows the current settings. `/cvn config` opens the settings page.
-- `/cvn bags <slots>` sets the free-slot threshold (0 to 200). `on` / `off` turns the bag trigger on or off.
-- `/cvn dur <percent>` sets the durability threshold (1 to 100). `on` / `off` turns the durability trigger on or off.
-- `/cvn ammo <count>` sets the ammo threshold (0 to 2000). `on` / `off` turns the ammo and reagent triggers on or off.
-- `/cvn trade <points>` sets the profession threshold (0 to 300). `on` / `off` turns the profession trigger on or off.
-- `/cvn reagent <count>` sets the threshold for all class reagents (1 to 40). `/cvn reagents` lists your class's reagents and whether each is on. `/cvn reagent off <name>` and `/cvn reagent on <name>` switch one reagent (case does not matter).
-- `/cvn choice ask` (the default) lists both targets when the closest is on another map and waits for your pick; `/cvn choice auto` sets the waypoint at once, with no question.
-- `/cvn prefer map` (the default) prefers the nearest target on your current map; `/cvn prefer distance` prefers the nearest by distance. It decides the first button, and what `auto` picks.
-- `/cvn notice on` (the default) / `/cvn notice off` show or hide the on-screen text when a target is chosen without asking. The chat line is always printed.
-- `/cvn buy on` / `/cvn buy off` switch ammo buying on or off. `/cvn buy ask` shows the count and price and waits for a Yes; `/cvn buy auto` (the default) buys at once.
-- `/cvn reagentbuy on` / `/cvn reagentbuy off` switch reagent buying on or off (off by default). `/cvn reagentbuy ask` (the default) shows the reagents, counts and price and waits for a Yes; `/cvn reagentbuy auto` buys at once. `/cvn reagentbuy <count>` sets how many of each class reagent to carry (0-100, default 20; 0 buys none). A class without vendor reagents is told so.
-- `/cvn arrows <mode>` and `/cvn bullets <mode>` choose which ammo to buy: `equipped` (the default), `best` or `cheapest`.
-- `/cvn hud lock` / `/cvn hud unlock` block or allow moving the status window; `/cvn hud reset` puts it back at its default position; `/cvn hud scale <percent>` sets its size (50-200); `/cvn hud opacity <percent>` sets how solid its background is (0-100, 0 draws no background); `/cvn hud textopacity <percent>` sets how solid its text and icons are (20-100); `/cvn hud color` opens the color picker, `/cvn hud color <#rrggbb>` sets the background color, and `black` or `reset` goes back to black; `/cvn hud row <group> low/always/never` sets when a group of lines shows. The group is `ammo`, `reagents`, `professions`, `bags` or `durability`, for example `/cvn hud row professions always`. `/cvn` lists the groups you changed.
-- `/cvn anchor hearth` (the default) or `/cvn anchor last` sets where a line click searches from inside a dungeon or raid: near your hearthstone point or your last position outside.
-- `/cvn ah on` / `/cvn ah off` let a line click go to the auction house when it is closer than a vendor (off by default).
-- `/cvn test sell`, `/cvn test repair`, `/cvn test arrows`, `/cvn test bullets` and `/cvn test reagent` ask the same question right now for that kind of vendor, whatever your bags, gear and ammo look like. Yes sets the pin. Opening any vendor window clears it.
-- `/cvn debug on` and `/cvn debug off` switch the debug log on and off. `/cvn log` shows a report you can copy, `/cvn log clear` empties the log.
-- `/closestvendor` works the same as `/cvn`.
+### General
 
-Settings are saved per account.
+- `/cvn` shows the current settings.
+- `/cvn config` opens the settings page.
+- `/closestvendor` works the same as `/cvn`.
+- Settings are saved per account.
+
+### Thresholds
+
+- `/cvn bags <slots>` sets the free-slot threshold (0 to 200).
+- `/cvn bags on` and `/cvn bags off` turn the bag warning on or off.
+- `/cvn dur <percent>` sets the durability threshold (1 to 100).
+- `/cvn dur on` and `/cvn dur off` turn the durability warning on or off.
+- `/cvn ammo <count>` sets the ammo threshold (0 to 2000).
+- `/cvn ammo on` and `/cvn ammo off` turn the ammo and reagent warnings on or off.
+- `/cvn trade <points>` sets the profession threshold (0 to 300).
+- `/cvn trade on` and `/cvn trade off` turn the profession warning on or off.
+- `/cvn reagent <count>` sets the threshold for all class reagents (1 to 40).
+- `/cvn reagents` lists the reagents of your class and shows if each is on.
+- `/cvn reagent off <name>` turns off one reagent. Case does not matter.
+- `/cvn reagent on <name>` turns on one reagent. Case does not matter.
+
+### Navigation
+
+- `/cvn choice ask` is the default. When the closest target is on another map, it lists both targets and waits for your pick.
+- `/cvn choice auto` sets the waypoint at once, with no question.
+- `/cvn prefer map` is the default. It prefers the closest target on your current map.
+- `/cvn prefer distance` prefers the closest target by distance.
+- The `prefer` setting decides the first button. It also decides what `auto` picks.
+- `/cvn notice on` is the default. It shows the on-screen text when the addon chooses a target without asking.
+- `/cvn notice off` hides the on-screen text.
+- The chat line is always printed.
+- `/cvn anchor hearth` is the default. In a dungeon or raid, a row click searches near your hearthstone point.
+- `/cvn anchor last` makes a row click search near your last position outside.
+- `/cvn ah on` lets a row click go to the auction house when it is closer than a vendor.
+- `/cvn ah off` turns this off. It is off by default.
+
+### Buying
+
+- `/cvn buy on` and `/cvn buy off` turn ammo buying on or off.
+- `/cvn buy ask` shows the count and price, and waits for a Yes.
+- `/cvn buy auto` is the default. It buys at once.
+- `/cvn reagentbuy on` and `/cvn reagentbuy off` turn reagent buying on or off. It is off by default.
+- `/cvn reagentbuy ask` is the default. It shows the reagents, counts and price, and waits for a Yes.
+- `/cvn reagentbuy auto` buys at once.
+- `/cvn reagentbuy <count>` sets how many of each class reagent to carry (0-100, default 20). The value 0 buys none.
+- If your class has no vendor reagents, the addon tells you.
+- `/cvn arrows <mode>` and `/cvn bullets <mode>` choose which ammo to buy.
+- The modes are `equipped` (the default), `best` and `cheapest`.
+
+### Status window
+
+- `/cvn hud lock` blocks moving the status window.
+- `/cvn hud unlock` allows moving it.
+- `/cvn hud reset` puts it back at its default position.
+- `/cvn hud scale <percent>` sets its size (50-200).
+- `/cvn hud opacity <percent>` sets how solid its background is (0-100). The value 0 draws no background.
+- `/cvn hud textopacity <percent>` sets how solid its text and icons are (20-100).
+- `/cvn hud color` opens the color picker.
+- `/cvn hud color <#rrggbb>` sets the background color.
+- `/cvn hud color black` or `/cvn hud color reset` goes back to black.
+- `/cvn hud row <group> low/always/never` sets when a group of rows shows.
+- The group is `ammo`, `reagents`, `professions`, `bags` or `durability`.
+- Example: `/cvn hud row professions always`.
+- `/cvn` lists the groups you changed.
+
+### Test and debug
+
+- `/cvn test sell`, `/cvn test repair`, `/cvn test arrows`, `/cvn test bullets` and `/cvn test reagent` ask the question now for that kind of vendor.
+- They ignore the state of your bags, gear and ammo.
+- Yes sets the pin.
+- Opening any vendor window clears the pin.
+- `/cvn debug on` turns on the debug log.
+- `/cvn debug off` turns it off.
+- `/cvn log` shows a report that you can copy.
+- `/cvn log clear` empties the log.
 
 ## How it finds vendors
 
-The addon ships a list of about 900 vendors, and it learns more as you play. Every time you open a vendor window it records that vendor (position, whether it repairs, and which ammo and reagents it sells). Learned vendors replace shipped ones with the same NPC id and are saved between sessions.
+The addon ships a list of about 900 vendors.
+It learns more as you play.
 
-Trainers work the same way but nothing is shipped: opening a profession trainer's window records where it is and which professions it teaches. Trainers (and the professions you have seen at a trainer or in a crafting window) are shared by all your characters.
+- Each time you open a vendor window, the addon records that vendor.
+- It records the position, whether the vendor repairs, and which ammo and reagents the vendor sells.
+- A learned vendor replaces a shipped vendor with the same NPC id.
+- The addon saves learned vendors between sessions.
 
-Vendors you open in WoW Forever's new zones (Mount Hyjal, Riverglades, Zephras Isle, Darkspear Islands, Shen'dralas) are the way those zones get covered.
+Trainers work the same way, but the addon ships no trainers.
+
+- When you open a profession trainer window, the addon records where the trainer is.
+- It also records which professions the trainer teaches.
+- All your characters share the trainers.
+- All your characters also share the professions you saw at a trainer or in a crafting window.
+
+The vendors that you open in the new zones of WoW Forever cover those zones.
+The new zones are Mount Hyjal, Riverglades, Zephras Isle, Darkspear Islands and Shen'dralas.
 
 ## Limitations
 
-- **Forever-only vendors are unknown until you open them.** The shipped list is Vanilla data. Forever's new zones have no shipped vendors, and vendors in zones Forever reshaped may be slightly off.
-- **Ammo buying fills only quivers and ammo pouches** that match your weapon, never ordinary bags, and ignores the stack in your ammo slot. "Best" ranks by the level an item requires, since the game does not report ammo damage.
-- **Ammo is counted for the ammo you have equipped** (bags included). If the equipped ammo is the wrong kind for your weapon, or none is equipped, the count is 0. Thrown weapons and wands are not monitored.
-- **Reagents are counted in your bags** (not the bank), and only for the spells you know. For ranked spells the reagent of your highest known rank is the one watched (for example the seed for your best Rebirth). Warlocks, hunters and warriors have none, and rogue poisons are not covered. Soul Shards, Blinding Powder and conjured food and water appear only as display-only status window lines, shown while the Reagents group is Always: they are counted, never routed to (no vendor sells them). The addon asks and shows the way, and buys reagents only when you switch reagent buying on.
-- **Reagent buying covers the reagents the warning watches:** those of your class whose spell you know and that are switched on (so a reagent switched off on the Reagents page is not bought either), counted the same way, bags only. It tops each up to the amount and never above it; an item a merchant sells in batches is bought only in whole batches that stay within the amount. Reagents go in ordinary bags only (not quivers, soul bags or profession bags). When gold or bag room runs out it buys what it can, in reagent table order, and says so. The money left after an ammo purchase at the same merchant is taken into account.
-- **Trainers are learned, not shipped.** Until you have opened a trainer for a profession, the addon cannot send you to one; it says so once per profession per session in chat. It only watches professions it has seen at a trainer or in a crafting window.
-- **The last skill tier is taken to end at 300.** A profession whose limit is already 300 is never asked about. Whether WoW Forever has tiers above 300 is not verified. The trainer's level requirement is not checked, so a character that is too low may be sent to a trainer who cannot teach the next tier yet.
-- **Distance is a straight line**, not a walking route, and only vendors on your current continent are considered.
-- **"Your map" means the exact map you are standing in.** A city is its own map, separate from the zone around it, so in a city "your map" is that city.
-- **Vendors of the other faction are skipped.** Neutral vendors count for everyone.
-- Nothing is asked in dungeons, raids and battlegrounds; the addon waits until you leave. A status window click there searches from an anchor (see above), so the vendor shown may be far from where you stand, and TomTom may refuse a waypoint set from inside an instance (chat then says so). Where the game gives no map position at all, the addon waits and retries.
-- The status window can lag a moment behind bag, ammo and skill changes. A saved window position that ends up off screen after a UI scale change is recovered with `/cvn hud reset`.
-- Auction house routing goes by straight-line distance to an auctioneer, as with vendors, and uses auctioneers shipped or learned; it does not check prices or whether an item can be sold there.
-- Professions are matched by the name the game shows, so after changing the game language, trainers are learned again.
-- The addon's own text is English. Other languages can be added; see [docs/localization.md](docs/localization.md).
-- Written and tested against fake game APIs. See the status of in-game checks in `docs/test-plan.md`.
+### Vendors and trainers
+
+- Vendors that exist only in WoW Forever are unknown until you open them.
+- The shipped list is Vanilla data.
+- The new zones of WoW Forever have no shipped vendors.
+- Vendors in zones that WoW Forever reshaped can be slightly wrong.
+- The addon ships no trainers.
+- Until you open a trainer for a profession, the addon cannot send you to one.
+- The addon says this once for each profession in each session, in chat.
+- The addon watches only professions that it saw at a trainer or in a crafting window.
+- Professions are matched by the name that the game shows.
+- After you change the game language, the addon learns trainers again.
+- The addon skips vendors of the other faction.
+- Neutral vendors count for everyone.
+
+### Ammo
+
+- The addon counts the ammo that you have equipped. This includes ammo in your bags.
+- If the equipped ammo is the wrong kind for your weapon, the count is 0.
+- If no ammo is equipped, the count is 0.
+- The addon does not monitor thrown weapons or wands.
+- Ammo buying fills only quivers and ammo pouches that match your weapon.
+- Ammo buying never fills ordinary bags.
+- Ammo buying ignores the stack in your ammo slot.
+- "Best" ranks ammo by the level that an item requires. The game does not report ammo damage.
+
+### Reagents
+
+- The addon counts reagents in your bags, not in the bank.
+- The addon counts a reagent only for spells that you know.
+- For ranked spells, the addon watches the reagent of your highest known rank. Example: the seed for your best Rebirth.
+- Warlocks, hunters and warriors have no reagents.
+- The addon does not cover rogue poisons.
+- Soul Shards, Blinding Powder, and conjured food and water are display-only rows.
+  - They show only while the Reagents group is set to Always.
+  - The addon counts them.
+  - The addon never routes to them, because no vendor sells them.
+- The addon asks and shows the way. It buys reagents only when you turn on reagent buying.
+
+### Reagent buying
+
+- Reagent buying covers the reagents that the warning watches.
+- These are reagents of your class, for a spell that you know, and that are turned on.
+- If you turn off a reagent on the Reagents page, the addon does not buy it.
+- The addon counts them the same way, in bags only.
+- The addon tops up each reagent to the set amount. It never goes above the amount.
+- If a merchant sells an item in batches, the addon buys only whole batches that stay within the amount.
+- Reagents go in ordinary bags only. They do not go in quivers, soul bags or profession bags.
+- If gold or bag room runs out, the addon buys what it can. It follows the reagent table order. It says so in chat.
+- The addon takes into account the money left after an ammo purchase at the same merchant.
+
+### Skill levels
+
+- The addon takes the last skill tier to end at 300.
+- The addon never asks about a profession whose limit is already 300.
+- It is not verified if WoW Forever has tiers above 300.
+- The addon does not check the level requirement of the trainer.
+- A character that is too low can be sent to a trainer who cannot teach the next tier yet.
+
+### Distance and maps
+
+- Distance is a straight line, not a walking route.
+- The addon considers only vendors on your current continent.
+- "Your map" means the exact map that you stand in.
+- A city is its own map, separate from the zone around it. In a city, "your map" is that city.
+- Auction house routing also uses straight-line distance to an auctioneer.
+- It uses auctioneers that are shipped or learned.
+- It does not check prices.
+- It does not check if you can sell an item there.
+
+### Instances
+
+- The addon asks nothing in dungeons, raids and battlegrounds. It waits until you leave.
+- A status window click in an instance searches from an anchor (see above).
+- The vendor that the addon shows can be far from where you stand.
+- TomTom can refuse a waypoint that you set from inside an instance. Chat then says so.
+- If the game gives no map position at all, the addon waits and tries again.
+
+### Other
+
+- The status window can lag a moment behind changes to bags, ammo and skills.
+- A saved window position can end up off screen after a UI scale change. Type `/cvn hud reset` to recover it.
+- The text of the addon is English only. You can add other languages. See [docs/localization.md](docs/localization.md).
+- The addon was written and tested against fake game APIs. See the status of in-game checks in `docs/test-plan.md`.
 
 ## Problems?
 
-Type `/cvn debug on`, do the thing that went wrong, then type `/cvn log`. A window opens with a report: select all (Ctrl+A), copy (Ctrl+C), and send it with a short description and your client (Classic Era or Forever). `/cvn debug off` stops recording. The report holds the game build, your settings (including whether the game's color picker and settings button exist, and why the background color swatch is missing if it is) and what the addon saw and decided; it holds no character name.
+1. Type `/cvn debug on`.
+2. Do the thing that went wrong.
+3. Type `/cvn log`. A window opens with a report.
+4. Select all (Ctrl+A) and copy (Ctrl+C).
+5. Send the report with a short description and your client (Classic Era or WoW Forever).
+6. Type `/cvn debug off` to stop recording.
+
+The report holds:
+
+- The game build.
+- Your settings. This includes whether the game's color picker and settings button exist, and why the background color swatch is missing if it is.
+- What the addon saw and decided.
+
+The report holds no character name.
 
 ## For developers
 
@@ -182,8 +490,16 @@ make test     # Lua tests (luajit tests/run.lua [pattern]) and Python tests
 make check    # TOC, version and changelog checks, the same ones the release workflow runs
 ```
 
-The vendor list is generated, not edited by hand (`python3 tools/fetch_data.py`, then `python3 tools/build_vendors.py`); see [docs/publishing.md](docs/publishing.md). To use a different data source, add a function that returns normalized records (see `pfquest_records` in `tools/build_vendors.py`) and pass them to `render`.
+The vendor list is generated. Do not edit it by hand.
+Run `python3 tools/fetch_data.py`, then `python3 tools/build_vendors.py`.
+See [docs/publishing.md](docs/publishing.md).
+
+To use a different data source, add a function that returns normalized records.
+See `pfquest_records` in `tools/build_vendors.py`.
+Pass the records to `render`.
 
 ## License and data
 
-MIT, see [LICENSE](LICENSE). The vendor list is generated from the [pfQuest](https://github.com/shagu/pfQuest) database (MIT) and wago.tools map data. See [THIRD_PARTY.md](THIRD_PARTY.md).
+MIT, see [LICENSE](LICENSE).
+The vendor list comes from the [pfQuest](https://github.com/shagu/pfQuest) database (MIT) and wago.tools map data.
+See [THIRD_PARTY.md](THIRD_PARTY.md).
