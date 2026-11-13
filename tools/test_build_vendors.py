@@ -173,12 +173,12 @@ class Build(unittest.TestCase):
 
     def test_first_coordinate_divided_to_0_1(self):
         text, _ = self.run_build()
-        self.assertIn('{10, "Horde Seller", 37, 0.5050, 0.2500, 2, false, 1, 1},', text)
+        self.assertIn('{10, "Horde Seller", 37, 0.5050, 0.2500, 2, false, 1, 1, 0},', text)
 
     def test_repair_flag_and_faction(self):
         text, _ = self.run_build()
-        self.assertIn('{20, "Remy \\"Two Times\\" Smith", 85, 0.8000, 0.9025, 1, true, 3, 5},', text)
-        self.assertIn('{40, "Both Factions", 37, 0.0500, 0.0600, 0, false, 2, 0},', text)
+        self.assertIn('{20, "Remy \\"Two Times\\" Smith", 85, 0.8000, 0.9025, 1, true, 3, 5, 0},', text)
+        self.assertIn('{40, "Both Factions", 37, 0.0500, 0.0600, 0, false, 2, 0, 0},', text)
 
     def test_drops_missing_coords_name_or_map(self):
         text, stats = self.run_build()
@@ -204,7 +204,7 @@ class Build(unittest.TestCase):
         text = b.render(recs, "Source: some other dataset")
         self.assertIn("-- Source: some other dataset", text)
         self.assertLess(text.index("{3,"), text.index("{9,"))  # sorted
-        self.assertIn('{9, "From Elsewhere", 2482, 0.5000, 0.2500, 0, true, 3, 0},', text)
+        self.assertIn('{9, "From Elsewhere", 2482, 0.5000, 0.2500, 0, true, 3, 0, 0},', text)
 
     def test_render_rejects_bad_records(self):
         ok = {"id": 1, "name": "A", "map": 1, "mx": 0.5, "my": 0.5, "faction": 0, "repair": False, "ammo": 0}
@@ -216,9 +216,9 @@ class Build(unittest.TestCase):
 
     def test_ammo_codes(self):
         text, _ = self.run_build()
-        self.assertIn("37, 0.5050, 0.2500, 2, false, 1, 1}", text)  # 10: arrows only
-        self.assertIn("1, true, 3, 5}", text)                       # 20: arrows and bullets
-        self.assertIn("0, false, 2, 0}", text)                      # 40: bullets only
+        self.assertIn("37, 0.5050, 0.2500, 2, false, 1, 1, 0}", text)  # 10: arrows only
+        self.assertIn("1, true, 3, 5, 0}", text)                       # 20: arrows and bullets
+        self.assertIn("0, false, 2, 0, 0}", text)                      # 40: bullets only
 
     def test_non_ammo_items_do_not_count(self):
         # 70 sells item 9999 (not ammo): listed vendor, no ammo.
@@ -234,9 +234,9 @@ class Build(unittest.TestCase):
     def test_reagent_mask(self):
         # 10 sells Arcane Powder (bit 0); 20 also Rune of Portals (bit 2); 40 sells neither.
         text, stats = self.run_build()
-        self.assertIn('{10, "Horde Seller", 37, 0.5050, 0.2500, 2, false, 1, 1},', text)
-        self.assertIn("1, true, 3, 5},", text)
-        self.assertIn('{40, "Both Factions", 37, 0.0500, 0.0600, 0, false, 2, 0},', text)
+        self.assertIn('{10, "Horde Seller", 37, 0.5050, 0.2500, 2, false, 1, 1, 0},', text)
+        self.assertIn("1, true, 3, 5, 0},", text)
+        self.assertIn('{40, "Both Factions", 37, 0.0500, 0.0600, 0, false, 2, 0, 0},', text)
         self.assertNotIn("Arcane Powder", stats["reagents_without_seller"])
         self.assertIn("Flash Powder", stats["reagents_without_seller"])  # no seller in the fixture
 
@@ -250,7 +250,37 @@ class Build(unittest.TestCase):
         for bad in (-1, 1 << 30, "x"):
             with self.assertRaises(ValueError):
                 b.render([dict(ok, reagents=bad)], "x")
-        self.assertIn("false, 0, 7},", b.render([dict(ok, reagents=7)], "x"))
+        self.assertIn("false, 0, 7, 0},", b.render([dict(ok, reagents=7)], "x"))
+
+    def test_sellers_by_item_in_one_pass(self):
+        got = b.parse_sellers_by_item(ITEMS, (2512, 2515, 2516, 999))
+        self.assertEqual(got[2512], {10, 20})
+        self.assertEqual(got[2516], {20, 40})
+        self.assertNotIn(2515, got)  # empty entry
+        self.assertNotIn(999, got)  # not in the file
+
+    def test_supply_mask(self):
+        # Pretend two arrow items are food (1) and a Bread-diet food (1 + 16): 10 and 20 sell the first,
+        # 20 and 40 the second; the healthstone bit (256) is never stored on a vendor.
+        supply = {2512: 1, 2516: 1 + 16, 2515: 256}
+        text, stats = self.run_build(supply_items=supply)
+        self.assertIn('{10, "Horde Seller", 37, 0.5050, 0.2500, 2, false, 1, 1, 1},', text)
+        self.assertIn("1, true, 3, 5, 17},", text)
+        self.assertIn('{40, "Both Factions", 37, 0.0500, 0.0600, 0, false, 2, 0, 17},', text)
+        self.assertIn("Fish", stats["supplies_without_seller"])
+        self.assertNotIn("Bread", stats["supplies_without_seller"])
+
+    def test_no_supply_items_means_no_supplies(self):
+        text, stats = self.run_build()
+        self.assertIn("2, false, 1, 1, 0},", text)
+        self.assertEqual(stats["supplies_without_seller"], [])
+
+    def test_render_rejects_bad_supply_mask(self):
+        ok = {"id": 1, "name": "A", "map": 1, "mx": 0.5, "my": 0.5, "faction": 0, "repair": False, "ammo": 0}
+        for bad in (-1, 256, "x"):
+            with self.assertRaises(ValueError):
+                b.render([dict(ok, supplies=bad)], "x")
+        self.assertIn("false, 0, 0, 255},", b.render([dict(ok, supplies=255)], "x"))
 
     def test_auctioneers_written(self):
         text, stats = self.run_build()

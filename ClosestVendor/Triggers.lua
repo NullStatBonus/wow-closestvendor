@@ -53,8 +53,10 @@ function T.AmmoCount(needed, ammoClassID, ammoSubClassID, total)
 end
 
 -- Higher number wins: a lower one never replaces an open or active higher one.
-local PRIORITY = { sell = 1, reagent = 2, ammo = 3, repair = 4 }
-local ORDER = { "repair", "ammo", "reagent", "sell" }
+-- food, water and pet food are supply kinds: plain conditions like ammo, one request each.
+local PRIORITY = { sell = 1, pet = 2, water = 3, food = 4, reagent = 5, ammo = 6, repair = 7 }
+local ORDER = { "repair", "ammo", "reagent", "food", "water", "pet", "sell" }
+local SUPPLY = { "food", "water", "pet" }
 
 -- The one test of "is it low" for bags, durability and ammo; warnings and the status window both
 -- use it. Returns { sell, repair, ammo }: sell is true / false, or nil when the bag count is unknown
@@ -70,24 +72,29 @@ function T.Conditions(cfg, free, durPct, ammo)
 end
 
 -- cfg: { bagThreshold, durThreshold, ammoThreshold, bagEnabled, durEnabled, ammoEnabled }
--- (read live, so edits apply at once). ammoEnabled is also the master switch for reagents.
--- Update(free, durPct, inCombat, ammo, reagents, inInstance): free is the free bag slots, or nil if
--- unknown; ammo is a count, or nil when ammo is not monitored; reagents is the list of item ids of
--- the watched reagents that are low (nil or empty: none). In combat or in an instance nothing is
+-- (read live, so edits apply at once). ammoEnabled is also the master switch for reagents and supplies.
+-- Update(free, durPct, inCombat, ammo, reagents, inInstance, supplies): free is the free bag slots, or
+-- nil if unknown; ammo is a count, or nil when ammo is not monitored; reagents is the list of item ids
+-- of the watched reagents that are low (nil or empty: none); supplies is the list of low supply keys
+-- ("food", "water", "pet"; nil or empty: none). In combat or in an instance nothing is
 -- requested and no latch is used up, so the request comes once the player is out and it still holds.
--- Returns nil | { "go", "sell"|"ammo"|"repair" } | { "go", "reagent", itemId } |
+-- Returns nil | { "go", "sell"|"ammo"|"repair"|"food"|"water"|"pet" } | { "go", "reagent", itemId } |
 -- { "clear", kind, itemId } (the request that ended; from OnMerchantShow just { "clear" }).
 function T.New(cfg)
-    local handled = { sell = false, ammo = false, repair = false }
+    local handled = { sell = false, ammo = false, repair = false, food = false, water = false, pet = false }
+    local reminded = {} -- reminder key -> true while its condition holds
     local handledReagent = {} -- item id -> true while that reagent stays low
     local active, activeReagent
     local last, lastLow -- the conditions and the low reagents seen by the latest Update
     local self = {}
 
-    function self.Update(free, durPct, inCombat, ammo, reagents, inInstance)
+    function self.Update(free, durPct, inCombat, ammo, reagents, inInstance, supplies)
         local low = {}
         if cfg.ammoEnabled then for _, id in ipairs(reagents or {}) do low[id] = true end end
         local now = T.Conditions(cfg, free, durPct, ammo)
+        local lowSupply = {}
+        if cfg.ammoEnabled then for _, k in ipairs(supplies or {}) do lowSupply[k] = true end end
+        for _, k in ipairs(SUPPLY) do now[k] = lowSupply[k] == true end
         last, lastLow = now, low
         -- A cleared condition may fire again later.
         for k in pairs(handled) do if now[k] == false then handled[k] = false end end
@@ -149,7 +156,25 @@ function T.New(cfg)
         return true
     end
 
-    -- The vendor request that is open or active ("sell"/"ammo"/"reagent"/"repair"), or nil.
+    -- Notice-only reminders (mage conjure, warlock healthstone): list is the keys whose condition holds.
+    -- Returns the keys to announce now, each once until its condition clears. Nothing is announced
+    -- (and nothing used up) in combat or in an instance, so it comes later if it still holds. A reminder
+    -- never touches a request that is open or active.
+    function self.Reminders(list, inCombat, inInstance)
+        local present, due = {}, {}
+        if cfg.ammoEnabled then for _, k in ipairs(list or {}) do present[k] = true end end
+        for k in pairs(reminded) do if not present[k] then reminded[k] = nil end end
+        if inCombat or inInstance then return due end
+        for _, k in ipairs(list or {}) do
+            if present[k] and not reminded[k] then
+                reminded[k] = true
+                due[#due + 1] = k
+            end
+        end
+        return due
+    end
+
+    -- The vendor request that is open or active ("sell"/"ammo"/"reagent"/"repair"/a supply), or nil.
     function self.Active() return active end
 
     function self.OnMerchantShow()

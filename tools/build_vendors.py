@@ -16,6 +16,8 @@ OUT = os.path.join(ROOT, "ClosestVendor", "Data", "Vendors.lua")
 REAGENTS_LUA = os.path.join(ROOT, "ClosestVendor", "Reagents.lua")
 FACTION = {"A": 1, "H": 2}  # anything else (AH, empty) -> 0, usable by both
 # Standard vendor ammo (Ice Threaded ammo is reputation-only and left out).
+SUPPLY_BITS = [("food", 1), ("drink", 2)] + [(d, 1 << (i + 2)) for i, d in enumerate(
+    ["Meat", "Fish", "Bread", "Cheese", "Fruit", "Fungus"])]
 ARROWS = (2512, 2515, 3030, 11285, 18042)  # Rough, Sharp, Razor, Jagged, Thorium Headed
 BULLETS = (2516, 2519, 3033, 11284, 15997)  # Light Shot, Heavy Shot, Solid Shot, Accurate Slugs, Thorium Shells
 
@@ -38,6 +40,19 @@ def parse_first_coords(text, wanted):
         c = re.search(r"\{ ([\d.]+), ([\d.]+), (\d+), \d+ \}", m.group(2))
         if c:
             out[uid] = (float(c.group(1)), float(c.group(2)), int(c.group(3)))
+    return out
+
+
+def parse_sellers_by_item(text, item_ids):
+    """{itemId: set of NPC ids that sell it} for the wanted items, in one pass over the items file."""
+    wanted, out = set(item_ids), {}
+    for m in re.finditer(r"^  \[(\d+)\] = \{\n(.*?)^  \},$", text, re.S | re.M):
+        item = int(m.group(1))
+        if item not in wanted:
+            continue
+        v = re.search(r'\["V"\] = \{(.*?)\n    \},', m.group(2), re.S)
+        if v:
+            out[item] = {int(x) for x in re.findall(r"\[(\d+)\]", v.group(1))}
     return out
 
 
@@ -93,9 +108,11 @@ def lua_str(s):
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def pfquest_records(meta, units, names, assignment_csv, items, reagents=None):
-    """Normalize pfQuest into records: {id, name, map, mx, my, faction, repair, ammo, reagents}.
+def pfquest_records(meta, units, names, assignment_csv, items, reagents=None, supply_items=None):
+    """Normalize pfQuest into records: {id, name, map, mx, my, faction, repair, ammo, reagents, supplies}.
     ammo: 0 none, 1 arrows, 2 bullets, 3 both. reagents: bitmask over the Reagents.lua table.
+    supplies: the OR of the item masks (bits 0-7: food, drink, six diets) of the supply items the vendor sells;
+    supply_items is {itemId: mask} from tools/build_supplies.py (none: no supplies).
 
     A different data source only has to produce the same records and call render().
     Returns (records, stats).
@@ -111,9 +128,20 @@ def pfquest_records(meta, units, names, assignment_csv, items, reagents=None):
     reagent_table = load_reagents() if reagents is None else reagents
     reagent_sellers = {(i, b): parse_item_sellers(items, (i,)) for i, b, _ in reagent_table}
 
+    supply_items = supply_items or {}
+    supply_sellers = parse_sellers_by_item(items, supply_items)
+    supply_mask = {}
+    for item, sellers in supply_sellers.items():
+        for uid in sellers & wanted:
+            supply_mask[uid] = supply_mask.get(uid, 0) | (supply_items[item] & 255)
+    all_bits = 0
+    for mask in supply_mask.values():
+        all_bits |= mask
+
     records, stats = [], {"listed": len(wanted), "kept": 0, "no_coords": 0, "no_name": 0, "no_map": 0,
                           "reagents_without_seller": [n for i, b, n in reagent_table
-                                                      if not reagent_sellers[(i, b)] & wanted]}
+                                                      if not reagent_sellers[(i, b)] & wanted],
+                          "supplies_without_seller": [n for n, bit in SUPPLY_BITS if supply_items and not all_bits & bit]}
     for uid in sorted(wanted):
         if uid not in coords:
             stats["no_coords"] += 1
@@ -130,7 +158,8 @@ def pfquest_records(meta, units, names, assignment_csv, items, reagents=None):
             "faction": FACTION.get(vendors.get(uid, repair.get(uid, "")), 0),
             "repair": uid in repair,
             "ammo": (1 if uid in arrow_sellers else 0) + (2 if uid in bullet_sellers else 0),
-            "reagents": sum(1 << b for (i, b), sellers in reagent_sellers.items() if uid in sellers)})
+            "reagents": sum(1 << b for (i, b), sellers in reagent_sellers.items() if uid in sellers),
+            "supplies": supply_mask.get(uid, 0)})
         stats["kept"] += 1
     return records, stats
 
@@ -185,24 +214,34 @@ def render(records, source_note, auctioneers=None):
         reagents = r.get("reagents", 0)
         if not (isinstance(reagents, int) and 0 <= reagents < 1 << 30):
             raise ValueError(f"npc {r['id']}: bad reagent mask")
-        lines.append("    {%d, %s, %d, %.4f, %.4f, %d, %s, %d, %d}," % (
+        supplies = r.get("supplies", 0)
+        if not (isinstance(supplies, int) and 0 <= supplies < 256):
+            raise ValueError(f"npc {r['id']}: bad supply mask")
+        lines.append("    {%d, %s, %d, %.4f, %.4f, %d, %s, %d, %d, %d}," % (
             r["id"], lua_str(r["name"]), r["map"], r["mx"], r["my"], r["faction"],
-            "true" if r["repair"] else "false", r["ammo"], reagents))
+            "true" if r["repair"] else "false", r["ammo"], reagents, supplies))
     header = (
         "-- Generated by tools/build_vendors.py. Do not edit.\n"
         f"-- {source_note}\n"
-        "-- Record: {npcId, name, uiMapID, mx, my, faction (0 both, 1 Alliance, 2 Horde), repair, ammo (0 none, 1 arrows, 2 bullets, 3 both), reagents (bitmask, see Reagents.lua)}\n"
+        "-- Record: {npcId, name, uiMapID, mx, my, faction (0 both, 1 Alliance, 2 Horde), repair, ammo (0 none, 1 arrows, 2 bullets, 3 both), reagents (bitmask, see Reagents.lua), supplies (bits 0-7: food, drink, Meat, Fish, Bread, Cheese, Fruit, Fungus; see Supplies.lua)}\n"
         "local _, ns = ...\n"
         "ns.ShippedVendors = {\n")
     text = header + "\n".join(lines) + "\n}\n"
     return text + "\n" + render_auctioneers(auctioneers or [])
 
 
-def build(meta, units, names, assignment_csv, items, source_note):
-    records, stats = pfquest_records(meta, units, names, assignment_csv, items)
+def build(meta, units, names, assignment_csv, items, source_note, supply_items=None):
+    records, stats = pfquest_records(meta, units, names, assignment_csv, items, supply_items=supply_items)
     auctioneers = auctioneer_records(meta, units, names, assignment_csv)
     stats["auctioneers"] = len(auctioneers)
     return render(records, source_note, auctioneers), stats
+
+
+def supply_items():
+    """{itemId: mask} for food, drink and pet diet items, from tools/build_supplies.py."""
+    import build_supplies
+    effects, names, items = build_supplies.load_wago()
+    return build_supplies.build(effects, names, items, build_supplies.load_diets())
 
 
 def main():
@@ -213,7 +252,8 @@ def main():
     text, stats = build(
         read("pfquest", "db", "meta.lua"), read("pfquest", "db", "units.lua"),
         read("pfquest", "db", "enUS", "units.lua"),
-        read("wago", "era", "UiMapAssignment.csv"), read("pfquest", "db", "items.lua"), note)
+        read("wago", "era", "UiMapAssignment.csv"), read("pfquest", "db", "items.lua"), note,
+        supply_items=supply_items())
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)

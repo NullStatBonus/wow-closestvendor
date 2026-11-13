@@ -1,20 +1,24 @@
 -- Pure nearest-vendor search: no WoW globals.
 -- Vendor record (array, for low memory): the on-disk shape plus world coordinates
---   { npcId, name, uiMapID, mx, my, faction, repair, ammo, wx, wy, reagents }
+--   { npcId, name, uiMapID, mx, my, faction, repair, ammo, wx, wy, reagents, supplies }
 -- faction: 0 = both, 1 = Alliance, 2 = Horde. repair: true if it can repair.
 -- ammo: 0 none, 1 arrows, 2 bullets, 3 both. reagents (index 11): bitmask, see Reagents.lua; a
--- record without it sells no reagents.
+-- record without it sells no reagents. supplies (index 12): bits 0-7, see Supplies.lua; absent sells none.
 local _, ns = ...
 
 local S = {}
 ns.Search = S
 
 -- need: nil (any vendor), "repair", "arrow", "bullet", or { reagent = item } (an entry of the
--- Reagents table) for a vendor that sells that reagent, or "auction" (any record: the caller passes
+-- Reagents table) for a vendor that sells that reagent, or { supply = bits } for a vendor that sells
+-- any of those supply bits (food, water, pet diets), or "auction" (any record: the caller passes
 -- an auctioneer bucket, same record shape).
 local function eligible(v, need)
     if need == nil then return true end
-    if type(need) == "table" then return ns.Reagents.Has(v[11], need.reagent) end
+    if type(need) == "table" then
+        if need.supply then return ns.Supplies.Sells(v[12], need.supply) end
+        return ns.Reagents.Has(v[11], need.reagent)
+    end
     if need == "auction" then return true end
     if need == "repair" then return v[7] and true or false end
     local code = v[8] or 0

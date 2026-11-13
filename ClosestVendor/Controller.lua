@@ -11,8 +11,11 @@
 --   env.reagents()                  -> list of { item, count, name } for the class reagents being watched
 --                                      (spell known, not switched off, count readable), or nil; name is
 --                                      what the question calls the reagent
+--   env.supplies()                  -> { class, totals, knows, diets } or nil: the player's class token, the
+--                                      bag totals (Supplies.Totals, nil when bags are unreadable), knows(spellId)
+--                                      and the active pet's diet set (nil without a pet); see Supplies.Evaluate
 --   env.confirm(kind, vendor, accept, count, trade, two)  ask the player; call accept() only on Yes
---       kind is "sell", "repair", "arrow", "bullet", "reagent" or "trainer"; count is the ammo or
+--       kind is "sell", "repair", "arrow", "bullet", "reagent", "supply" or "trainer"; count is the ammo or
 --       reagent left, or for a trainer the points left to the cap; trade names the profession (or,
 --       for a reagent, the reagent). two (optional) is a second
 --       choice { other = record, acceptOther = fn, dist, otherDist (yards), mapFirst = bool }: vendor
@@ -58,7 +61,7 @@ function C.PromptText(kind, vendor, zone, count, trade, two, otherZone)
                 return L["Your %s skill is %d point(s) from its current limit.\n\nWhich %s trainer do you want to navigate to?\n\n%s\n%s"]:format(trade, count, trade, a, b)
             end
             return L["Your %s skill has reached its current limit.\n\nWhich %s trainer do you want to navigate to?\n\n%s\n%s"]:format(trade, trade, a, b)
-        elseif kind == "reagent" then
+        elseif kind == "reagent" or kind == "supply" then
             return L["You are low on %s (%d left).\n\nWhich vendor that sells %s do you want to navigate to?\n\n%s\n%s"]:format(trade, count, trade, a, b)
         elseif kind == "arrow" then
             if count then
@@ -80,7 +83,7 @@ function C.PromptText(kind, vendor, zone, count, trade, two, otherZone)
             return L["Your %s skill is %d point(s) from its current limit.\n\nNavigate to the closest %s trainer, %s?"]:format(trade, count, trade, who)
         end
         return L["Your %s skill has reached its current limit.\n\nNavigate to the closest %s trainer, %s?"]:format(trade, trade, who)
-    elseif kind == "reagent" then
+    elseif kind == "reagent" or kind == "supply" then
         return L["You are low on %s (%d left).\n\nNavigate to the closest vendor that sells %s, %s?"]:format(trade, count, trade, who)
     elseif kind == "arrow" then
         if count then
@@ -112,6 +115,9 @@ function C.New(env)
     local noticed = {} -- professions already told about having no known trainer
     local noticedReagent = {} -- reagents already told about having no known seller
     local lowReagents = {} -- item id -> { item, count, name } for the reagents low at the last Evaluate
+    local lowSupply = {} -- "food"/"water"/"pet" -> { count, name, bits } for the supplies low at the last Evaluate
+    local noticedSupply = {} -- supplies already told about having no known seller
+    local SUPPLY = { food = true, water = true, pet = true }
     local promptId = 0
     local log = env.log or function() end
     local professions = ns.Professions.New()
@@ -162,11 +168,12 @@ function C.New(env)
     -- Nearest eligible vendor for kind, or nil plus "nopos" / "novendor". A third value is the nearest
     -- one on the player's map when the overall nearest is on another map, else nil; then x, y. With
     -- at ({ continent, x, y, map }, an anchor) the search starts there instead of at the player.
-    local function findVendor(kind, reagent, at)
+    local function findVendor(kind, reagent, at, supplyBits)
         at = at or here()
         if not at then return nil, "nopos" end
         local need = (kind == "repair" or kind == "arrow" or kind == "bullet") and kind or nil
         if kind == "reagent" then need = { reagent = reagent } end
+        if kind == "supply" then need = { supply = supplyBits } end
         local v, onMap = ns.Search.NearestFrom(env.buckets, at, need, env.playerFaction)
         if not v then return nil, "novendor" end
         if onMap == v then onMap = nil end
@@ -232,7 +239,7 @@ function C.New(env)
         if trade then
             log(("question shown: trainer for %s, %s (npc %s), %d point(s) left"):format(trade, first[2], tostring(first[1]), count))
         elseif name then
-            log(("question shown: reagent %s, %s (npc %s), %d left"):format(name, first[2], tostring(first[1]), count))
+            log(("question shown: %s %s, %s (npc %s), %d left"):format(kind == "supply" and "supply" or "reagent", name, first[2], tostring(first[1]), count))
         else
             log(("question shown: %s, %s (npc %s)"):format(kind, first[2], tostring(first[1])))
         end
@@ -286,9 +293,69 @@ function C.New(env)
         end
     end
 
-    -- trigger is "sell", "repair", "ammo" or "reagent"; ammo resolves to arrows or bullets from the
-    -- weapon, reagent needs the item id.
+    -- "Meat, Fish" for a pet's diet set, in the table's order.
+    local function dietList(diets)
+        local out = {}
+        for _, d in ipairs(ns.Supplies.DIETS) do if diets and diets[d] then out[#out + 1] = d end end
+        return table.concat(out, ", ")
+    end
+
+    -- What a supply is called in a question: "food", "water" or "pet food (Meat, Fish)".
+    local function supplyName(key, diets)
+        if key == "food" then return L["food"] end
+        if key == "water" then return L["water"] end
+        return L["pet food (%s)"]:format(dietList(diets))
+    end
+
+    -- The one line (chat and on-screen) of a notice-only reminder; key is "food", "water" or "healthstone".
+    local function reminderText(key, count)
+        if key == "food" then return L["You are low on food (%d left). Cast Conjure Food to make more."]:format(count) end
+        if key == "water" then return L["You are low on water (%d left). Cast Conjure Water to make more."]:format(count) end
+        return L["You have no healthstone. Cast Create Healthstone to make one."]
+    end
+
+    -- The reminder sound the player chose (nothing for "none"). The game call is the environment's.
+    local function chime()
+        if env.playSound then env.playSound(env.cfg.remindSound) end
+    end
+
+    local function remind(key, count)
+        local text = reminderText(key, count)
+        log("reminder: " .. key .. " (" .. tostring(count) .. ")")
+        say(text)
+        if env.notify and env.cfg.autoNotice ~= false then env.notify(text) end
+    end
+
+    -- A supply request: key is "food", "water" or "pet" (the pet's diets are in lowSupply[key].bits).
+    -- Mirrors place() for a reagent: ask or pin the nearest seller, or say once that none is known.
+    local function placeSupply(key)
+        local s = lowSupply[key]
+        if not s then self.pending, self.pendingId = nil, nil return end
+        local v, why, onMap, x, y = findVendor("supply", nil, nil, s.bits)
+        if why == "nopos" then
+            self.pending, self.pendingId = key, nil
+            log("no map position yet: " .. key .. " request kept for a retry")
+        elseif v then
+            self.pending, self.pendingId = nil, nil
+            offer("supply", v, onMap, x, y, s.count, nil, s.name, key)
+        else
+            self.pending, self.pendingId = nil, nil
+            log("no known vendor for " .. key .. " on this continent")
+            if not noticedSupply[s.noticeKey] then
+                noticedSupply[s.noticeKey] = true
+                if key == "pet" then
+                    say(L["No known vendor sells food your pet eats on this continent yet. Open a vendor that sells it once and the addon will remember it."])
+                else
+                    say(L["No known vendor sells %s on this continent yet. Open a vendor that sells it once and the addon will remember it."]:format(s.name))
+                end
+            end
+        end
+    end
+
+    -- trigger is "sell", "repair", "ammo", "reagent", "food", "water" or "pet"; ammo resolves to arrows or
+    -- bullets from the weapon, reagent needs the item id.
     local function place(trigger, id)
+        if SUPPLY[trigger] then return placeSupply(trigger) end
         -- ammo resolves to arrows or bullets from the weapon seen by the last Evaluate
         local kind = trigger == "ammo" and ammoKind or trigger
         local r = trigger == "reagent" and lowReagents[id] or nil
@@ -325,7 +392,26 @@ function C.New(env)
             lowReagents[low.item.id] = watched[low.item.id]
             lowIds[#lowIds + 1] = low.item.id
         end
-        local a = triggers.Update(free, dur, combat, ammoKind and ammoCount or nil, lowIds, inside ~= nil)
+        -- Supplies.Evaluate is the one "is it low" test for food, water and pet food, and for the reminders.
+        lowSupply = {}
+        local supKeys, remindKeys, remindCount = {}, {}, {}
+        local state = env.supplies and env.supplies()
+        if state then
+            local ev = ns.Supplies.Evaluate(state.class, state.totals, state.knows, env.cfg)
+            for _, e in ipairs(ev.go) do
+                local bits = ns.Supplies.Want(e.key, state.diets)
+                if bits then
+                    lowSupply[e.key] = { count = e.count, name = supplyName(e.key, state.diets), bits = bits,
+                        noticeKey = e.key == "pet" and ("pet:" .. dietList(state.diets)) or e.key }
+                    supKeys[#supKeys + 1] = e.key
+                end
+            end
+            for _, e in ipairs(ev.remind) do
+                remindKeys[#remindKeys + 1] = e.key
+                remindCount[e.key] = e.count
+            end
+        end
+        local a = triggers.Update(free, dur, combat, ammoKind and ammoCount or nil, lowIds, inside ~= nil, supKeys)
         if a then
             log(("trigger %s%s%s (bags=%s durability=%s ammo=%s combat=%s)"):format(a[1], a[2] and (" " .. a[2]) or "",
                 a[3] and (" " .. a[3]) or "",
@@ -334,7 +420,7 @@ function C.New(env)
             if a[1] == "clear" then
                 self.pending = nil
                 cancelPrompt()
-                clearVendorNav(a[2], a[3]) -- only the waypoint of the request that ended
+                if SUPPLY[a[2]] then clearVendorNav("supply", a[2]) else clearVendorNav(a[2], a[3]) end -- only the waypoint of the request that ended
             else
                 place(a[2], a[3])
             end
@@ -342,6 +428,9 @@ function C.New(env)
             log("retrying the " .. self.pending .. " request")
             place(self.pending, self.pendingId)
         end
+        local due = triggers.Reminders(remindKeys, combat, inside ~= nil)
+        for _, key in ipairs(due) do remind(key, remindCount[key]) end
+        if #due > 0 then chime() end -- one sound for the batch
     end
 
     function self.OnMerchantShow()
@@ -378,17 +467,55 @@ function C.New(env)
     end
 
     local function noVendorText(kind, name)
-        if kind == "reagent" then return L["No known vendor selling %s on this continent for your faction."]:format(name) end
+        if kind == "reagent" or kind == "supply" then return L["No known vendor selling %s on this continent for your faction."]:format(name) end
         if kind == "repair" then return L["No known repair vendor on this continent for your faction."] end
         if kind == "arrow" then return L["No known vendor selling arrows on this continent for your faction."] end
         if kind == "bullet" then return L["No known vendor selling bullets on this continent for your faction."] end
         return L["No known vendor on this continent for your faction."]
     end
 
+    -- /cvn test food, water or petfood: the usual supply question whatever the count. Returns a message
+    -- when there is nothing to ask about.
+    local function testSupply(kind)
+        local s = env.supplies and env.supplies()
+        if not s then return L["Your bags cannot be read right now."] end
+        local key = kind == "petfood" and "pet" or kind
+        if key == "water" and not ns.Supplies.UsesMana(s.class) then return L["Your class does not use water."] end
+        if key == "pet" and not (s.class == "HUNTER" and ns.Supplies.Want("pet", s.diets)) then
+            return L["There is no pet to feed."]
+        end
+        local name = supplyName(key, s.diets)
+        local v, why, onMap, x, y = findVendor("supply", nil, nil, ns.Supplies.Want(key, s.diets))
+        if why == "nopos" then
+            return L["No map position here (dungeons and some areas have none). Try again outside."]
+        elseif why == "novendor" then
+            return noVendorText("supply", name)
+        end
+        offer("supply", v, onMap, x, y, s.totals and s.totals[key] or 0, nil, name, key)
+    end
+
+    -- /cvn test remind: always shows a reminder and plays the sound, whatever the class, count, settings,
+    -- combat or bags. A mage and a warlock get their own; any other class gets a plain test line.
+    local function testRemind()
+        local s = env.supplies and env.supplies()
+        local class = s and s.class
+        if class == "MAGE" then remind("food", s.totals and s.totals.food or 0)
+        elseif class == "WARLOCK" then remind("healthstone", 0)
+        else
+            local text = L["This is a test reminder. Only mages and warlocks get real ones."]
+            log("reminder: test")
+            say(text)
+            if env.notify and env.cfg.autoNotice ~= false then env.notify(text) end
+        end
+        chime()
+    end
+
     -- For /cvn test: ask the usual question for kind, ignoring triggers and combat.
     -- Returns a message when there is nothing to ask about, otherwise nil.
     function self.Test(kind)
         log("test command: " .. kind)
+        if kind == "food" or kind == "water" or kind == "petfood" then return testSupply(kind) end
+        if kind == "remind" then return testRemind() end
         local r
         if kind == "reagent" then
             r = (env.reagents and env.reagents() or {})[1]
@@ -422,14 +549,14 @@ function C.New(env)
 
     -- A direct pin (a click on a status window row): pin the nearest target for kind at once. No
     -- question, whatever vendorMode is, and combat does not hold it back: the player asked for it.
-    -- kind is "sell", "repair", "ammo", "reagent" (id: the item id) or "trainer" (id: the profession
+    -- kind is "sell", "repair", "ammo", "reagent" (id: the item id), "supply" (id: food, water or pet) or "trainer" (id: the profession
     -- name). An open question is closed, and a condition that is low counts as handled, as if the
     -- player had answered Yes. Returns true when a target was pinned; otherwise chat says why not
     -- (nothing is said for a row that cannot be routed to). demo: the pin is only for show, so a
     -- low condition is not marked as handled.
     local function direct(kind, id, demo)
         log(("direct pin: %s%s"):format(tostring(kind), id and (" " .. tostring(id)) or ""))
-        local find, name, trade = kind, nil, nil -- find: what to search for
+        local find, name, trade, supplyBits = kind, nil, nil, nil -- find: what to search for
         local item
         if kind == "ammo" then
             ammoKind, ammoCount = env.ammo()
@@ -443,6 +570,12 @@ function C.New(env)
             for _, r in ipairs(env.reagents and env.reagents() or {}) do
                 if r.item.id == id then name = r.name end
             end
+        elseif kind == "supply" then
+            -- id is "food", "water" or "pet"; a pet needs a pet out and a known diet.
+            local s = env.supplies and env.supplies()
+            supplyBits = s and ns.Supplies.Want(id, s.diets)
+            if not supplyBits then log("direct pin: nothing to look for") return false end
+            name = supplyName(id, s.diets)
         elseif kind == "trainer" then
             -- Only while the profession is near its cap: otherwise the next skill check would clear the pin.
             local near = false
@@ -477,7 +610,7 @@ function C.New(env)
             if onMap == v then onMap = nil end
         else
             local _
-            v, _, onMap = findVendor(find, item, at)
+            v, _, onMap = findVendor(find, item, at, supplyBits)
             -- Only a click, never an automatic trigger, may route to an auctioneer: for something that
             -- is bought (ammo, a reagent) that is not soulbound, with the setting on, outside instances.
             local ah
@@ -502,14 +635,16 @@ function C.New(env)
         end
 
         cancelPrompt() -- a question about something else is answered by this choice
-        autoPin(trade and "trainer" or find, v, onMap, at.x, at.y, trade, name, item and id or nil)
+        autoPin(trade and "trainer" or find, v, onMap, at.x, at.y, trade, name, (item or kind == "supply") and id or nil)
         if which == "hearth" then
             say(L["You are in an instance, so the search started from your hearthstone point."])
         elseif which == "last" then
             say(L["You are in an instance, so the search started from your last position outside."])
         end
         -- A low condition is now handled and active, so it ends the usual way and is not asked about.
-        if not demo and not trade and triggers.Take(kind, id) then self.pending, self.pendingId = nil, nil end
+        local takeKind, takeId = kind, id -- a supply request is kept under its own key
+        if kind == "supply" then takeKind, takeId = id, nil end
+        if not demo and not trade and triggers.Take(takeKind, takeId) then self.pending, self.pendingId = nil, nil end
         return true
     end
 
@@ -532,7 +667,11 @@ function C.New(env)
     -- are read as usual and never changed. A demo that is still running is ended first, and its
     -- timer then does nothing. done() (optional) is called when this demo's time is up, after its
     -- waypoint and question are gone. Returns false, doing nothing, when there are no timers.
+    -- A reminder is also a demo outcome. Food, water and pet food use made-up counts (and a made-up diet
+    -- when no pet is out); a direct pin only for kinds that need no weapon or pet.
     local DEMO_KINDS = { "sell", "repair", "arrow", "bullet" }
+    local DEMO_SUPPLY = { "food", "water", "pet" }
+    local DEMO_DIRECT = { "sell", "repair", "food", "water" }
     function self.Demo(roll, done)
         if not env.after then return false end
         endDemo()
@@ -547,12 +686,43 @@ function C.New(env)
         if not armed then return false end
         local way = roll(3)
         if way == 3 then
-            local kind = DEMO_KINDS[roll(2)]
+            local kind = DEMO_DIRECT[roll(#DEMO_DIRECT)]
             log("demo: direct pin, " .. kind)
-            if direct(kind, nil, true) then demoHandle = handle end
+            local ok
+            if kind == "food" or kind == "water" then ok = direct("supply", kind, true) else ok = direct(kind, nil, true) end
+            if ok then demoHandle = handle end
             return true
         end
-        local kind = DEMO_KINDS[roll(#DEMO_KINDS)]
+        local pick = roll(#DEMO_KINDS + #DEMO_SUPPLY + 1)
+        if pick == #DEMO_KINDS + #DEMO_SUPPLY + 1 then
+            log("demo: reminder")
+            testRemind()
+            return true
+        end
+        if pick > #DEMO_KINDS then -- food, water or pet food: made-up count, the pet's diet or a made-up one
+            local key = DEMO_SUPPLY[pick - #DEMO_KINDS]
+            local s = env.supplies and env.supplies()
+            if key == "water" and s and s.class and not ns.Supplies.UsesMana(s.class) then key = "food" end
+            local diets = s and s.diets
+            if key == "pet" and not diets then diets = { [ns.Supplies.DIETS[roll(#ns.Supplies.DIETS)]] = true } end
+            local count = roll(6) - 1
+            local name = supplyName(key, diets)
+            log(("demo: %s, %s (%d left)"):format(way == 1 and "pin without asking" or "question", key, count))
+            local v, why, onMap, x, y = findVendor("supply", nil, nil, ns.Supplies.Want(key, diets))
+            if why == "nopos" then
+                say(L["No map position here (dungeons and some areas have none). Try again outside."])
+            elseif why == "novendor" then
+                say(noVendorText("supply", name))
+            elseif way == 1 then
+                autoPin("supply", v, onMap, x, y, nil, name, key)
+                demoHandle = handle
+            else
+                demoPrompt = promptId + 1
+                ask("supply", v, onMap, x, y, count, nil, name, key, function() demoHandle, demoPrompt = handle, nil end)
+            end
+            return true
+        end
+        local kind = DEMO_KINDS[pick]
         log(("demo: %s, %s"):format(way == 1 and "pin without asking" or "question", kind))
         local v, why, onMap, x, y = findVendor(kind)
         if why == "nopos" then

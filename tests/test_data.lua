@@ -3,7 +3,7 @@ local function validate(list)
     if type(list) ~= "table" or #list == 0 then return "empty or missing data" end
     local prev = 0
     for i, v in ipairs(list) do
-        local id, name, map, mx, my, fac, rep, ammo, mask = v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9]
+        local id, name, map, mx, my, fac, rep, ammo, mask, sup = v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10]
         local where = "record " .. i .. " (npc " .. tostring(id) .. ")"
         if type(id) ~= "number" or id <= prev then return where .. ": id not ascending/unique" end
         prev = id
@@ -15,7 +15,8 @@ local function validate(list)
         if type(rep) ~= "boolean" then return where .. ": repair not boolean" end
         if ammo ~= 0 and ammo ~= 1 and ammo ~= 2 and ammo ~= 3 then return where .. ": bad ammo code" end
         if type(mask) ~= "number" or mask < 0 or mask >= 2 ^ 30 or mask % 1 ~= 0 then return where .. ": bad reagent mask" end
-        if #v ~= 9 then return where .. ": expected 9 fields, got " .. #v end
+        if type(sup) ~= "number" or sup < 0 or sup >= 256 or sup % 1 ~= 0 then return where .. ": bad supply mask" end
+        if #v ~= 10 then return where .. ": expected 10 fields, got " .. #v end
     end
 end
 
@@ -65,6 +66,38 @@ for _, item in ipairs(ns2.Reagents.ITEMS) do
     end
 end
 
+-- Supplies: every vendor mask bit is one the addon knows (bits 0-7), plenty of food and water sellers, each diet
+-- sold somewhere, and the item table is well formed: masks below 512, every item at least one kind.
+local ns3 = {}
+assert(loadfile("ClosestVendor/Data/Supplies.lua"), "Data/Supplies.lua does not parse")("ClosestVendor", ns3)
+local counts = {}
+for _, v in ipairs(list) do
+    for bit = 0, 7 do
+        if math.floor(v[10] / 2 ^ bit) % 2 == 1 then counts[bit] = (counts[bit] or 0) + 1 end
+    end
+end
+assert((counts[0] or 0) > 50 and (counts[0] or 0) < #list, "food seller count implausible: " .. tostring(counts[0]))
+assert((counts[1] or 0) > 20, "water seller count implausible: " .. tostring(counts[1]))
+for bit = 2, 7 do assert((counts[bit] or 0) > 0, "no shipped vendor sells diet bit " .. bit) end
+local items, hs = 0, 0
+for id, m in pairs(ns3.SupplyItems) do
+    items = items + 1
+    assert(type(id) == "number" and m % 1 == 0 and m >= 1 and m < 512, "bad supply item " .. tostring(id))
+    if math.floor(m / 256) % 2 == 1 then hs = hs + 1 end
+end
+assert(items > 200, "suspiciously few supply items: " .. items)
+assert(hs == 15, "expected 15 healthstone items, got " .. hs)
+assert(ns3.SupplyItems[117] == 5 and ns3.SupplyItems[159] == 2, "Tough Jerky (food, Meat) and Refreshing Spring Water (drink) expected")
+
+-- Pet families: id -> diet bits 4-128; the common hunter pets are present.
+local fams = 0
+for id, m in pairs(ns3.PetFamilies) do
+    fams = fams + 1
+    assert(type(id) == "number" and m % 4 == 0 and m >= 4 and m < 256, "bad pet family " .. tostring(id))
+end
+assert(fams >= 15, "suspiciously few pet families: " .. fams)
+assert(ns3.PetFamilies[4] == 252 and ns3.PetFamilies[1] == 4, "Bear (all diets) and Wolf (Meat) expected")
+
 -- Shipped auctioneers: {npcId, name, uiMapID, mx, my, faction}, ascending ids, and a plausible count.
 local function validateAH(list)
     if type(list) ~= "table" or #list == 0 then return "empty or missing auctioneers" end
@@ -95,11 +128,11 @@ assert(validateAH({}) ~= nil, "empty auctioneers undetected")
 
 -- The check must actually fail on bad data.
 local function bad(mut)
-    local copy = { { 1, "A", 1429, 0.5, 0.5, 1, false, 0, 0 }, { 2, "B", 1429, 0.5, 0.5, 1, true, 3, 5 } }
+    local copy = { { 1, "A", 1429, 0.5, 0.5, 1, false, 0, 0, 0 }, { 2, "B", 1429, 0.5, 0.5, 1, true, 3, 5, 17 } }
     mut(copy)
     return validate(copy) ~= nil
 end
-assert(validate({ { 1, "A", 1429, 0.5, 0.5, 1, false, 0, 0 } }) == nil, "baseline must pass")
+assert(validate({ { 1, "A", 1429, 0.5, 0.5, 1, false, 0, 0, 0 } }) == nil, "baseline must pass")
 assert(bad(function(c) c[2][4] = 1.5 end), "mx out of range undetected")
 assert(bad(function(c) c[2][5] = -0.1 end), "my out of range undetected")
 assert(bad(function(c) c[2][2] = "" end), "empty name undetected")
@@ -111,6 +144,10 @@ assert(bad(function(c) c[2][8] = nil end), "missing ammo code undetected")
 assert(bad(function(c) c[2][9] = nil end), "missing reagent mask undetected")
 assert(bad(function(c) c[2][9] = -1 end), "negative reagent mask undetected")
 assert(bad(function(c) c[2][9] = 1.5 end), "fractional reagent mask undetected")
+assert(bad(function(c) c[2][10] = nil end), "missing supply mask undetected")
+assert(bad(function(c) c[2][10] = 256 end), "supply mask above 255 undetected")
+assert(bad(function(c) c[2][10] = -1 end), "negative supply mask undetected")
+assert(bad(function(c) c[2][10] = 1.5 end), "fractional supply mask undetected")
 assert(validate({}) ~= nil, "empty list undetected")
 
 print(("ok (%d vendors, %d repair, %d arrow sellers, %d bullet sellers)"):format(#list, repairs, arrows, bullets))

@@ -174,7 +174,7 @@ Use `/cvn test sell` (and `/cvn test repair`) so you can repeat the checks. Ente
 - [ ] With `/cvn choice auto` and `prefer distance`: expected: the addon sets the waypoint at once, at the closer vendor.
 - [ ] With `/cvn choice auto`: expected: one chat line names the target.
 - [ ] With `/cvn choice auto`: expected: the same text shows on screen. It names the target with its zone and its distance in yards. When there were two candidates, it also names the other choice.
-- [ ] Check the sound. Expected: there is no sound beyond the map waypoint's own sound.
+- [ ] Check the sound. Expected: there is no sound beyond the map waypoint's own sound. (A reminder is different: it plays the reminder sound.)
 - [ ] Count the seconds the on-screen text stays. Expected: about five seconds. It sits high and centered. Then it disappears.
 - [ ] Set a second waypoint while the text shows. Expected: the new text replaces the old text. The time restarts.
 - [ ] Cause a game error, for example try an action that fails. Expected: the error text still looks the same and lasts as long as usual.
@@ -456,6 +456,76 @@ Use a mage who knows Arcane Brilliance and Teleport (or another class with vendo
 - [ ] Check Soul Shards, Blinding Powder and conjured items. Expected: the addon never buys them.
 - [ ] Use a rogue. Enter `/cvn buy auto` and `/cvn reagentbuy auto`. Buy ammo and Flash Powder at once. Have gold for only the ammo. Expected: the addon buys no Flash Powder. The ammo cost is taken off first.
 - [ ] Close the merchant before you answer Yes. Note what the game does with the purchase. The dialog stays. The ammo dialog behaves the same.
+
+## 14. Food, water and pet food
+
+Enter `/cvn debug on`. Use `/cvn` to check the line "Supplies: food on (5), water on (5), pet food on (5), healthstone reminder on".
+
+### 14.1 Food and water
+
+- [ ] As a warrior, carry 6 food items. Eat or drop food until you carry 5 or fewer. Expected: the addon asks about the closest vendor that sells food.
+- [ ] Carry cooked, looted or conjured food in the bags. Expected: it counts toward the food total.
+- [ ] As a warrior, enter `/cvn test water`. Expected: chat says "Your class does not use water." No question shows.
+- [ ] As a rogue, let your drinks run out. Expected: the addon never asks about water.
+- [ ] As a priest, carry 5 or fewer drinks. Expected: the addon asks about the closest vendor that sells drink.
+- [ ] Answer Yes. Expected: the pin or chat line shows that vendor. A food or water trip does not also ask about selling.
+- [ ] Enter `/cvn choice auto`. Expected: one chat line and the on-screen notice, like other triggers.
+
+### 14.2 Pet food
+
+- [ ] As a hunter with no pet out, enter `/cvn test petfood`. Expected: chat says "There is no pet to feed." No question shows.
+- [ ] Call a pet. Let its food run low. Expected: the addon asks about the closest vendor that sells food your pet eats.
+- [ ] Dismiss the pet. Expected: the addon watches nothing for pet food.
+- [ ] Call a pet with a different diet. Expected: the addon now counts the items that this pet eats.
+- [ ] Use a pet that eats only meat or fish, in a place where no known vendor sells it. Expected: one chat line. No dialog shows.
+- [ ] Run `/dump UnitCreatureFamily("pet")`. Expected: a name and a number. Check that the pet food question names the diets that this family eats. On a non-English client the result is the same.
+
+### 14.3 Reminders
+
+- [ ] As a mage who knows Conjure Food, carry 5 or fewer food items. Expected: a chat line like "You are low on food (2 left). Cast Conjure Food to make more." The addon does not ask about a vendor.
+- [ ] Do the same with Conjure Water. Expected: the same kind of reminder for water.
+- [ ] As a mage who does not know the spell, carry 5 or fewer food items. Expected: the addon asks about a vendor like other classes.
+- [ ] Turn on the on-screen notice (`/cvn notice on`). Expected: the reminder also shows on screen.
+- [ ] Stay low. Expected: the reminder shows once, not again. Raise the count above the threshold, then lower it. Expected: it shows again.
+- [ ] As a warlock who knows Create Healthstone, carry no healthstone. Expected: chat says "You have no healthstone. Cast Create Healthstone to make one."
+- [ ] Carry a healthstone of any rank. Expected: no reminder.
+- [ ] Enter `/cvn test remind` as a mage, as a warlock and as another class. Expected: the mage and warlock reminders show. Any other class gets "This is a test reminder. Only mages and warlocks get real ones." Every class hears the sound. It works in combat, too.
+- [ ] Start a reminder condition in combat, or in an instance. Expected: the reminder waits. It shows when combat or the instance ends, and the sound plays then, not before.
+- [ ] When a reminder shows, listen. Expected: the whisper ping plays once. It does not play again while the reminder stays shown.
+- [ ] Let food and water both drop at the same time (a mage who knows both spells). Expected: two chat lines and one sound.
+- [ ] Enter `/cvn sound`. Expected: chat shows the current sound and the names whisper, ping, invite, ready and none.
+- [ ] Enter `/cvn sound ping`, then `invite`, then `ready`. Expected: each plays at once and `/cvn` shows the new name. Then let a reminder show. Expected: it plays the chosen sound.
+- [ ] Enter `/cvn sound none`. Expected: nothing plays. A reminder still shows in chat, with no sound.
+- [ ] Enter `/cvn sound banana`. Expected: chat lists the choices and nothing changes.
+- [ ] Enter `/cvn test remind` as a mage or a warlock. Expected: the reminder shows and the sound plays.
+- [ ] Let a vendor question appear for food (a warrior, or a mage without the spell). Expected: no reminder sound. The map pin makes its own sound when you say Yes.
+
+### 14.4 Settings and commands
+
+- [ ] Open the settings page. Expected: a **Supplies** page sits between Reagents and Ammo. It shows only the rows your class can use. A warlock also sees **Healthstone reminder**.
+- [ ] Open the Supplies page as any class. Expected: a **Reminder sound** dropdown with Whisper ping, Minimap ping, Group invite, Ready check and None. Choose one. Expected: it plays at once.
+- [ ] Turn off the ammo and reagents master switch (`/cvn ammo off`). Expected: no food, water, pet food or reminder shows.
+- [ ] Turn it on again. Turn off food only (`/cvn food off`). Expected: no food question. Water and pet food still work.
+- [ ] Repeat for `/cvn water off` and `/cvn petfood off`.
+- [ ] Enter `/cvn food 10`. Carry 10 food items. Expected: the addon asks. Carry 11. Expected: it does not ask.
+- [ ] Enter `/cvn food 0` and `/cvn food 41`. Expected: the addon rejects both. Repeat for water and petfood.
+- [ ] Move a slider on the Supplies page. Expected: `/cvn` shows the new value.
+- [ ] Enter `/cvn test food`, `/cvn test water` and `/cvn test petfood`. Expected: each asks now, whatever the count.
+- [ ] Enter `/cvn log`. Expected: the report header has a "supplies: ..." line.
+
+### 14.5 Learning and order
+
+- [ ] Open a baker or a water vendor that the addon does not ship. Expected: the addon learns it. It becomes a target for food or water.
+- [ ] With reagents and food both low, answer the questions. Expected: the order is repair, ammo, reagent, food, water, pet food, sell, trainer. Reagent comes before food.
+- [ ] Open a merchant while food is low. Expected: the addon buys nothing. It does not buy food, water or pet food in this version.
+- [ ] Open the status window settings. Expected: a **Show: Supplies** dropdown sits between Reagents and Bag space. `/cvn hud row supplies always` does the same.
+- [ ] Set Supplies to Always. Expected: a Food row for every class, a Water row for mana classes, and a Pet food row for a hunter with a pet out. A warrior has no Water row.
+- [ ] Set Supplies to Only when low and carry plenty of food. Expected: no supply row. Drop to 5 or fewer food. Expected: the Food row shows in red, at the same time as the warning.
+- [ ] Switch food off (`/cvn food off`) or the master switch off. Expected: the Food row is not red.
+- [ ] Call a pet, then dismiss it. Expected: the Pet food row appears and goes away. Call a different pet. Expected: the count changes to that pet's food.
+- [ ] Click the Food row. Expected: the closest food seller is pinned at once, with no question. Click it in combat. Expected: the same.
+- [ ] As a mage with Reagents set to Always, look at the window. Expected: the Conjured Food and Conjured Water rows and the Food and Water rows. They are separate rows and do not conflict.
+- [ ] Set Supplies to Never. Expected: no supply rows.
 
 ## Not covered yet
 

@@ -16,7 +16,7 @@ Copy-ready text and field values for the CurseForge and Wago projects. Create th
 | Source code URL | `https://github.com/NullStatBonus/wow-closestvendor` |
 | Issues URL | `https://github.com/NullStatBonus/wow-closestvendor/issues` |
 | Relations | Optional dependencies: TomTom (`tomtom` on CurseForge) and WaypointUI (`waypointui` on CurseForge). The addon works without either. |
-| Tags | vendor, repair, ammo, reagent, profession, trainer, navigation, waypoint, quality of life, classic, forever |
+| Tags | vendor, repair, ammo, reagent, food, water, profession, trainer, navigation, waypoint, quality of life, classic, forever |
 | Release type | Release (use Beta for pre-release tags) |
 | Changelog | Taken from `CHANGELOG.md` by the packager; nothing to type. |
 | Donations | none |
@@ -37,6 +37,7 @@ Closest Vendor tells you when it is a good time to repair, restock or make bag s
 - Your gear is wearing out: it offers the closest repair vendor.
 - Your ammo is running low: it offers the closest vendor that sells it.
 - A class reagent is running low: it offers the closest vendor that sells it.
+- Food, water or pet food is running low: it offers the closest vendor that sells it. Mages and warlocks who can make their own get a reminder with a sound instead.
 - A profession is near its skill limit: it offers the closest trainer you have visited.
 
 **Restock without the trip planning.** At any merchant, it can fill your quiver or ammo pouch. It can also top up your class reagents (off by default). It buys only what you can afford and tells you in chat.
@@ -49,6 +50,7 @@ Closest Vendor tells you when it is a good time to repair, restock or make bag s
 
 - It ships with about 900 vendors and learns the ones you open.
 - TomTom and WaypointUI are optional. Classic Era needs TomTom to show an arrow.
+- Pet food works for hunters with a pet out, in every game language.
 - Open a vendor or trainer once so the addon learns it. This matters most in WoW Forever's new zones.
 - Problems? Type `/cvn debug on`, repeat the problem, then type `/cvn log` and post the report.
 

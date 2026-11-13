@@ -1,8 +1,8 @@
 -- The status window's rows: pure data and logic, no WoW globals. Tracker.lua draws what this returns.
 -- A row key is a stable string: "ammo", "bags", "durability", "prof:<profession name>",
--- "reagent:<item id>" (class reagents and display-only items alike). Every row belongs to one of five
--- groups, and the mode is set per group: cfg.hudRow maps a group key ("ammo", "reagents",
--- "professions", "bags", "durability") to "low" (shown only while low), "always" or "never". It holds
+-- "reagent:<item id>" (class reagents and display-only items alike), "supply:food", "supply:water",
+-- "supply:pet". Every row belongs to one of six groups, and the mode is set per group: cfg.hudRow maps a
+-- group key ("ammo", "reagents", "supplies", "professions", "bags", "durability") to "low" (shown only while low), "always" or "never". It holds
 -- only the modes the player changed; anything else, or any other key in it, means "low".
 -- A display-only item is a reagents row that is never low: it shows only while Reagents is "always".
 local _, ns = ...
@@ -47,10 +47,10 @@ function S.ParseColor(text)
 end
 
 -- The groups, in the order the window draws them and the settings page lists them.
-S.GROUPS = { "ammo", "reagents", "bags", "durability", "professions" }
+S.GROUPS = { "ammo", "reagents", "supplies", "bags", "durability", "professions" }
 S.DEFAULT_MODE = "low"
 
-local GROUP_NAMES = { ammo = L["Ammo"], reagents = L["Reagents"], professions = L["Professions"],
+local GROUP_NAMES = { ammo = L["Ammo"], reagents = L["Reagents"], supplies = L["Supplies"], professions = L["Professions"],
     bags = L["Bag space"], durability = L["Durability"] }
 
 -- The group a row key (or a group key) belongs to; nil for anything else.
@@ -59,6 +59,7 @@ function S.Group(key)
     if GROUP_NAMES[key] then return key end
     if key:match("^reagent:%d+$") then return "reagents" end
     if key:match("^prof:.+$") then return "professions" end
+    if key:match("^supply:%a+$") then return "supplies" end
 end
 
 -- The mode of a row, through its group.
@@ -76,7 +77,8 @@ end
 
 -- The group a player means by text (case and extra spaces ignored), nil if none.
 local WORDS = { ammo = "ammo", arrows = "ammo", bullets = "ammo", reagents = "reagents", reagent = "reagents",
-    professions = "professions", profession = "professions", prof = "professions", profs = "professions",
+    supplies = "supplies", supply = "supplies", food = "supplies", water = "supplies", petfood = "supplies",
+    ["pet food"] = "supplies", professions = "professions", profession = "professions", prof = "professions", profs = "professions",
     bags = "bags", bag = "bags", ["bag space"] = "bags", durability = "durability", dur = "durability" }
 function S.Find(text)
     local want = tostring(text or ""):lower():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")
@@ -98,6 +100,8 @@ end
 --                                   whether or not their warning is switched off
 --   display                         { { item, count } }: display-only items whose spell is known, the
 --                                   count summed over every item id of the entry
+--   supplies                        { class, totals, knows } as Controller's supplies(), or nil: the bag
+--                                   totals of food, water and pet food (nil when unreadable)
 --   skills, known                   the skill list and the set of seen professions
 function S.Snapshot(src, cfg, class)
     local snap = { reagents = {}, display = {}, known = src.known or {} }
@@ -126,6 +130,7 @@ function S.Snapshot(src, cfg, class)
             if total then snap.display[#snap.display + 1] = { item = item, count = total } end
         end
     end
+    if S.Mode(cfg, "supplies") ~= "never" and src.supplies then snap.supplies = src.supplies() end
     if next(snap.known) and S.Mode(cfg, "professions") ~= "never" then snap.skills = src.skills() end
     return snap
 end
@@ -167,6 +172,25 @@ function S.Rows(snap, cfg, class)
     for _, item in ipairs(items) do
         local r = byId[item.id]
         add("reagent:" .. item.id, "reagent", item.id, L["%s: %d"]:format(r.name or item.name, r.count), lowReagent[item.id], true)
+    end
+
+    -- Food, water and pet food. A row is low when Supplies.Evaluate puts it in go or remind, the test the
+    -- warnings use; the ammo switch is the master switch. Water is for mana classes, pet food needs a diet.
+    local sup = snap.supplies
+    if type(sup) == "table" and sup.totals then
+        local low = {}
+        if cfg.ammoEnabled then
+            local ev = ns.Supplies.Evaluate(sup.class, sup.totals, sup.knows or function() end, cfg)
+            for _, e in ipairs(ev.go) do low[e.key] = true end
+            for _, e in ipairs(ev.remind) do low[e.key] = true end
+        end
+        local names = { food = L["Food: %d"], water = L["Water: %d"], pet = L["Pet food: %d"] }
+        for _, key in ipairs({ "food", "water", "pet" }) do
+            local n = sup.totals[key]
+            if n and (key ~= "water" or ns.Supplies.UsesMana(sup.class)) and (key ~= "pet" or sup.class == "HUNTER") then
+                add("supply:" .. key, "supply", key, names[key]:format(n), low[key], true)
+            end
+        end
     end
 
     if snap.free then add("bags", "sell", nil, L["Bag space: %d free"]:format(snap.free), cond.sell, true) end
@@ -232,6 +256,7 @@ function S.Demo(roll, cfg)
     local fake = {}
     for k, v in pairs(cfg) do fake[k] = v end
     fake.bagEnabled, fake.durEnabled, fake.ammoEnabled, fake.tradeEnabled = true, true, true, true
+    fake.foodEnabled, fake.waterEnabled, fake.petFoodEnabled = true, true, true
     fake.hudRow = {}
     local snap = { reagents = {}, display = {}, known = {}, skills = {} }
     local sold, shown = {}, {}
@@ -256,6 +281,19 @@ function S.Demo(roll, cfg)
             return "durability"
         end,
     }
+    -- Food, water and pet food rows: a hunter has all three, and each maker fills its own total.
+    local function supplies()
+        snap.supplies = snap.supplies or { class = "HUNTER", totals = { healthstone = 0 } }
+        return snap.supplies.totals
+    end
+    for _, kind in ipairs({ { "food", "foodThreshold", "supply:food" }, { "water", "waterThreshold", "supply:water" },
+            { "pet", "petFoodThreshold", "supply:pet" } }) do
+        makers[#makers + 1] = function(low)
+            local threshold = cfg[kind[2]] or 5
+            supplies()[kind[1]] = low and upTo(threshold) or threshold + roll(40)
+            return kind[3]
+        end
+    end
     local at = roll(#sold)
     for i = 0, 2 do
         local item = sold[(at + i - 1) % #sold + 1]

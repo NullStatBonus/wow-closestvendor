@@ -152,6 +152,57 @@ local function registerReagents(category, cfg, defaults, onChange, class, master
     registerReagentBuying(category, cfg, defaults, onChange, class)
 end
 
+-- Food, water and pet food: a switch and a threshold slider each (the slider greys out with its switch),
+-- and the warlock's healthstone reminder. Only what the class uses is listed: water for mana users, pet food
+-- for hunters, the healthstone reminder for warlocks.
+local function registerSupplies(category, cfg, defaults, onChange, class, masterCheckbox, masterSetting)
+    local function underMaster(initializer)
+        if masterCheckbox and initializer.SetParentInitializer then
+            initializer:SetParentInitializer(masterCheckbox, function() return masterSetting:GetValue() end)
+        end
+    end
+    local function row(key, tag, label, sliderLabel, tip)
+        local on = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_" .. tag .. "_ENABLED", key .. "Enabled", cfg,
+            Settings.VarType.Boolean, label, defaults[key .. "Enabled"])
+        local checkbox = Settings.CreateCheckbox(category, on, tip)
+        underMaster(checkbox)
+        local amount = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_" .. tag .. "_THRESHOLD", key .. "Threshold", cfg,
+            Settings.VarType.Number, sliderLabel, defaults[key .. "Threshold"])
+        local limits = ns.Commands.LIMITS[key]
+        local options = Settings.CreateSliderOptions(limits[1], limits[2], 1)
+        options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+        local slider = Settings.CreateSlider(category, amount, options, tip)
+        if slider.SetParentInitializer then slider:SetParentInitializer(checkbox, function() return on:GetValue() end) end
+        on:SetValueChangedCallback(onChange)
+        amount:SetValueChangedCallback(onChange)
+    end
+    row("food", "FOOD", L["Food"], L["Ask when food is at or below"],
+        L["Ask about the nearest vendor selling food when you carry this many food items or fewer. A mage who can conjure food is reminded instead."])
+    if ns.Supplies.UsesMana(class) then
+        row("water", "WATER", L["Water"], L["Ask when water is at or below"],
+            L["Ask about the nearest vendor selling drink when you carry this many drinks or fewer. A mage who can conjure water is reminded instead."])
+    end
+    if class == "HUNTER" then
+        row("petFood", "PETFOOD", L["Pet food"], L["Ask when pet food is at or below"],
+            L["Ask about the nearest vendor selling food your pet eats when you carry this many of it or fewer. Nothing is asked while no pet is out."])
+    end
+    if class == "WARLOCK" then
+        local remind = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_HEALTHSTONE_REMIND", "healthstoneRemind", cfg,
+            Settings.VarType.Boolean, L["Healthstone reminder"], defaults.healthstoneRemind)
+        underMaster(Settings.CreateCheckbox(category, remind, L["Remind you to create a healthstone when you know the spell and carry none."]))
+        remind:SetValueChangedCallback(onChange)
+    end
+    -- Every class sees it (the command works for all); only a mage or a warlock is reminded. Choosing plays it.
+    local choices = {}
+    for _, sound in ipairs(ns.Supplies.SOUNDS) do choices[#choices + 1] = { sound[1], sound[3] } end
+    local setting = dropdown(category, cfg, defaults, onChange, "CLOSESTVENDOR_REMIND_SOUND", "remindSound",
+        L["Reminder sound"], choices, L["The sound that plays when a mage is reminded to conjure food or water, or a warlock to create a healthstone."])
+    setting:SetValueChangedCallback(function(...)
+        onChange(...)
+        if ns.Adapter then ns.Adapter.playSound(ns.Supplies.SoundId(setting:GetValue())) end
+    end)
+end
+
 -- Ammo buying. The grade dropdowns need a newer part of the API; without it use /cvn arrows and /cvn bullets.
 local function registerAmmoBuying(category, cfg, defaults, onChange)
     local buy = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AMMOBUY_ENABLED", "ammoBuyEnabled", cfg,
@@ -365,6 +416,10 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note, swatchPicke
     local reagents = page(category, L["Reagents"])
     if reagents == category then header(category, L["Reagents"]) end
     registerReagents(reagents, cfg, defaults, onChange, class, reagents == category and ammoSwitch or nil, ammoSetting)
+
+    local supplies = page(category, L["Supplies"])
+    if supplies == category then header(category, L["Supplies"]) end
+    registerSupplies(supplies, cfg, defaults, onChange, class, supplies == category and ammoSwitch or nil, ammoSetting)
 
     local ammo = page(category, L["Ammo"])
     if ammo == category then header(category, L["Ammo"]) end

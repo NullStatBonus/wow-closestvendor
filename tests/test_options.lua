@@ -9,6 +9,8 @@ local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tra
     ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped",
     vendorMode = "ask", vendorPrefer = "map", autoNotice = true, reagentThreshold = 5,
     reagentBuyEnabled = false, reagentBuyPrompt = true, reagentBuyTarget = 20,
+    foodEnabled = true, waterEnabled = true, petFoodEnabled = true, healthstoneRemind = true,
+    foodThreshold = 5, waterThreshold = 5, petFoodThreshold = 5, remindSound = "whisper",
     instanceAnchor = "hearth", ahEnabled = false, hudLocked = false, hudScale = 100, hudAlpha = 80, hudTextAlpha = 100, hudColor = "000000" }
 
 -- Load Commands and Options with the fake globals in their environment.
@@ -16,7 +18,7 @@ local function load(settings, class)
     local env = setmetatable({ Settings = settings, MinimalSliderWithSteppersMixin = { Label = { Right = "right" } },
         CreateSettingsListSectionHeaderInitializer = function(text) return { text = text } end }, { __index = _G })
     local ns = {}
-    for _, f in ipairs({ "Locales/enUS", "Reagents", "Status", "Commands", "Options" }) do
+    for _, f in ipairs({ "Locales/enUS", "Reagents", "Supplies", "Status", "Commands", "Options" }) do
         local chunk = assert(loadfile("ClosestVendor/" .. f .. ".lua"))
         setfenv(chunk, env)
         chunk("ClosestVendor", ns)
@@ -36,9 +38,9 @@ local category = ns.Options.Register(cfg, DEFAULTS, function() changes = changes
 eq(category, rec.category, "returns the category")
 eq(category.name, "Closest Vendor", "page name")
 eq(rec.registered, category, "category registered under AddOns")
-eq(#rec.settings, 33, "main 13 (two per trigger, notice, three dropdowns, auction), reagents 7 (threshold, three reagents, three for buying), ammo buying 4, window 9 (lock, three sliders, five row groups)")
-eq(#rec.checkboxes, 14, "a checkbox per trigger, per mage reagent, two for reagent buying, two for ammo buying, notice, auction and lock")
-eq(#rec.sliders, 9, "a slider per trigger, the reagent slider, the reagent amount, scale, background and text opacity")
+eq(#rec.settings, 39, "main 13 (two per trigger, notice, three dropdowns, auction), reagents 7 (threshold, three reagents, three for buying), supplies 5 (a mage: food and water, a switch and a threshold each, and the reminder sound), ammo buying 4, window 10 (lock, three sliders, six row groups)")
+eq(#rec.checkboxes, 16, "a checkbox per trigger, per mage reagent, two for reagent buying, two for ammo buying, notice, auction and lock")
+eq(#rec.sliders, 11, "a slider per trigger, the reagent slider, the reagent amount, scale, background and text opacity")
 local cbByKey, slByKey = {}, {}
 for _, c in ipairs(rec.checkboxes) do cbByKey[c.setting.key] = c end
 for _, sl in ipairs(rec.sliders) do slByKey[sl.setting.key] = sl end
@@ -46,8 +48,8 @@ for _, sl in ipairs(rec.sliders) do slByKey[sl.setting.key] = sl end
 -- Subcategories: Reagents, Ammo and Status window, each with its own controls.
 local subs = {}
 for _, c in ipairs(rec.subcategories) do subs[c.name] = c; eq(c.parent, category, "subcategory of the main page: " .. c.name) end
-eq(#rec.subcategories, 3, "three subcategories")
-eq(subs["Reagents"] ~= nil and subs["Ammo"] ~= nil and subs["Status window"] ~= nil, true, "named")
+eq(#rec.subcategories, 4, "four subcategories")
+eq(subs["Reagents"] ~= nil and subs["Supplies"] ~= nil and subs["Ammo"] ~= nil and subs["Status window"] ~= nil, true, "named")
 local function inPage(c)
     local n = {}
     for _, s in ipairs(rec.settings) do if s.category == c then n[#n + 1] = s end end
@@ -55,8 +57,9 @@ local function inPage(c)
 end
 eq(#inPage(category), 13, "main page controls")
 eq(#inPage(subs["Reagents"]), 7, "reagents page")
+eq(#inPage(subs["Supplies"]), 5, "supplies page for a mage: food and water, and the reminder sound")
 eq(#inPage(subs["Ammo"]), 4, "ammo page")
-eq(#inPage(subs["Status window"]), 9, "status window page")
+eq(#inPage(subs["Status window"]), 10, "status window page")
 eq(inPage(subs["Status window"])[1].key, "hudLocked", "Lock window position is the first control of the window page")
 local hdr = {}
 for _, h in ipairs(rec.headers) do eq(h.category, category, "headers only on the main page with subcategories"); hdr[#hdr + 1] = h.text end
@@ -77,7 +80,7 @@ for _, s in ipairs(rec.settings) do
     if s.key ~= "mode" then keys[s.key] = s end
     if s.key ~= "mode" then
     eq(s.default, DEFAULTS[s.key], "default for " .. s.key)
-    eq(s.vtype, (s.key:find("Enabled") or s.key == "ammoBuyPrompt" or s.key == "reagentBuyPrompt" or s.key == "autoNotice" or s.key == "hudLocked") and "boolean" or (s.key:find("Grade") or s.key:find("^vendor") or s.key == "instanceAnchor") and "string" or "number", "type of " .. s.key)
+    eq(s.vtype, (s.key:find("Enabled") or s.key == "ammoBuyPrompt" or s.key == "reagentBuyPrompt" or s.key == "autoNotice" or s.key == "hudLocked") and "boolean" or (s.key:find("Grade") or s.key:find("^vendor") or s.key == "instanceAnchor" or s.key == "remindSound") and "string" or "number", "type of " .. s.key)
     end
   end
 end
@@ -91,7 +94,7 @@ for _, k in ipairs({ "ammoBuyEnabled", "ammoBuyPrompt", "arrowGrade", "bulletGra
 end
 eq(cbByKey.ammoBuyEnabled ~= nil, true, "buy switch")
 eq(cbByKey.ammoBuyPrompt ~= nil, true, "ask-first switch")
-eq(#rec.dropdowns, 3 + 2 + 5, "three navigation choices, a dropdown per ammo kind, a mode per window row group")
+eq(#rec.dropdowns, 3 + 2 + 6 + 1, "three navigation choices, a dropdown per ammo kind, a mode per window row group, the reminder sound")
 local ddByKey = {}
 for _, d in ipairs(rec.dropdowns) do ddByKey[d.setting.key] = d end
 eq(ddByKey.arrowGrade ~= nil and ddByKey.bulletGrade ~= nil, true, "arrow and bullet dropdowns")
@@ -200,7 +203,7 @@ local create = S4.CreateSlider
 S4.CreateSlider = function(...) local i = create(...); i.SetParentInitializer = nil; return i end
 local ns4 = load(S4)
 eq(ns4.Options.Register({}, DEFAULTS, function() end) ~= nil, true, "works without SetParentInitializer")
-eq(#rec4.sliders, 9, "sliders still created")
+eq(#rec4.sliders, 10, "sliders still created (no class: the food slider is shown, water and pet food are not)")
 
 -- Reagents: the slider, and one checkbox per reagent of the class, all hanging off the master switch.
 cfg.ammoEnabled = true -- an earlier check switched it off
@@ -261,7 +264,7 @@ load(S6).Options.Register({ reagentOff = {} }, DEFAULTS, function() end, nil)
 local n6 = 0
 for _, st in ipairs(rec6.settings) do if type(st.key) == "number" then n6 = n6 + 1 end end
 eq(n6, 0, "no class: no reagent checkboxes")
-eq(#rec6.sliders, 9, "but the sliders are still there")
+eq(#rec6.sliders, 10, "but the sliders are still there (and the food one)")
 
 -- Reagent buying: at the end of the Reagents page, buy, ask first and the amount, the last two
 -- greyed while buying is off; bound to the keys the commands edit.
@@ -318,7 +321,7 @@ local modeDD = {}
 for _, d in ipairs(rec.dropdowns) do if d.setting.category == win and d.setting.key == "mode" then modeDD[#modeDD + 1] = d end end
 local names = {}
 for _, d in ipairs(modeDD) do names[#names + 1] = d.setting.name end
-eq(table.concat(names, "|"), "Show: Ammo|Show: Reagents|Show: Bag space|Show: Durability|Show: Professions", "five groups in window order, Reagents right below Ammo")
+eq(table.concat(names, "|"), "Show: Ammo|Show: Reagents|Show: Supplies|Show: Bag space|Show: Durability|Show: Professions", "six groups in window order, Reagents right below Ammo")
 local scale, alpha, textAlpha
 for _, sl in ipairs(rec.sliders) do
     if sl.setting.key == "hudScale" then scale = sl elseif sl.setting.key == "hudAlpha" then alpha = sl
@@ -333,7 +336,7 @@ eq(alpha.setting.category == win and textAlpha.setting.category == win, true, "b
 local wkeys = {}
 for _, st in ipairs(inPage(win)) do if st.key ~= "mode" then wkeys[#wkeys + 1] = st.key end end
 eq(table.concat(wkeys, ","), "hudLocked,hudScale,hudAlpha,hudTextAlpha", "window page order: lock, scale, opacities (the colour is a swatch button, not a setting)")
-local ammoMode, reagentsMode, bagsMode, profMode = modeDD[1], modeDD[2], modeDD[3], modeDD[5]
+local ammoMode, reagentsMode, suppliesMode, bagsMode, profMode = modeDD[1], modeDD[2], modeDD[3], modeDD[4], modeDD[6]
 local vals7 = {}
 for _, o in ipairs(bagsMode.options) do vals7[#vals7 + 1] = o.value end
 eq(table.concat(vals7, ","), "low,always,never", "mode choices")
@@ -347,10 +350,12 @@ profMode.setting:SetValue("always")
 eq(cfg.hudRow.professions, "always", "one Professions dropdown writes the group key")
 reagentsMode.setting:SetValue("never")
 eq(cfg.hudRow.reagents, "never", "a mage's Reagents dropdown writes the group key")
+suppliesMode.setting:SetValue("always")
+eq(cfg.hudRow.supplies, "always", "the Supplies dropdown writes the group key")
 cfg.hudRow.durability = "never"
-eq(modeDD[4].setting:GetValue(), "never", "reads what /cvn hud row set")
-eq(bagsMode.setting:GetValue() == "always" and modeDD[4].setting:GetValue() == "never", true, "each group its own")
-cfg.hudRow.reagents, cfg.hudRow.professions, cfg.hudRow.durability = nil, nil, nil
+eq(modeDD[5].setting:GetValue(), "never", "reads what /cvn hud row set")
+eq(bagsMode.setting:GetValue() == "always" and modeDD[5].setting:GetValue() == "never", true, "each group its own")
+cfg.hudRow.reagents, cfg.hudRow.professions, cfg.hudRow.durability, cfg.hudRow.supplies = nil, nil, nil, nil
 local S9, rec9 = fake.new()
 local ns9 = load(S9)
 local cfg9 = {}
@@ -403,17 +408,17 @@ for k, v in pairs(DEFAULTS) do cfg10[k] = v end
 cfg10.reagentOff = {}
 local cat10 = ns10.Options.Register(cfg10, DEFAULTS, function() end, "MAGE")
 eq(#rec10.subcategories, 0, "no subcategories")
-eq(#rec10.settings, 33, "same controls")
+eq(#rec10.settings, 39, "same controls")
 for _, st in ipairs(rec10.settings) do eq(st.category, cat10, "all on one page: " .. tostring(st.key)) end
 local h10 = {}
 for _, h in ipairs(rec10.headers) do h10[#h10 + 1] = h.text end
-eq(table.concat(h10, ","), "Warnings,Navigation,Reagents,Ammo,Status window", "headers for every group")
+eq(table.concat(h10, ","), "Warnings,Navigation,Reagents,Supplies,Ammo,Status window", "headers for every group")
 local ammoCb10
 for _, c in ipairs(rec10.checkboxes) do if c.setting.key == "ammoEnabled" then ammoCb10 = c end end
 local rs10
 for _, sl in ipairs(rec10.sliders) do if sl.setting.key == "reagentThreshold" then rs10 = sl end end
 eq(rs10.parent, ammoCb10, "reagent slider still hangs off the ammo switch")
-eq(rec10.settings[#rec10.settings - 8].key, "hudLocked", "Lock still leads the window group")
+eq(rec10.settings[#rec10.settings - 9].key, "hudLocked", "Lock still leads the window group")
 
 -- Navigation: anchor dropdown and auction checkbox on the main page.
 eq(ddByKey.instanceAnchor.setting.category, category, "anchor dropdown on the main page")
@@ -550,5 +555,64 @@ eq(cfgh.hudColor, "000000", "the failed swatch left the colour alone")
 local reci, _, _, ni = withSwatch({ swatch = true }, nil, true)
 eq(#reci.swatches .. "/" .. #reci.buttons, "0/0", "no picker at all: neither")
 eq(ni:find("background color control not built", 1, true) == 1, true, "said so")
+
+-- Supplies page: food for every class, water for mana users, pet food for hunters, the healthstone reminder for warlocks.
+local function supplyKeys(cls)
+    local Sx, recx = fake.new()
+    local nsx = load(Sx)
+    local cx = {}
+    for k, v in pairs(DEFAULTS) do cx[k] = v end
+    cx.reagentOff = {}
+    nsx.Options.Register(cx, DEFAULTS, function() end, cls)
+    local sub
+    for _, c in ipairs(recx.subcategories) do if c.name == "Supplies" then sub = c end end
+    local out = {}
+    for _, st in ipairs(recx.settings) do if st.category == sub then out[#out + 1] = st.key end end
+    return table.concat(out, ","), recx
+end
+eq((supplyKeys("MAGE")), "foodEnabled,foodThreshold,waterEnabled,waterThreshold,remindSound", "mage: food, water and the reminder sound")
+eq((supplyKeys("WARRIOR")), "foodEnabled,foodThreshold,remindSound", "warrior: food and the sound")
+eq((supplyKeys("ROGUE")), "foodEnabled,foodThreshold,remindSound", "rogue: food and the sound, no water")
+eq((supplyKeys("HUNTER")), "foodEnabled,foodThreshold,waterEnabled,waterThreshold,petFoodEnabled,petFoodThreshold,remindSound", "hunter: food, water, pet food and the sound")
+eq((supplyKeys("WARLOCK")), "foodEnabled,foodThreshold,waterEnabled,waterThreshold,healthstoneRemind,remindSound", "warlock: food, water, the healthstone reminder and the sound")
+eq((supplyKeys("PRIEST")):find("petFood", 1, true), nil, "no pet food for a priest")
+do
+    local _, recx = supplyKeys("HUNTER")
+    local sl = {}
+    for _, s in ipairs(recx.sliders) do sl[s.setting.key] = s end
+    eq(sl.petFoodThreshold.options.min .. "-" .. sl.petFoodThreshold.options.max, "1-40", "pet food limits are the command limits")
+    eq(sl.foodThreshold.options.min .. "-" .. sl.foodThreshold.options.max, table.concat(ns.Commands.LIMITS.food, "-"), "food limits match /cvn food")
+    local cb = {}
+    for _, c in ipairs(recx.checkboxes) do cb[c.setting.key] = c end
+    eq(sl.petFoodThreshold.parent, cb.petFoodEnabled, "the slider hangs off its own switch")
+    eq(cb.petFoodEnabled.setting.name, "Pet food", "labelled")
+end
+
+-- The reminder sound: only a class that is reminded has it; choosing one plays it; the choices are the shared list.
+eq((supplyKeys("HUNTER")):find("remindSound", 1, true) ~= nil, true, "every class sees the sound choice")
+do
+    local Sx, recx = fake.new()
+    local nsx = load(Sx)
+    local played = {}
+    nsx.Adapter = { playSound = function(id) played[#played + 1] = id end }
+    local cx = {}
+    for k, v in pairs(DEFAULTS) do cx[k] = v end
+    cx.reagentOff = {}
+    local changed = 0
+    nsx.Options.Register(cx, DEFAULTS, function() changed = changed + 1 end, "MAGE")
+    local dd
+    for _, d in ipairs(recx.dropdowns) do if d.setting.key == "remindSound" then dd = d end end
+    eq(dd ~= nil, true, "a sound dropdown")
+    eq(dd.setting:GetValue(), "whisper", "defaults to the whisper ping")
+    local labels = {}
+    for _, o in ipairs(dd.choices or {}) do labels[#labels + 1] = o[1] end
+    eq(#nsx.Supplies.SOUNDS, 5, "five choices")
+    dd.setting:SetValue("ping")
+    eq(cx.remindSound, "ping", "saved as a key")
+    eq(played[#played], 3175, "choosing plays the sound")
+    dd.setting:SetValue("none")
+    eq(#played, 1, "none plays nothing")
+    eq(changed >= 2, true, "the page's change callback still runs")
+end
 
 H.done()

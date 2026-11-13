@@ -14,7 +14,10 @@ local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tra
     -- percentages; the background colour is "rrggbb", pure black unless the player chooses another.
     -- Row group modes are in cfg.hudRow (see init).
     hudLocked = false, hudScale = 100, hudAlpha = 80, hudTextAlpha = 100, hudColor = "000000",
-    instanceAnchor = "hearth", ahEnabled = false }
+    instanceAnchor = "hearth", ahEnabled = false,
+    -- Supplies: each switch is on, each threshold 5 (see Supplies.lua). The master switch is ammoEnabled.
+    foodEnabled = true, waterEnabled = true, petFoodEnabled = true, healthstoneRemind = true,
+    foodThreshold = 5, waterThreshold = 5, petFoodThreshold = 5, remindSound = "whisper" }
 local POLL_SECONDS = 5
 local WINDOW_DELAY = 0.25 -- one redraw of the status window this long after the first change
 
@@ -102,7 +105,7 @@ local function rebuildBuckets()
         if continent then
             local b = buckets[continent]
             if not b then b = {}; buckets[continent] = b end
-            b[#b + 1] = { r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8] or 0, wx, wy, r[9] or 0 }
+            b[#b + 1] = { r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8] or 0, wx, wy, r[9] or 0, r[10] or 0 }
         end
     end
 end
@@ -188,7 +191,7 @@ local function learnMerchant()
     if not m then return end
     local map, x, y = A.mapPosition()
     if not map then return end
-    if ns.Discovery.Record(DB.learned, { m.id, m.name, map, x, y, m.faction, m.repair, m.ammo, m.reagents }) then
+    if ns.Discovery.Record(DB.learned, { m.id, m.name, map, x, y, m.faction, m.repair, m.ammo, m.reagents, m.supplies }) then
         rebuildBuckets()
     end
 end
@@ -259,6 +262,25 @@ local function reagentList()
     return out
 end
 
+-- What the controller needs for food, water, pet food and the reminders: the class, the bag totals
+-- (nil when the bags cannot be read), the spell test and the active pet's diets (hunters only, nil
+-- without a pet), or nil when the class is unknown.
+local function supplyState()
+    local class = A.classToken()
+    if not class then return end
+    local diets = class == "HUNTER" and A.petDiet() or nil
+    return { class = class, totals = ns.Supplies.Totals(A.supplyCounts(), diets), knows = A.knowsSpell, diets = diets }
+end
+
+-- One report line: each supply switch with its threshold.
+local function supplyLine()
+    local c = DB.cfg
+    return ("supplies: food %s (%d), water %s (%d), pet food %s (%d), healthstone reminder %s, reminder sound %s"):format(
+        c.foodEnabled and "on" or "off", c.foodThreshold, c.waterEnabled and "on" or "off", c.waterThreshold,
+        c.petFoodEnabled and "on" or "off", c.petFoodThreshold, c.healthstoneRemind and "on" or "off",
+        tostring(c.remindSound))
+end
+
 -- What ns.Reagents.OnMerchant needs when a merchant opens: the reagents the warning watches, with
 -- the same counts, and the game reads and the purchase through the Adapter. Money is what is left
 -- after an ammo purchase made a moment before (the game updates it only when the server answers).
@@ -284,6 +306,7 @@ local REAGENT_ENV = {
 local STATUS_SRC = {
     freeSlots = A.freeSlots, lowestDurability = A.lowestDurability, ammo = A.ammoStatus,
     knows = A.knowsSpell, itemCount = A.itemCount, itemName = A.itemName,
+    supplies = supplyState,
     skills = function()
         if not skillCache then skillCache = A.skills() end
         return skillCache
@@ -392,6 +415,7 @@ local function reportText()
         ("ammo buying: %s, %s, arrows %s, bullets %s"):format(c.ammoBuyEnabled and "on" or "off",
             c.ammoBuyPrompt and "asks first" or "buys at once", tostring(c.arrowGrade), tostring(c.bulletGrade)),
         reagentLine(),
+        supplyLine(),
         ("reagent buying: %s, %s, up to %s of each"):format(c.reagentBuyEnabled and "on" or "off",
             c.reagentBuyPrompt and "asks first" or "buys at once", tostring(c.reagentBuyTarget)),
         ("target choice: %s, prefers %s, on-screen notice %s"):format(tostring(c.vendorMode), tostring(c.vendorPrefer), c.autoNotice and "on" or "off"),
@@ -432,6 +456,7 @@ local function start()
         nav = nav,
         ammo = A.ammoStatus,
         reagents = reagentList,
+        supplies = supplyState,
         confirm = function(kind, v, accept, count, trade, two)
             closeQuestions() -- one question is open at a time, whichever kind it is
             if not two then
@@ -449,6 +474,7 @@ local function start()
         auctionBuckets = auctionBuckets,
         say = say,
         notify = A.screenMessage,
+        playSound = function(key) A.playSound(ns.Supplies.SoundId(key)) end,
         zoneName = A.mapName,
         instanceType = A.instanceType,
         anchor = anchor,
@@ -483,6 +509,10 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
     end
     if action and action[1] == "log" then
         if action[2] == "clear" then log.Clear() else showReport() end
+        return
+    end
+    if action and action[1] == "sound" then
+        A.playSound(ns.Supplies.SoundId(DB.cfg.remindSound))
         return
     end
     if action and action[1] == "test" then
@@ -572,3 +602,4 @@ for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "Z
 end
 -- Registering an event the client does not have is an error, and this one's name is unverified.
 pcall(ns.frame.RegisterEvent, ns.frame, "AUCTION_HOUSE_SHOW")
+pcall(ns.frame.RegisterEvent, ns.frame, "UNIT_PET") -- the active pet, so its diet follows pet changes

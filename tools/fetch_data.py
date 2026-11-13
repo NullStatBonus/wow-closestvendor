@@ -10,7 +10,9 @@ import urllib.request
 PFQUEST_COMMIT = "104f35678ca39ab1fb78b655f815cc7016f5e0c8"
 PFQUEST_FILES = ["db/meta.lua", "db/units.lua", "db/enUS/units.lua", "db/items.lua", "LICENSE"]
 WAGO_BUILDS = {"era": "1.15.9.70576", "forever": "1.60.1.70790"}
-WAGO_TABLES = ["UiMapAssignment"]
+WAGO_TABLES = ["UiMapAssignment", "ItemEffect", "SpellName", "ItemSparse", "CreatureFamily"]
+# Forever links items to effects through ItemXItemEffect and to pet diets through Item.ItemPetFoodID (names in ItemPetFood).
+WAGO_EXTRA = {"forever": ["ItemXItemEffect", "Item", "ItemPetFood"]}
 
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
@@ -28,7 +30,7 @@ def main():
         get(f"https://raw.githubusercontent.com/shagu/pfQuest/{PFQUEST_COMMIT}/{p}",
             os.path.join(DATA, "pfquest", p))
     for flavor, build in WAGO_BUILDS.items():
-        for t in WAGO_TABLES:
+        for t in WAGO_TABLES + WAGO_EXTRA.get(flavor, []):
             get(f"https://wago.tools/db2/{t}/csv?build={build}",
                 os.path.join(DATA, "wago", flavor, f"{t}.csv"))
 

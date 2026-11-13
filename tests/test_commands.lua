@@ -5,6 +5,7 @@ local eq = H.eq
 local ns = {}
 H.locale(ns)
 loadfile("ClosestVendor/Reagents.lua")("ClosestVendor", ns)
+loadfile("ClosestVendor/Supplies.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Status.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Commands.lua")("ClosestVendor", ns)
 local M = ns.Commands
@@ -403,7 +404,7 @@ eq(has(M.Run(c, "ah maybe"), "Choose on or off."), true, "bad value explains")
 
 -- Help lists the new commands; no line has a raw pipe.
 local help = M.Run(fresh(), "help")
-for _, word in ipairs({ "/cvn hud lock/unlock/reset", "/cvn hud scale <50-200>", "/cvn hud opacity <0-100>", "/cvn hud textopacity <20-100>", "/cvn hud color  open the color picker", "/cvn hud color <#rrggbb/black/reset>", "/cvn hud row <ammo/reagents/professions/bags/durability> low/always/never", "/cvn anchor hearth/last", "/cvn ah on/off" }) do
+for _, word in ipairs({ "/cvn hud lock/unlock/reset", "/cvn hud scale <50-200>", "/cvn hud opacity <0-100>", "/cvn hud textopacity <20-100>", "/cvn hud color  open the color picker", "/cvn hud color <#rrggbb/black/reset>", "/cvn hud row <ammo/reagents/supplies/professions/bags/durability> low/always/never", "/cvn anchor hearth/last", "/cvn ah on/off", "/cvn sound <name>" }) do
     eq(has(help, word), true, "help lists " .. word)
 end
 eq(has(help, "|"), false, "no pipe in help")
@@ -421,5 +422,67 @@ local lines, action = M.Run(c, "demo")
 eq(#lines, 0, "demo prints nothing itself (and so not the help)")
 eq(action and action[1], "demo", "demo is an action for the caller")
 eq(flat(c), was, "demo changes no setting")
+
+-- Supplies: food, water and pet food thresholds (1 to 40), switches, test actions and the status line.
+c = fresh()
+out = M.Run(c, "food 10")
+eq(c.foodThreshold, 10, "food threshold set")
+eq(has(out, "Supplies: food on (10)"), true, "reply shows the new value: " .. table.concat(out, " | "))
+M.Run(c, "water 3"); eq(c.waterThreshold, 3, "water threshold set")
+M.Run(c, "petfood 7"); eq(c.petFoodThreshold, 7, "pet food threshold set (command petfood, setting petFood)")
+for _, w in ipairs({ { "food", "foodThreshold" }, { "water", "waterThreshold" }, { "petfood", "petFoodThreshold" } }) do
+    M.Run(c, w[1] .. " 1"); eq(c[w[2]], 1, w[1] .. ": 1 allowed")
+    M.Run(c, w[1] .. " 40"); eq(c[w[2]], 40, w[1] .. ": 40 allowed")
+    for _, bad in ipairs({ "0", "41", "-1", "2.5", "x" }) do
+        out = M.Run(c, w[1] .. " " .. bad)
+        eq(c[w[2]], 40, w[1] .. " " .. bad .. ": unchanged")
+        eq(has(out, "from 1 to 40"), true, w[1] .. " " .. bad .. ": says the range")
+    end
+end
+M.Run(c, "food off"); eq(c.foodEnabled, false, "food off")
+M.Run(c, "food on"); eq(c.foodEnabled, true, "food on")
+M.Run(c, "water off"); eq(c.waterEnabled, false, "water off")
+M.Run(c, "petfood off"); eq(c.petFoodEnabled, false, "petfood off")
+eq(has(M.Run(c, ""), "Supplies: food on (40), water off (40), pet food off (40), healthstone reminder on"), true, "status line")
+eq(has(M.Run(fresh(), ""), "Supplies: food on (5), water on (5), pet food on (5), healthstone reminder on"), true, "status line defaults")
+for _, k in ipairs({ "food", "water", "petfood" }) do
+    local lines, action = M.Run(fresh(), "test " .. k)
+    eq(action[1] .. ":" .. action[2], "test:" .. k, "test " .. k .. " action")
+    eq(#lines, 1, "test " .. k .. " says what it does")
+end
+local _, act = M.Run(fresh(), "test remind")
+eq(act[1] .. ":" .. act[2], "test:remind", "test remind action")
+
+-- /cvn sound: show, pick (plays as a preview), refuse a name that is not a choice.
+do
+    local cs = fresh()
+    cs.remindSound = "whisper"
+    local out, act2 = M.Run(cs, "sound")
+    eq(has(out, "Reminder sound: Whisper ping") and has(out, "whisper, ping, invite, ready, none"), true, "/cvn sound shows the choice and the names")
+    eq(act2, nil, "showing plays nothing")
+    out, act2 = M.Run(cs, "sound ping")
+    eq(cs.remindSound .. "/" .. tostring(act2 and act2[1]), "ping/sound", "a key picks it and asks for the preview")
+    eq(has(out, "Reminder sound: Minimap ping"), true, "confirmed by label")
+    M.Run(cs, "sound Group Invite")
+    eq(cs.remindSound, "invite", "the label works too, case ignored")
+    out, act2 = M.Run(cs, "sound none")
+    eq(cs.remindSound .. "/" .. tostring(act2 and act2[1]), "none/sound", "none is saved (the preview is silent)")
+    out, act2 = M.Run(cs, "sound banana")
+    eq(cs.remindSound .. "/" .. tostring(act2), "none/nil", "an unknown name changes nothing")
+    eq(has(out, "Choose a sound: whisper, ping, invite, ready, none."), true, "and lists the choices")
+    eq(has(M.Run(cs, ""), "Reminder sound: None"), true, "/cvn reports it")
+end
+do -- the new row group by name
+    local cg = fresh()
+    M.Run(cg, "hud row supplies always", "MAGE")
+    eq(cg.hudRow.supplies, "always", "/cvn hud row supplies")
+    M.Run(cg, "hud row food never", "MAGE")
+    eq(cg.hudRow.supplies, "never", "food is the same group")
+    eq(has(M.Run(cg, "hud row banana always", "MAGE"), "reagents, supplies, professions"), true, "the error names the group")
+end
+eq(M.LIMITS.food[1] .. "-" .. M.LIMITS.food[2] .. "," .. M.LIMITS.water[2] .. "," .. M.LIMITS.petFood[2], "1-40,40,40", "limits")
+eq(has(M.Run(fresh(), "help"), "/cvn food <count>"), true, "help lists the thresholds")
+eq(has(M.Run(fresh(), "help"), "/cvn test food, water, petfood"), true, "help lists the tests")
+for _, line in ipairs(M.Run(fresh(), "help")) do eq(line:find("|", 1, true), nil, "no raw | in help") end
 
 H.done()

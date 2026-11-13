@@ -333,31 +333,34 @@ function A.auctioneer()
     return { id = id, name = name, faction = A.factionId("npc") }
 end
 
--- What the open merchant window sells: an ammo code (0 none, 1 arrows, 2 bullets, 3 both) and a
--- reagent mask (bits of the Reagents table). One pass over the offered items.
+-- What the open merchant window sells: an ammo code (0 none, 1 arrows, 2 bullets, 3 both), a
+-- reagent mask (bits of the Reagents table) and a supply mask (bits 0-7 of Supplies.lua). One pass
+-- over the offered items.
 local function merchantScan()
-    local arrows, bullets, reagents = 0, 0, {}
+    local arrows, bullets, reagents, supplies = 0, 0, {}, {}
     local count = call("GetMerchantNumItems", GetMerchantNumItems) or 0
     for i = 1, count do
         local link = call("GetMerchantItemLink", GetMerchantItemLink, i)
         local id = type(link) == "string" and tonumber(link:match("item:(%d+)"))
         if id then
             if ns.Reagents.ById(id) then reagents[id] = true end
+            if ns.Supplies.ItemMask(id) ~= 0 then supplies[id] = true end
             local c, sc = A.itemClass(id)
             if c == 6 and sc == 2 then arrows = 1 elseif c == 6 and sc == 3 then bullets = 2 end
         end
     end
-    return arrows + bullets, ns.Reagents.Mask(reagents)
+    return arrows + bullets, ns.Reagents.Mask(reagents), ns.Supplies.VendorMask(supplies)
 end
 
--- The merchant window that just opened: { id, name, faction, repair, ammo, reagents }, or nil if
+-- The merchant window that just opened: { id, name, faction, repair, ammo, reagents, supplies }, or nil if
 -- the merchant cannot be identified as a creature.
 function A.merchant()
     local id, name = A.npc()
     if not id then return end
-    local ammo, reagents = merchantScan()
+    local ammo, reagents, supplies = merchantScan()
     return { id = id, name = name, faction = A.factionId("npc"),
-             repair = call("CanMerchantRepair", CanMerchantRepair) and true or false, ammo = ammo, reagents = reagents }
+             repair = call("CanMerchantRepair", CanMerchantRepair) and true or false, ammo = ammo, reagents = reagents,
+             supplies = supplies }
 end
 
 -- Class reagents -------------------------------------------------------------------------------
@@ -519,6 +522,34 @@ function A.bagSlots()
         end
     end
     return slots
+end
+
+-- The active pet's diets as a set ({ Meat = true, Fish = true }), or nil when there is no pet, the call is
+-- missing or fails, or the family is unknown. The pet is identified by the creature family id that
+-- UnitCreatureFamily returns after the name, so no localized text is read; Supplies maps the id to diets.
+function A.petDiet()
+    if type(UnitCreatureFamily) ~= "function" then fail("UnitCreatureFamily", "missing") return end
+    local ok, name, id = pcall(UnitCreatureFamily, "pet")
+    if not ok then fail("UnitCreatureFamily", name) return end
+    if type(id) ~= "number" then return end
+    return ns.Supplies.FamilyDiets(id)
+end
+
+-- Play a game sound by id (PlaySound). A missing or failing call is reported once and skipped.
+function A.playSound(id)
+    if type(id) == "number" then call("PlaySound", PlaySound, id) end
+end
+
+-- How many of each supply item (food, drink, healthstone, pet food) the general bags hold:
+-- { [itemId] = count }, only for ids in the supply table; nil when any bag slot cannot be read.
+function A.supplyCounts()
+    local slots = A.bagSlots()
+    if not slots then return end
+    local counts = {}
+    for _, s in ipairs(slots) do
+        if s and ns.Supplies.ItemMask(s[1]) ~= 0 then counts[s[1]] = (counts[s[1]] or 0) + s[2] end
+    end
+    return counts
 end
 
 -- How many of the item fit in one bag slot, or nil when unknown (item not cached).

@@ -122,7 +122,7 @@ local function boot(opts)
     env._G = env
 
     local ns = {}
-    for _, f in ipairs({ "Locales/enUS", "Triggers", "Ammo", "Professions", "Reagents", "Status", "Adapter", "Search", "Discovery", "Nav", "Controller", "Commands", "Options", "Log", "Report", "Tracker" }) do
+    for _, f in ipairs({ "Locales/enUS", "Triggers", "Ammo", "Professions", "Reagents", "Supplies", "Status", "Adapter", "Search", "Discovery", "Nav", "Controller", "Commands", "Options", "Log", "Report", "Tracker" }) do
         setmetatable(ns, nil)
         local chunk = assert(loadfile("ClosestVendor/" .. f .. ".lua"))
         setfenv(chunk, env)
@@ -1383,7 +1383,7 @@ eq(window(g).frame.shown, false, "skill event: read again, no longer near the ca
 g.skillLines = { { "Mining", 145, 150 } }
 g.onEvent("SKILL_LINES_CHANGED"); flush(g)
 eq(shownRows(g), "Mining: 145/150", "near the next cap")
-for _, name in ipairs({ "ammo", "bags", "durability", "professions", "reagents" }) do
+for _, name in ipairs({ "ammo", "bags", "durability", "professions", "reagents", "supplies" }) do
     g.env.SlashCmdList.CLOSESTVENDOR("hud row " .. name .. " never")
 end
 eq(window(g).frame.shown, false, "every row never: no window")
@@ -1498,7 +1498,7 @@ eq(deep(g.env.ClosestVendorDB.hud), savedHud, "demo over: saved position exactly
 g.env.SlashCmdList.CLOSESTVENDOR("demo")
 eq(shownRows(g), demoRows, "the same time gives the same window")
 g.timers[#g.timers]()
-local sawQuestion, sawPin, sawNotice, windowsSeen = false, false, false, {}
+local sawQuestion, sawPin, sawNotice, sawReminder, windowsSeen = false, false, false, false, {}
 for i = 1, 40 do
     g.time = 200 + i * 1.7
     g.tomtom = {}
@@ -1510,11 +1510,17 @@ for i = 1, 40 do
         sawPin = true
         if #g.printed > printed and has(lastPrinted(g), "Navigating to") then sawNotice = true end
     end
-    eq((g.popup ~= nil) ~= (#g.tomtom > 0), true, "each demo has exactly one warning")
+    -- One warning (a question or a pin), or a line in chat: a reminder, or no known vendor for a supply.
+    eq(not (g.popup ~= nil and #g.tomtom > 0), true, "each demo has at most one warning")
+    if g.popup == nil and #g.tomtom == 0 then
+        eq(#g.printed > printed, true, "a demo without a question or a pin says something")
+        if has(lastPrinted(g), "reminder") or has(lastPrinted(g), "Conjure") or has(lastPrinted(g), "healthstone") then sawReminder = true end
+    end
     g.timers[#g.timers]()
     eq(g.popup == nil and (#g.tomtom == 0 or g.tomtom.removed == true), true, "each demo cleans up after itself")
 end
 eq(sawQuestion and sawPin and sawNotice, true, "questions, pins and notices all turn up")
+eq(sawReminder, true, "and so does a reminder")
 local n = 0
 for _ in pairs(windowsSeen) do n = n + 1 end
 eq(n > 10, true, "and the windows differ")
@@ -1590,5 +1596,174 @@ do
     g = boot(); login(g)
     eq(has(reportOf(g), "background color control not built, missing: the Settings API"), true, "report: no settings API")
 end
+
+-- 40. Supplies: food, water and pet food from the bags, learned from merchants, the report line and the
+-- commands; a mage who can conjure and a warlock without a healthstone get a reminder instead.
+local function supplyGame(class, bag, over)
+    local gg = boot({ tomtom = true })
+    gg.ns.ShippedVendors = {
+        { 81, "Plain Shop", 100, 0.51, 0.5, 0, false, 0, 0, 0 },
+        { 82, "Baker",      100, 0.70, 0.5, 0, false, 0, 0, 1 },   -- food
+        { 83, "Well",       100, 0.60, 0.5, 0, false, 0, 0, 2 },   -- water
+        { 84, "Butcher",    100, 0.90, 0.5, 0, false, 0, 0, 1 + 4 }, -- food, Meat
+    }
+    gg.ns.PetFamilies = { [1] = 4 } -- Wolf eats Meat
+    gg.ns.SupplyItems = { [117] = 1 + 4, [159] = 2, [5509] = 256, [4540] = 1 + 16 }
+    gg.class, gg.spells, gg.counts, gg.bag = class, {}, {}, bag
+    for k, v in pairs(over or {}) do gg[k] = v end
+    gg.env.GetContainerNumSlots = function(b) return b == 0 and 16 or 0 end
+    gg.env.GetContainerItemInfo = function(_, s) local it = gg.bag[s]; return it and { itemID = it[1], stackCount = it[2] } or nil end
+    login(gg)
+    gg.autoAccept = false
+    return gg
+end
+g = supplyGame("WARRIOR", { { 117, 2 } })
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup ~= nil, true, "low food asks")
+eq(has(g.popup.text, "food") and has(g.popup.text, "2 left"), true, "names food and the count: " .. g.popup.text)
+eq(has(g.popup.text, "Baker") and not has(g.popup.text, "Plain Shop"), true, "the nearest seller of food, not the nearest shop")
+g.popup.accept()
+eq(g.tomtom[1], "Baker", "Yes navigates to the food seller")
+g.bag[2] = { 117, 30 }
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.shown, 1, "restocked: nothing more asked")
+
+g = supplyGame("PRIEST", { { 117, 30 }, { 159, 2 } })
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(has(g.popup.text, "water") and has(g.popup.text, "Well"), true, "a priest is asked about water: " .. g.popup.text)
+g = supplyGame("ROGUE", { { 117, 30 } })
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "a rogue is not asked about water")
+g = supplyGame("WARRIOR", { { 117, 1 } }); g.env.SlashCmdList.CLOSESTVENDOR("ammo off"); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "master switch off")
+g = supplyGame("WARRIOR", { { 117, 1 } }); g.env.SlashCmdList.CLOSESTVENDOR("food off"); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "food switched off")
+g = supplyGame("WARRIOR", { { 117, 8 } }); g.env.SlashCmdList.CLOSESTVENDOR("food 10"); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.env.ClosestVendorDB.cfg.foodThreshold, 10, "/cvn food sets the threshold")
+eq(g.popup ~= nil, true, "and it applies at once")
+g = supplyGame("WARRIOR", { { 117, 1 } }); g.env.SlashCmdList.CLOSESTVENDOR("food 99")
+eq(g.env.ClosestVendorDB.cfg.foodThreshold, 5, "out of range: unchanged")
+g = supplyGame("WARRIOR", { { 117, 1 } }); g.bag = nil
+g.bag = {}
+g.env.GetContainerItemInfo = function() error("unreadable") end
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "unreadable bags are not an empty bag")
+
+-- Pet food: the pet's diet from the game picks what is counted and which vendor is offered.
+g = supplyGame("HUNTER", { { 117, 2 }, { 159, 30 }, { 4540, 30 } }, nil)
+g.env.UnitCreatureFamily = function() return "Wolf", 1 end
+g.onEvent("UNIT_PET")
+eq(g.popup ~= nil and has(g.popup.text, "pet food (Meat)") and has(g.popup.text, "2 left"), true, "pet food asks: " .. tostring(g.popup and g.popup.text))
+eq(has(g.popup.text, "Butcher") and not has(g.popup.text, "Baker"), true, "the Meat seller, not the nearer Baker")
+g = supplyGame("HUNTER", { { 117, 2 }, { 159, 30 }, { 4540, 30 } })
+g.env.UnitCreatureFamily = function() end
+g.onEvent("UNIT_PET")
+eq(g.popup, nil, "no pet out: nothing asked")
+g = supplyGame("HUNTER", { { 117, 2 }, { 159, 30 }, { 4540, 30 } })
+g.env.UnitCreatureFamily = function() return "Wolf", 1 end
+g.onEvent("UNIT_PET")
+g.env.SlashCmdList.CLOSESTVENDOR("petfood off")
+eq(g.env.ClosestVendorDB.cfg.petFoodEnabled, false, "/cvn petfood off")
+
+-- Reminders.
+g = supplyGame("MAGE", { { 117, 1 }, { 159, 30 } }, { spells = { [587] = true } })
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "a mage who can conjure is not sent to a vendor")
+eq(has(table.concat(g.printed, "\n"), "You are low on food (1 left). Cast Conjure Food to make more."), true, "and is reminded")
+g = supplyGame("WARLOCK", { { 117, 30 }, { 159, 30 } }, { spells = { [6201] = true } })
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(has(table.concat(g.printed, "\n"), "You have no healthstone. Cast Create Healthstone to make one."), true, "warlock reminder")
+g = supplyGame("WARLOCK", { { 117, 30 }, { 159, 30 }, { 5509, 1 } }, { spells = { [6201] = true } })
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(has(table.concat(g.printed, "\n"), "healthstone"), false, "has one: no reminder")
+
+-- The reminder sound, end to end: the saved key becomes a game sound id, once per reminder.
+do
+    local function chimeGame(class, bag, spells)
+        local gg = supplyGame(class, bag, { spells = spells })
+        gg.played = {}
+        gg.env.PlaySound = function(id) gg.played[#gg.played + 1] = id end
+        return gg
+    end
+    g = chimeGame("MAGE", { { 117, 1 }, { 159, 30 } }, { [587] = true })
+    g.onEvent("BAG_UPDATE_DELAYED")
+    eq(table.concat(g.played, ","), "3081", "a reminder plays the whisper ping by default")
+    g.onEvent("BAG_UPDATE_DELAYED")
+    eq(#g.played, 1, "and only once")
+    g = chimeGame("MAGE", { { 117, 1 }, { 159, 30 } }, { [587] = true })
+    g.env.SlashCmdList.CLOSESTVENDOR("sound ping")
+    eq(table.concat(g.played, ","), "3175", "/cvn sound plays the new choice as a preview")
+    eq(g.env.ClosestVendorDB.cfg.remindSound, "ping", "and saves it")
+    g.onEvent("BAG_UPDATE_DELAYED")
+    eq(table.concat(g.played, ","), "3175,3175", "the reminder uses it")
+    g.env.SlashCmdList.CLOSESTVENDOR("sound none")
+    eq(#g.played, 2, "none previews nothing")
+    g.bag = { { 117, 1 }, { 159, 30 } }
+    g.onEvent("BAG_UPDATE_DELAYED")
+    g = chimeGame("MAGE", { { 117, 1 }, { 159, 30 } }, { [587] = true })
+    g.env.SlashCmdList.CLOSESTVENDOR("sound none")
+    g.onEvent("BAG_UPDATE_DELAYED")
+    eq(#g.played, 0, "none: a reminder is silent")
+    g = chimeGame("MAGE", { { 117, 30 }, { 159, 30 } }, { [587] = true })
+    g.env.SlashCmdList.CLOSESTVENDOR("test remind")
+    eq(table.concat(g.played, ","), "3081", "/cvn test remind plays it")
+    g = chimeGame("WARRIOR", { { 117, 1 } })
+    g.env.PlaySound = nil
+    g.env.SlashCmdList.CLOSESTVENDOR("sound ping")
+    eq(g.env.ClosestVendorDB.cfg.remindSound, "ping", "a client without PlaySound: still saved, no error")
+end
+
+-- Status window: the Supplies rows follow the bags and the pet.
+do
+    local gg = supplyGame("PRIEST", { { 117, 2 }, { 159, 30 } })
+    flush(gg)
+    eq(shownRows(gg), "Food: 2", "mode low: only the low row")
+    gg.env.SlashCmdList.CLOSESTVENDOR("hud row supplies always")
+    flush(gg)
+    eq(shownRows(gg), "Food: 2 | Water: 30", "always: food and water")
+    gg.bag[1] = { 117, 40 }
+    gg.onEvent("BAG_UPDATE_DELAYED"); flush(gg)
+    eq(shownRows(gg), "Food: 40 | Water: 30", "the bags changed: the rows follow")
+    gg.env.SlashCmdList.CLOSESTVENDOR("hud row supplies never")
+    flush(gg)
+    eq(window(gg).frame.shown, false, "never: nothing to show, no window")
+    local hh = supplyGame("HUNTER", { { 117, 30 }, { 159, 30 }, { 4540, 30 } })
+    hh.env.SlashCmdList.CLOSESTVENDOR("hud row supplies always")
+    flush(hh)
+    eq(shownRows(hh), "Food: 60 | Water: 30", "no pet: no pet food row")
+    hh.env.UnitCreatureFamily = function() return "Wolf", 1 end
+    hh.onEvent("UNIT_PET"); flush(hh)
+    eq(shownRows(hh), "Food: 60 | Water: 30 | Pet food: 30", "a pet out: its diet's row appears at once")
+end
+
+-- Merchants: the supplies they sell are learned (food + Bread here), and a shipped vendor keeps its own.
+g = supplyGame("WARRIOR", { { 117, 30 } })
+g.npc = { guid = "Creature-0-4372-0-55-90-0000A1B2C3", name = "New Baker" }
+g.pos = { map = 100, x = 0.2, y = 0.5 }
+g.stock = { 4540 }
+g.onEvent("MERCHANT_SHOW")
+eq(g.env.ClosestVendorDB.learned[90][10], 17, "supply mask learned from the offered items")
+g.npc = { guid = "Creature-0-4372-0-55-82-0000A1B2C3", name = "Baker" }
+g.pos = { map = 100, x = 0.7, y = 0.5 }
+g.stock = { 4540 }
+g.onEvent("MERCHANT_SHOW")
+eq(g.env.ClosestVendorDB.learned[82][10], 17, "a shipped food vendor keeps food when opened")
+
+-- Defaults, old saved data and the report line.
+g = boot({ tomtom = true, db = { cfg = { ammoThreshold = 100, foodThreshold = 9 } } }); login(g)
+local c = g.env.ClosestVendorDB.cfg
+eq(c.foodEnabled and c.waterEnabled and c.petFoodEnabled and c.healthstoneRemind, true, "new switches default on")
+eq(c.waterThreshold .. "/" .. c.petFoodThreshold, "5/5", "new thresholds default to 5")
+eq(c.foodThreshold, 9, "a saved value is kept")
+g = supplyGame("WARRIOR", { { 117, 30 } })
+g.env.SlashCmdList.CLOSESTVENDOR("water off")
+g.env.SlashCmdList.CLOSESTVENDOR("log")
+local swin
+for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then swin = f end end
+eq(has(swin.box.text, "supplies: food on (5), water off (5), pet food on (5), healthstone reminder on"), true, "report line")
+g.env.SlashCmdList.CLOSESTVENDOR("")
+eq(has(table.concat(g.printed, "\n"), "Supplies: food on (5), water off (5), pet food on (5), healthstone reminder on"), true, "settings line")
+eq(has(table.concat(g.printed, "\n"), "Reminder sound: Whisper ping"), true, "sound line")
+eq(has(swin.box.text, "reminder sound whisper"), true, "sound in the report header")
 
 H.done()
