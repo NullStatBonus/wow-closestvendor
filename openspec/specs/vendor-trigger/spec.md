@@ -205,7 +205,7 @@ The addon SHALL provide `/cvn test sell`, `/cvn test repair`, `/cvn test arrows`
 - **THEN** the real triggers still ask when their own conditions are met
 
 ### Requirement: Configurable thresholds
-The addon SHALL persist a bag-slot threshold, a durability-percent threshold, an ammo-count threshold and a profession-points threshold per account, settable via slash command, and SHALL allow disabling each trigger independently.
+The addon SHALL persist a bag-slot threshold, a durability-percent threshold, an ammo-count threshold and a profession-points threshold per character, settable via slash command, and SHALL allow disabling each trigger independently.
 
 #### Scenario: Custom bag threshold
 - **WHEN** the user sets the bag threshold to 5

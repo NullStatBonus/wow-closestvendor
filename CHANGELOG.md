@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0
+
+- Settings are now saved per character: thresholds, switches, the reminder sound, the status window options and position, known professions, the hearthstone point and the debug log. The vendors, trainers and auctioneers the addon learns are still shared by the account.
+- A character that has not used the addon before starts from the settings the account had, or from the defaults. Known professions are learned again when you open a trade window or trainer.
+
 ## 1.1.0
 
 - Food, water and pet food: the addon counts the food, drink and pet food in your bags (bought, cooked, looted or conjured) and, at 5 or fewer by default, asks about the closest vendor that sells it. Water is for classes that use mana. Pet food is for a hunter with a pet out, and it follows the pet's diet (Meat, Fish, Bread, Cheese, Fruit, Fungus), found from the pet's creature family, so it works in every game language.

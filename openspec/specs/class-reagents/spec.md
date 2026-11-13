@@ -67,7 +67,7 @@ When a watched, enabled reagent is at or below the reagent threshold, and the ma
 - **THEN** the question closes or the pin is removed
 
 ### Requirement: Reagent master switch and thresholds
-"Ammo and reagents" SHALL be one on/off switch for both ammo and reagent questions. Ammo SHALL keep its own count threshold (default 200). All reagents SHALL share one count threshold, default 5, from 1 to 40, saved per account.
+"Ammo and reagents" SHALL be one on/off switch for both ammo and reagent questions. Ammo SHALL keep its own count threshold (default 200). All reagents SHALL share one count threshold, default 5, from 1 to 40, saved per character.
 
 #### Scenario: Switch off
 - **WHEN** the player turns the master switch off

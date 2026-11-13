@@ -67,7 +67,7 @@ local function closeQuestions()
     A.hidePopup(POPUP); A.hidePopup(POPUP_MAP); A.hidePopup(POPUP_DIST)
 end
 
-local DB, controller, timerArmed, panel, log
+local DB, CHAR, controller, timerArmed, panel, log
 local colorNote = "not registered" -- what Options said about the background colour control
 local buckets, trainerBuckets, auctionBuckets = {}, {}, {}
 local tracker, windowDirty, skillCache, playerClass
@@ -137,7 +137,7 @@ local function rebuildAuctioneers()
 end
 
 -- Notes where the player is: logs a change of instance, and while in the open world with a position
--- keeps it as DB.lastOutside { continent, map, x, y } (world x,y). Never updated inside an instance.
+-- keeps it as CHAR.lastOutside { continent, map, x, y } (world x,y). Never updated inside an instance.
 local lastInstance = "none"
 local function trackPlace()
     local inst = A.instanceType() or "none" -- unknown is treated as the open world
@@ -148,30 +148,30 @@ local function trackPlace()
     if inst ~= "none" then return end
     local continent, x, y, map = A.playerWorldPos()
     if not continent then return end
-    local o = DB.lastOutside
-    if not o then o = {}; DB.lastOutside = o end
+    local o = CHAR.lastOutside
+    if not o then o = {}; CHAR.lastOutside = o end
     o.continent, o.map, o.x, o.y = continent, map, x, y
 end
 
--- The hearthstone point, DB.hearth { name, continent, map, x, y }: the game gives only the name of
+-- The hearthstone point, CHAR.hearth { name, continent, map, x, y }: the game gives only the name of
 -- the bind location, so when that name changes the player's position is taken as the point. The
 -- first name seen is kept without a position: that hearthstone was bound somewhere else, earlier.
 local function learnHearth()
     local name = A.bindLocation()
     if not name then return end
-    local h = DB.hearth
-    if not h then DB.hearth = { name = name } return end
+    local h = CHAR.hearth
+    if not h then CHAR.hearth = { name = name } return end
     if h.name == name or (A.instanceType() or "none") ~= "none" then return end
     local continent, x, y, map = A.playerWorldPos()
     if not continent then return end -- tried again at the next zone change
-    DB.hearth = { name = name, continent = continent, map = map, x = x, y = y }
+    CHAR.hearth = { name = name, continent = continent, map = map, x = x, y = y }
     log.Add("hearthstone point learned: " .. name)
 end
 
 -- A saved place for the controller: "hearth" or "last", nil while its position is not known.
 local function anchor(which)
     local p
-    if which == "hearth" then p = DB.hearth else p = DB.lastOutside end
+    if which == "hearth" then p = CHAR.hearth else p = CHAR.lastOutside end
     if p and p.continent then return p end
 end
 
@@ -202,7 +202,7 @@ local function learnTrainer()
     local t = A.trainer()
     if not t then return end
     local set = {}
-    for _, name in ipairs(t.trades) do DB.professions[name] = true; set[name] = true end
+    for _, name in ipairs(t.trades) do CHAR.professions[name] = true; set[name] = true end
     local map, x, y = A.mapPosition()
     if map and ns.Discovery.RecordTrainer(DB.trainers, { t.id, t.name, map, x, y, t.faction }, t.trades) then
         rebuildTrainers()
@@ -223,29 +223,45 @@ end
 
 local function init()
     ClosestVendorDB = ClosestVendorDB or {}
-    DB = ClosestVendorDB
-    DB.cfg = DB.cfg or {}
-    for k, v in pairs(DEFAULTS) do if DB.cfg[k] == nil then DB.cfg[k] = v end end
-    DB.cfg.reagentOff = DB.cfg.reagentOff or {} -- item ids the player switched off; all others are on
+    DB = ClosestVendorDB -- shared by the account: the vendors, trainers and auctioneers learned
+    -- Everything the player sets, and what is true of this character only, is saved per character. A
+    -- character met for the first time starts from the settings the account had before they were per
+    -- character (left in DB for the next one), or from the defaults.
+    local first = ClosestVendorCharDB == nil
+    ClosestVendorCharDB = ClosestVendorCharDB or {}
+    CHAR = ClosestVendorCharDB
+    if first then
+        local function copy(v)
+            if type(v) ~= "table" then return v end
+            local t = {}
+            for k, x in pairs(v) do t[k] = copy(x) end
+            return t
+        end
+        if type(DB.cfg) == "table" then CHAR.cfg = copy(DB.cfg) end
+        if type(DB.hud) == "table" then CHAR.hud = copy(DB.hud) end
+    end
+    CHAR.cfg = CHAR.cfg or {}
+    for k, v in pairs(DEFAULTS) do if CHAR.cfg[k] == nil then CHAR.cfg[k] = v end end
+    CHAR.cfg.reagentOff = CHAR.cfg.reagentOff or {} -- item ids the player switched off; all others are on
     -- A saved window number outside its range, or a colour that is not one, is put right.
     for _, key in ipairs({ "hudScale", "hudAlpha", "hudTextAlpha", "reagentBuyTarget" }) do
-        local v, limits = tonumber(DB.cfg[key]), ns.Commands.LIMITS[key]
-        DB.cfg[key] = v and math.max(limits[1], math.min(limits[2], v)) or DEFAULTS[key]
+        local v, limits = tonumber(CHAR.cfg[key]), ns.Commands.LIMITS[key]
+        CHAR.cfg[key] = v and math.max(limits[1], math.min(limits[2], v)) or DEFAULTS[key]
     end
-    if not ns.Status.Color(DB.cfg.hudColor) then DB.cfg.hudColor = DEFAULTS.hudColor end
+    if not ns.Status.Color(CHAR.cfg.hudColor) then CHAR.cfg.hudColor = DEFAULTS.hudColor end
     -- Status window group key -> mode, only for groups the player changed. Anything else in it (a key
     -- that is not a group, a mode that is not one) is dropped: it would mean the default anyway.
-    if type(DB.cfg.hudRow) ~= "table" then DB.cfg.hudRow = {} end
-    for key, mode in pairs(DB.cfg.hudRow) do
-        if ns.Status.Group(key) ~= key or not ns.Status.MODES[mode] then DB.cfg.hudRow[key] = nil end
+    if type(CHAR.cfg.hudRow) ~= "table" then CHAR.cfg.hudRow = {} end
+    for key, mode in pairs(CHAR.cfg.hudRow) do
+        if ns.Status.Group(key) ~= key or not ns.Status.MODES[mode] then CHAR.cfg.hudRow[key] = nil end
     end
-    DB.hud = DB.hud or {} -- where the status window was dragged to; empty means its default place
+    CHAR.hud = CHAR.hud or {} -- where the status window was dragged to; empty means its default place
     DB.learned = DB.learned or {}
     DB.auctioneers = DB.auctioneers or {}
     DB.trainers = DB.trainers or {}
-    DB.professions = DB.professions or {}
-    DB.log = DB.log or {}
-    log = ns.Log.New(DB.log, A.now)
+    CHAR.professions = CHAR.professions or {}
+    CHAR.log = CHAR.log or {}
+    log = ns.Log.New(CHAR.log, A.now)
 end
 
 -- The class reagents being watched, with their counts: { { item, count, name } }, or nil when the
@@ -255,7 +271,7 @@ local function reagentList()
     local class = A.classToken()
     if not class then return end
     local out = {}
-    for _, item in ipairs(ns.Reagents.Watched(class, A.knowsSpell, DB.cfg.reagentOff)) do
+    for _, item in ipairs(ns.Reagents.Watched(class, A.knowsSpell, CHAR.cfg.reagentOff)) do
         local count = A.itemCount(item.id)
         if count then out[#out + 1] = { item = item, count = count, name = A.itemName(item.id) or item.name } end
     end
@@ -274,7 +290,7 @@ end
 
 -- One report line: each supply switch with its threshold.
 local function supplyLine()
-    local c = DB.cfg
+    local c = CHAR.cfg
     return ("supplies: food %s (%d), water %s (%d), pet food %s (%d), healthstone reminder %s, reminder sound %s"):format(
         c.foodEnabled and "on" or "off", c.foodThreshold, c.waterEnabled and "on" or "off", c.waterThreshold,
         c.petFoodEnabled and "on" or "off", c.petFoodThreshold, c.healthstoneRemind and "on" or "off",
@@ -317,8 +333,8 @@ local STATUS_SRC = {
 local function refreshWindow()
     if not tracker then return end
     playerClass = playerClass or A.classToken()
-    local cfg = DB.cfg
-    STATUS_SRC.known = DB.professions
+    local cfg = CHAR.cfg
+    STATUS_SRC.known = CHAR.professions
     local rows = ns.Status.Visible(ns.Status.Rows(ns.Status.Snapshot(STATUS_SRC, cfg, playerClass), cfg, playerClass), cfg)
     local ok, err = pcall(tracker.Show, rows)
     if not ok then
@@ -351,8 +367,8 @@ end
 
 local function buildWindow()
     local ok, t = pcall(ns.Tracker.New, {
-        cfg = DB.cfg,
-        pos = DB.hud,
+        cfg = CHAR.cfg,
+        pos = CHAR.hud,
         shiftDown = A.shiftDown,
         go = function(row)
             log.Add("row click: " .. row.key .. " (" .. row.text .. ")")
@@ -368,7 +384,7 @@ end
 
 -- One report line: the status window settings; only group modes that are not the default are listed.
 local function windowLine()
-    local c, rows = DB.cfg, {}
+    local c, rows = CHAR.cfg, {}
     for _, group in ipairs(ns.Status.GROUPS) do
         local mode = ns.Status.Mode(c, group)
         if mode ~= ns.Status.DEFAULT_MODE then rows[#rows + 1] = group .. "=" .. mode end
@@ -381,13 +397,13 @@ end
 local function reagentLine()
     local watching, off = {}, {}
     for _, r in ipairs(reagentList() or {}) do watching[#watching + 1] = r.item.name .. ":" .. r.count end
-    for id, v in pairs(DB.cfg.reagentOff) do
+    for id, v in pairs(CHAR.cfg.reagentOff) do
         local item = v and ns.Reagents.ById(id)
         if item then off[#off + 1] = item.name end
     end
     table.sort(off)
     return ("reagents: class %s, threshold %d, watching: %s, switched off: %s"):format(tostring(A.classToken()),
-        DB.cfg.reagentThreshold, #watching > 0 and table.concat(watching, ", ") or "none", #off > 0 and table.concat(off, ", ") or "none")
+        CHAR.cfg.reagentThreshold, #watching > 0 and table.concat(watching, ", ") or "none", #off > 0 and table.concat(off, ", ") or "none")
 end
 
 -- The report: facts about this client and addon, then the debug log.
@@ -398,11 +414,11 @@ local function reportText()
     local trainers, professions = 0, {}
     for _ in pairs(DB.learned) do learned = learned + 1 end
     for _ in pairs(DB.trainers) do trainers = trainers + 1 end
-    for name in pairs(DB.professions) do professions[#professions + 1] = name end
+    for name in pairs(CHAR.professions) do professions[#professions + 1] = name end
     table.sort(professions)
     for id, b in pairs(buckets) do continents[#continents + 1] = id .. ":" .. #b end
     table.sort(continents)
-    local c = DB.cfg
+    local c = CHAR.cfg
     local header = {
         "addon version: " .. tostring(info.addon),
         "game: " .. tostring(info.gameVersion) .. " build " .. tostring(info.build) .. ", interface " .. tostring(info.interface),
@@ -445,7 +461,7 @@ local function start()
     local nav = { Set = function(v) return ns.Nav.Set(A.navApi(say), v) end,
                   Clear = function(h) ns.Nav.Clear(A.navApi(say), h) end }
     controller = ns.Controller.New({
-        cfg = DB.cfg,
+        cfg = CHAR.cfg,
         log = function(msg) log.Add(msg) end,
         freeSlots = A.freeSlots,
         lowestDurability = A.lowestDurability,
@@ -469,7 +485,7 @@ local function start()
         cancelConfirm = closeQuestions,
         questionOpen = function() return A.popupShown(POPUP) or A.popupShown(POPUP_MAP) or A.popupShown(POPUP_DIST) end,
         skills = A.skills,
-        known = DB.professions,
+        known = CHAR.professions,
         trainerBuckets = trainerBuckets,
         auctionBuckets = auctionBuckets,
         say = say,
@@ -481,7 +497,7 @@ local function start()
         after = A.after,
     })
     -- The settings page is optional: if the client's settings API differs, only the page is lost.
-    local ok, category = pcall(ns.Options.Register, DB.cfg, DEFAULTS, function() evaluate(); applyWindow() end, A.classToken(),
+    local ok, category = pcall(ns.Options.Register, CHAR.cfg, DEFAULTS, function() evaluate(); applyWindow() end, A.classToken(),
         A.hasColorPicker() and A.pickColor or nil,
         function(text) colorNote = text; log.Add(text) end, A.hasSwatchPicker())
     if not ok then colorNote = "settings page failed: " .. tostring(category) end
@@ -495,7 +511,7 @@ SLASH_CLOSESTVENDOR1 = "/cvn"
 SLASH_CLOSESTVENDOR2 = "/closestvendor"
 SlashCmdList["CLOSESTVENDOR"] = function(msg)
     if not DB then return end
-    local lines, action = ns.Commands.Run(DB.cfg, msg, A.classToken())
+    local lines, action = ns.Commands.Run(CHAR.cfg, msg, A.classToken())
     for _, line in ipairs(lines) do say(line) end
     if action and action[1] == "open" then
         if openSettings() then return end
@@ -512,7 +528,7 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
         return
     end
     if action and action[1] == "sound" then
-        A.playSound(ns.Supplies.SoundId(DB.cfg.remindSound))
+        A.playSound(ns.Supplies.SoundId(CHAR.cfg.remindSound))
         return
     end
     if action and action[1] == "test" then
@@ -522,9 +538,9 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
     end
     if action and action[1] == "hud" and action[2] == "pick" then
         -- The picker works wherever the game has one, settings page or not.
-        local r, g, b = ns.Status.Color(DB.cfg.hudColor)
+        local r, g, b = ns.Status.Color(CHAR.cfg.hudColor)
         local opened = A.hasColorPicker() and A.pickColor(r or 0, g or 0, b or 0, function(nr, ng, nb)
-            DB.cfg.hudColor = ns.Status.Hex(nr, ng, nb)
+            CHAR.cfg.hudColor = ns.Status.Hex(nr, ng, nb)
             applyWindow()
         end)
         if not opened then
@@ -533,10 +549,10 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
         return
     end
     if action and action[1] == "demo" then
-        -- A made-up window and one made-up warning for a few seconds; DB.cfg is only read.
+        -- A made-up window and one made-up warning for a few seconds; CHAR.cfg is only read.
         if not controller then return end
         local roll = ns.Status.Roller(A.now())
-        local snap, fake = ns.Status.Demo(roll, DB.cfg)
+        local snap, fake = ns.Status.Demo(roll, CHAR.cfg)
         local started = controller.Demo(roll, function()
             if tracker then pcall(tracker.Demo, nil) end
             refreshWindow()
@@ -547,7 +563,7 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
         return
     end
     if action and action[1] == "hud" and action[2] == "reset" then
-        for k in pairs(DB.hud) do DB.hud[k] = nil end
+        for k in pairs(CHAR.hud) do CHAR.hud[k] = nil end
         log.Add("status window position reset")
     end
     evaluate() -- a changed threshold may apply right away
@@ -568,9 +584,9 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         if DB then learnMerchant() end
         if controller then controller.OnMerchantShow() end
         if DB then
-            local _, spent = ns.Ammo.OnMerchant(DB.cfg, AMMO_ENV)
+            local _, spent = ns.Ammo.OnMerchant(CHAR.cfg, AMMO_ENV)
             ammoSpent = spent or 0
-            ns.Reagents.OnMerchant(DB.cfg, REAGENT_ENV)
+            ns.Reagents.OnMerchant(CHAR.cfg, REAGENT_ENV)
         end
     elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
         local trades = DB and learnTrainer()
@@ -585,7 +601,7 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         -- A craft is a successful cast while a tradeskill or craft window is open.
         local name = DB and A.craftProfession()
         if name then
-            DB.professions[name] = true
+            CHAR.professions[name] = true
             if event == "UNIT_SPELLCAST_SUCCEEDED" and controller then controller.OnCraft() end
         end
     else

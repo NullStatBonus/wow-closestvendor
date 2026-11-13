@@ -55,7 +55,7 @@ When food or water is watched, enabled, and at or below its own threshold, and t
 - **THEN** the question closes or the pin is removed
 
 ### Requirement: Food and water settings
-Food and water SHALL each have an on/off setting, on by default, and their own count threshold from 1 to 40, default 5, saved per account. The master "Ammo and reagents" switch SHALL turn both off when it is off. The settings page SHALL show food and water controls; a class without water SHALL NOT be shown the water controls.
+Food and water SHALL each have an on/off setting, on by default, and their own count threshold from 1 to 40, default 5, saved per character. The master "Ammo and reagents" switch SHALL turn both off when it is off. The settings page SHALL show food and water controls; a class without water SHALL NOT be shown the water controls.
 
 #### Scenario: Separate thresholds
 - **WHEN** the player sets the food threshold to 10 and the water threshold to 3
