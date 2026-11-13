@@ -55,7 +55,7 @@ When no known vendor on this continent sells any item the pet eats, the addon SH
 - **THEN** one chat line says no known vendor sells food this pet eats
 
 ### Requirement: Pet food settings and commands
-Pet food SHALL have an on/off setting, on by default, and its own count threshold from 1 to 40, default 5, saved per account. The addon SHALL provide `/cvn petfood <count>`, `/cvn petfood on|off` and `/cvn test petfood`. A count outside 1 to 40 SHALL print a message and change nothing. The settings page SHALL show the pet food controls only to hunters.
+Pet food SHALL have an on/off setting, on by default, and its own count threshold from 1 to 40, default 5, saved per character. The addon SHALL provide `/cvn petfood <count>`, `/cvn petfood on|off` and `/cvn test petfood`. A count outside 1 to 40 SHALL print a message and change nothing. The settings page SHALL show the pet food controls only to hunters.
 
 #### Scenario: Switch off
 - **WHEN** the player runs `/cvn petfood off`

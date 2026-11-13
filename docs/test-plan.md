@@ -527,6 +527,13 @@ Enter `/cvn debug on`. Use `/cvn` to check the line "Supplies: food on (5), wate
 - [ ] As a mage with Reagents set to Always, look at the window. Expected: the Conjured Food and Conjured Water rows and the Food and Water rows. They are separate rows and do not conflict.
 - [ ] Set Supplies to Never. Expected: no supply rows.
 
+## 15. Settings per character
+
+- [ ] On character A, set `/cvn bags 30` and `/cvn sound ping`. Log in character B on the same account. Expected: B shows its own values (its old ones, not 30 or ping).
+- [ ] Change the status window position on A. Expected: B's window stays where it was.
+- [ ] Open a merchant the addon does not know on A. Log in B. Expected: B can be directed to it.
+- [ ] Log in a character that never used the addon, on an account with earlier settings. Expected: it starts with those settings.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

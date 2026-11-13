@@ -321,7 +321,7 @@ Type `/cvn config` to open the main page.
 - `/cvn` shows the current settings.
 - `/cvn config` opens the settings page.
 - `/closestvendor` works the same as `/cvn`.
-- Settings are saved per account.
+- Settings are saved per character. The vendors, trainers and auctioneers the addon learns are shared by the account. A character you have not used with the addon before starts from the settings you had before this was per character.
 
 ### Thresholds
 

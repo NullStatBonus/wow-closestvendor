@@ -107,6 +107,7 @@ local function boot(opts)
         end,
         StaticPopup_Hide = function() g.popup = nil; g.hidden = (g.hidden or 0) + 1 end,
         ClosestVendorDB = opts.db,
+        ClosestVendorCharDB = opts.charDb,
     }
     if opts.tomtom then
         env.TomTom = { AddWaypoint = function(_, map, x, y, o) g.tomtom[#g.tomtom + 1] = o.title; return {} end,
@@ -151,15 +152,15 @@ eq(g0.env.ClosestVendorDB, nil, "other addon's load leaves our saved variables a
 -- 1. Saved variables get defaults and keep existing values.
 local g = boot({ db = { cfg = { bagThreshold = 5 } } })
 g.onEvent("ADDON_LOADED", "SomeOtherAddon")
-eq(g.env.ClosestVendorDB.cfg.bagThreshold, 5, "other addon's load ignored")
+eq(g.env.ClosestVendorCharDB, nil, "other addon's load ignored")
 login(g)
-local cfg = g.env.ClosestVendorDB.cfg
+local cfg = g.env.ClosestVendorCharDB.cfg
 eq(cfg.bagThreshold, 5, "existing value kept")
 eq(cfg.durThreshold, 20, "default filled in")
 eq(cfg.bagEnabled, true, "default flag filled in")
 eq(cfg.tradeThreshold, 10, "profession threshold default")
 eq(cfg.tradeEnabled, true, "profession switch default")
-eq(g.env.ClosestVendorDB.trainers ~= nil and g.env.ClosestVendorDB.professions ~= nil, true, "trainer and profession tables created")
+eq(g.env.ClosestVendorDB.trainers ~= nil and g.env.ClosestVendorCharDB.professions ~= nil, true, "trainer and profession tables created")
 
 -- 2. Registers the events it needs.
 for _, e in ipairs({ "BAG_UPDATE_DELAYED", "UPDATE_INVENTORY_DURABILITY", "PLAYER_REGEN_ENABLED", "MERCHANT_SHOW", "PLAYER_LOGIN" }) do
@@ -286,7 +287,7 @@ eq(g.env.SLASH_CLOSESTVENDOR2, "/closestvendor", "long slash alias")
 g.env.SlashCmdList.CLOSESTVENDOR("bags 5") -- before login: ignored, no error
 login(g)
 g.env.SlashCmdList.CLOSESTVENDOR("bags 25")
-eq(g.env.ClosestVendorDB.cfg.bagThreshold, 25, "threshold saved in the saved-variables table")
+eq(g.env.ClosestVendorCharDB.cfg.bagThreshold, 25, "threshold saved in the saved-variables table")
 eq(g.printed[1]:find("25 free slot", 1, true) ~= nil, true, "status printed")
 eq(lastPrinted(g):find("Closest vendor:", 1, true) ~= nil, true, "20 free <= 25: navigation starts at once")
 
@@ -451,7 +452,7 @@ g.equipped = { [18] = 100, [0] = 200 }; g.counts = { [200] = 300 }
 g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "300 arrows is above the default 200")
 g.env.SlashCmdList.CLOSESTVENDOR("ammo 400")
-eq(g.env.ClosestVendorDB.cfg.ammoThreshold, 400, "saved")
+eq(g.env.ClosestVendorCharDB.cfg.ammoThreshold, 400, "saved")
 eq(g.popup ~= nil, true, "now asks at once")
 g = boot(); login(g)
 g.autoAccept = false
@@ -527,7 +528,7 @@ local function setting(g, key) for _, s in ipairs(g.settings.settings) do if s.k
 g = boot({ settings = true }); login(g)
 eq(g.settings.category.name, "Closest Vendor", "settings page registered")
 eq(g.settings.registered, g.settings.category, "listed under AddOns")
-eq(setting(g, "bagThreshold").tbl, g.env.ClosestVendorDB.cfg, "page edits the saved settings table")
+eq(setting(g, "bagThreshold").tbl, g.env.ClosestVendorCharDB.cfg, "page edits the saved settings table")
 eq(setting(g, "ammoThreshold").default, 200, "ammo default shown")
 eq(setting(g, "bagThreshold").default, 2, "bag default shown")
 g.autoAccept = false
@@ -535,7 +536,7 @@ g.free = 20
 g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "plenty of space: silent")
 setting(g, "bagThreshold"):SetValue(25)
-eq(g.env.ClosestVendorDB.cfg.bagThreshold, 25, "slider saved")
+eq(g.env.ClosestVendorCharDB.cfg.bagThreshold, 25, "slider saved")
 eq(g.popup ~= nil, true, "a slider change applies at once")
 
 g = boot({ settings = true }); login(g)
@@ -670,13 +671,13 @@ g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "an unreadable ammo count is not treated as no ammo")
 
 -- 21. Debug log: off by default, switched with /cvn debug, saved with the other settings.
-local function logText(g) local t = {} for _, e in ipairs(g.env.ClosestVendorDB.log.entries) do t[#t + 1] = e.msg end return table.concat(t, "\n") end
+local function logText(g) local t = {} for _, e in ipairs(g.env.ClosestVendorCharDB.log.entries) do t[#t + 1] = e.msg end return table.concat(t, "\n") end
 local function has(text, part) return text:find(part, 1, true) ~= nil end
 g = boot(); login(g)
 g.onEvent("BAG_UPDATE_DELAYED")
-eq(#g.env.ClosestVendorDB.log.entries, 0, "nothing recorded by default")
+eq(#g.env.ClosestVendorCharDB.log.entries, 0, "nothing recorded by default")
 g.env.SlashCmdList.CLOSESTVENDOR("debug on")
-eq(g.env.ClosestVendorDB.log.enabled, true, "switched on and saved")
+eq(g.env.ClosestVendorCharDB.log.enabled, true, "switched on and saved")
 eq(has(lastPrinted(g), "Debug log on"), true, "says so")
 g.onEvent("BAG_UPDATE_DELAYED")
 g.onEvent("UNIT_INVENTORY_CHANGED", "player")
@@ -694,12 +695,12 @@ text = logText(g)
 eq(has(text, "trigger go sell (bags=1"), true, "decisions recorded with their values")
 eq(has(text, "question shown: sell"), true, "question recorded")
 g.env.SlashCmdList.CLOSESTVENDOR("debug off")
-local count = #g.env.ClosestVendorDB.log.entries
+local count = #g.env.ClosestVendorCharDB.log.entries
 g.onEvent("BAG_UPDATE_DELAYED")
-eq(#g.env.ClosestVendorDB.log.entries, count, "off again: nothing more recorded")
+eq(#g.env.ClosestVendorCharDB.log.entries, count, "off again: nothing more recorded")
 
 -- Saved variables: the switch and the entries survive a reload.
-g = boot({ db = { log = { enabled = true, entries = { { t = 1, msg = "from the last session" } } } } }); login(g)
+g = boot({ charDb = { log = { enabled = true, entries = { { t = 1, msg = "from the last session" } } } } }); login(g)
 eq(has(logText(g), "from the last session"), true, "entries restored")
 eq(has(logText(g), "---- login ----"), true, "a login marker separates sessions")
 
@@ -749,13 +750,13 @@ eq(has(win.box.text, "navigation: tomtom"), true, "report names the navigation m
 -- No window available: the facts and the newest entries go to chat; a pipe cannot escape.
 g = boot(); login(g)
 g.env.SlashCmdList.CLOSESTVENDOR("debug on")
-g.env.ClosestVendorDB.log.entries[#g.env.ClosestVendorDB.log.entries + 1] = { t = 1, msg = "odd|text" }
+g.env.ClosestVendorCharDB.log.entries[#g.env.ClosestVendorCharDB.log.entries + 1] = { t = 1, msg = "odd|text" }
 g.frameThrows = "ClosestVendorReport"
 g.env.SlashCmdList.CLOSESTVENDOR("log")
 local chat = table.concat(g.printed, "\n")
 eq(has(chat, "addon version: 0.1.0"), true, "fallback prints the facts")
 eq(has(chat, "odd||text"), true, "fallback prints the entries, pipe doubled")
-for i = 1, 40 do g.env.ClosestVendorDB.log.entries[#g.env.ClosestVendorDB.log.entries + 1] = { t = i, msg = "filler " .. i } end
+for i = 1, 40 do g.env.ClosestVendorCharDB.log.entries[#g.env.ClosestVendorCharDB.log.entries + 1] = { t = i, msg = "filler " .. i } end
 g.printed = {}
 g.env.SlashCmdList.CLOSESTVENDOR("log")
 local filler = 0
@@ -767,10 +768,10 @@ eq(has(table.concat(g.printed, "\n"), "filler 40"), true, "the newest is among t
 g = boot(); login(g)
 g.env.SlashCmdList.CLOSESTVENDOR("debug on")
 g.onEvent("BAG_UPDATE_DELAYED")
-eq(#g.env.ClosestVendorDB.log.entries > 0, true, "something to clear")
+eq(#g.env.ClosestVendorCharDB.log.entries > 0, true, "something to clear")
 g.env.SlashCmdList.CLOSESTVENDOR("log clear")
-eq(#g.env.ClosestVendorDB.log.entries, 0, "cleared")
-eq(g.env.ClosestVendorDB.log.enabled, true, "clearing does not switch it off")
+eq(#g.env.ClosestVendorCharDB.log.entries, 0, "cleared")
+eq(g.env.ClosestVendorCharDB.log.enabled, true, "clearing does not switch it off")
 eq(has(lastPrinted(g), "Debug log cleared"), true, "says so")
 
 -- Before login the commands do nothing and do not error.
@@ -802,7 +803,7 @@ local DB = g.env.ClosestVendorDB
 eq(DB.trainers[5513][2], "Gelman Stonehand", "trainer learned")
 eq(DB.trainers[5513][7].Mining and DB.trainers[5513][7].Engineering, true, "with what it teaches")
 eq(DB.trainers[5513][6], 1, "and its faction")
-eq(DB.professions.Mining and DB.professions.Engineering, true, "professions seen at the trainer")
+eq(g.env.ClosestVendorCharDB.professions.Mining and g.env.ClosestVendorCharDB.professions.Engineering, true, "professions seen at the trainer")
 g.onEvent("TRAINER_UPDATE")
 local npcCount = 0
 for _ in pairs(DB.trainers) do npcCount = npcCount + 1 end
@@ -852,7 +853,7 @@ g.popup = nil
 
 -- Learned trainers are saved and used after a reload.
 local saved = g.env.ClosestVendorDB
-local g2 = boot({ tomtom = true, db = saved }); login(g2)
+local g2 = boot({ tomtom = true, db = saved, charDb = g.env.ClosestVendorCharDB }); login(g2)
 g2.autoAccept = false
 g2.skillLines = { { "Mining", 70, 75 } }; g2.tradeWindow = "Mining"
 g2.onEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
@@ -862,7 +863,7 @@ eq(g2.popup ~= nil and has(g2.popup.text, "Gelman Stonehand"), true, "learned tr
 g = boot({ tomtom = true }); login(g)
 g.skillLines = { { "Tailoring", 70, 75 } }; g.tradeWindow = "Tailoring"
 g.onEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
-eq(g.env.ClosestVendorDB.professions.Tailoring, true, "profession learned from the crafting window")
+eq(g.env.ClosestVendorCharDB.professions.Tailoring, true, "profession learned from the crafting window")
 eq(g.popup, nil, "no trainer, no question")
 eq(has(table.concat(g.printed, "\n"), "No known trainer for Tailoring"), true, "told in chat")
 local told = #g.printed
@@ -886,7 +887,7 @@ g.skillLines = { { "Mining", 60, 75 } }; g.tradeWindow = "Mining"
 g.onEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 eq(g.popup, nil, "15 away with the default 10")
 g.env.SlashCmdList.CLOSESTVENDOR("trade 20")
-eq(g.env.ClosestVendorDB.cfg.tradeThreshold, 20, "/cvn trade sets it")
+eq(g.env.ClosestVendorCharDB.cfg.tradeThreshold, 20, "/cvn trade sets it")
 g.env.SlashCmdList.CLOSESTVENDOR("debug on")
 g.onEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 eq(g.popup ~= nil, true, "asks with the raised threshold")
@@ -920,7 +921,7 @@ g = boot({ tomtom = true }); login(g)
 g.pos = nil
 visit(g, 901, "Lost Trainer", { "Mining" })
 eq(g.env.ClosestVendorDB.trainers[901], nil, "no position: not recorded")
-eq(g.env.ClosestVendorDB.professions.Mining, true, "but the profession was still seen")
+eq(g.env.ClosestVendorCharDB.professions.Mining, true, "but the profession was still seen")
 
 -- Opening a tradeskill window teaches the profession, but is not a craft.
 g = boot({ tomtom = true }); login(g)
@@ -1043,7 +1044,7 @@ g = mage({ spells = {} }); g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "spell not known")
 g = mage({ class = "WARRIOR" }); g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "a class without reagents")
-g = mage(); g.env.ClosestVendorDB.cfg.reagentOff[17020] = true; g.onEvent("BAG_UPDATE_DELAYED")
+g = mage(); g.env.ClosestVendorCharDB.cfg.reagentOff[17020] = true; g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "switched off")
 g = mage(); g.env.SlashCmdList.CLOSESTVENDOR("ammo off"); g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "master switch off")
@@ -1061,9 +1062,9 @@ eq(g.popup, nil, "an unreadable reagent count is not treated as none")
 
 -- A settings default exists and the off-list is created for old saved data.
 g = boot({ tomtom = true, db = { cfg = { ammoThreshold = 100 } } }); login(g)
-eq(g.env.ClosestVendorDB.cfg.reagentThreshold, 5, "default reagent threshold")
-eq(type(g.env.ClosestVendorDB.cfg.reagentOff), "table", "off-list exists")
-eq(g.env.ClosestVendorDB.cfg.ammoThreshold, 100, "saved settings kept")
+eq(g.env.ClosestVendorCharDB.cfg.reagentThreshold, 5, "default reagent threshold")
+eq(type(g.env.ClosestVendorCharDB.cfg.reagentOff), "table", "off-list exists")
+eq(g.env.ClosestVendorCharDB.cfg.ammoThreshold, 100, "saved settings kept")
 
 -- Merchants: the reagents they sell are learned, and a learned record keeps them.
 g = mage(); g.autoAccept = true
@@ -1083,7 +1084,7 @@ eq(g.shown, 1, "and is still found as a seller")
 eq(has(g.popup.text, "Reagent Shop"), true, "learned record still offered: " .. g.popup.text)
 
 -- The debug report lists the threshold, the watched reagents and the switched-off ones.
-g = mage(); g.env.ClosestVendorDB.cfg.reagentOff[17031] = true
+g = mage(); g.env.ClosestVendorCharDB.cfg.reagentOff[17031] = true
 g.env.SlashCmdList.CLOSESTVENDOR("log")
 local rwin
 for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then rwin = f end end
@@ -1109,7 +1110,7 @@ local function reagentShop(over)
     return gg
 end
 g = reagentShop()
-cfg = g.env.ClosestVendorDB.cfg
+cfg = g.env.ClosestVendorCharDB.cfg
 eq(tostring(cfg.reagentBuyEnabled) .. "/" .. tostring(cfg.reagentBuyPrompt) .. "/" .. cfg.reagentBuyTarget, "false/true/20", "defaults: off, ask first, 20")
 g.onEvent("MERCHANT_SHOW")
 eq(#g.bought, 0, "off by default: nothing bought")
@@ -1129,14 +1130,14 @@ g.onEvent("MERCHANT_SHOW")
 eq(table.concat(g.bought, ","), "1:10", "buys at once with the money the ammo left")
 eq(has(lastPrinted(g), "(all you could afford)"), true, "partial: " .. lastPrinted(g))
 g = boot({ db = { cfg = { reagentBuyTarget = 150 } } }); login(g)
-eq(g.env.ClosestVendorDB.cfg.reagentBuyTarget, 100, "a saved amount above 100 is held to 100")
+eq(g.env.ClosestVendorCharDB.cfg.reagentBuyTarget, 100, "a saved amount above 100 is held to 100")
 g = boot({ db = { cfg = { reagentBuyTarget = -3 } } }); login(g)
-eq(g.env.ClosestVendorDB.cfg.reagentBuyTarget, 0, "and one below 0 to 0")
+eq(g.env.ClosestVendorCharDB.cfg.reagentBuyTarget, 0, "and one below 0 to 0")
 
 -- Instances. Full bags in a battleground: nothing is asked inside, and the question comes after
 -- leaving (it used to be lost for good).
 g = boot(); login(g); g.autoAccept = false
-g.env.ClosestVendorDB.log.enabled = true
+g.env.ClosestVendorCharDB.log.enabled = true
 g.onEvent("PLAYER_ENTERING_WORLD")
 g.instance = "pvp"
 g.onEvent("PLAYER_ENTERING_WORLD")
@@ -1149,7 +1150,7 @@ g.instance = nil
 g.onEvent("PLAYER_ENTERING_WORLD")
 eq(g.shown, 1, "asked after leaving with full bags")
 local function logged(game, text)
-    for _, e in ipairs(game.env.ClosestVendorDB.log.entries or {}) do if e.msg:find(text, 1, true) then return true end end
+    for _, e in ipairs(game.env.ClosestVendorCharDB.log.entries or {}) do if e.msg:find(text, 1, true) then return true end end
     return false
 end
 eq(logged(g, "instance: none -> pvp"), true, "entering is logged")
@@ -1164,86 +1165,86 @@ eq(g.shown, 1, "unknown instance state: asked as in the open world")
 -- The last position outside is kept while in the open world, and left alone inside an instance.
 g = boot(); login(g)
 g.onEvent("PLAYER_ENTERING_WORLD")
-local lo = g.env.ClosestVendorDB.lastOutside
+local lo = g.env.ClosestVendorCharDB.lastOutside
 eq(lo.continent .. ":" .. lo.map .. ":" .. lo.x .. ":" .. lo.y, "1:100:500:500", "position saved with its continent and map")
 g.pos = { map = 100, x = 0.6, y = 0.5 }
 g.onEvent("BAG_UPDATE_DELAYED")
-eq(g.env.ClosestVendorDB.lastOutside.x, 600, "follows the player outside")
+eq(g.env.ClosestVendorCharDB.lastOutside.x, 600, "follows the player outside")
 g.instance = "party"; g.pos = { map = 100, x = 0.1, y = 0.1 }
 g.onEvent("BAG_UPDATE_DELAYED")
-eq(g.env.ClosestVendorDB.lastOutside.x, 600, "not updated in a dungeon")
+eq(g.env.ClosestVendorCharDB.lastOutside.x, 600, "not updated in a dungeon")
 g.instance = nil; g.pos = nil
 g.onEvent("BAG_UPDATE_DELAYED")
-eq(g.env.ClosestVendorDB.lastOutside.x, 600, "no position: the old one is kept")
+eq(g.env.ClosestVendorCharDB.lastOutside.x, 600, "no position: the old one is kept")
 g = boot(); login(g); g.pos = nil
 g.onEvent("PLAYER_ENTERING_WORLD")
-eq(g.env.ClosestVendorDB.lastOutside, nil, "never had a position: nothing saved")
+eq(g.env.ClosestVendorCharDB.lastOutside, nil, "never had a position: nothing saved")
 
 -- The hearthstone point. The first bind name seen has no position (bound before the addon saw it);
 -- a new name takes the player's position.
 g = boot(); login(g); g.bind = "Goldshire"
-g.env.ClosestVendorDB.log.enabled = true
+g.env.ClosestVendorCharDB.log.enabled = true
 g.onEvent("PLAYER_ENTERING_WORLD")
-local hearth = g.env.ClosestVendorDB.hearth
+local hearth = g.env.ClosestVendorCharDB.hearth
 eq(hearth.name, "Goldshire", "bind name remembered")
 eq(hearth.continent, nil, "but no position: it was bound earlier")
 g.onEvent("ZONE_CHANGED_NEW_AREA")
-eq(g.env.ClosestVendorDB.hearth.continent, nil, "same name: still no position")
+eq(g.env.ClosestVendorCharDB.hearth.continent, nil, "same name: still no position")
 g.bind = "Stormwind"; g.pos = { map = 100, x = 0.3, y = 0.4 }
 g.onEvent("BAG_UPDATE_DELAYED")
-eq(g.env.ClosestVendorDB.hearth.name, "Goldshire", "only read on login and zone change")
+eq(g.env.ClosestVendorCharDB.hearth.name, "Goldshire", "only read on login and zone change")
 g.instance = "party"
 g.onEvent("ZONE_CHANGED_NEW_AREA")
-eq(g.env.ClosestVendorDB.hearth.name, "Goldshire", "not learned inside an instance")
+eq(g.env.ClosestVendorCharDB.hearth.name, "Goldshire", "not learned inside an instance")
 g.instance = nil; g.pos = nil
 g.onEvent("ZONE_CHANGED_NEW_AREA")
-eq(g.env.ClosestVendorDB.hearth.name, "Goldshire", "no position: the old point is kept")
+eq(g.env.ClosestVendorCharDB.hearth.name, "Goldshire", "no position: the old point is kept")
 g.pos = { map = 100, x = 0.3, y = 0.4 }
 g.onEvent("ZONE_CHANGED_NEW_AREA")
-hearth = g.env.ClosestVendorDB.hearth
+hearth = g.env.ClosestVendorCharDB.hearth
 eq(hearth.name .. ":" .. hearth.continent .. ":" .. hearth.map .. ":" .. hearth.x .. ":" .. hearth.y, "Stormwind:1:100:300:400", "rebind: the player's position becomes the point")
 eq(logged(g, "hearthstone point learned: Stormwind"), true, "and it is logged")
 g.bind = nil
 g.onEvent("ZONE_CHANGED_NEW_AREA")
-eq(g.env.ClosestVendorDB.hearth.name, "Stormwind", "an unreadable bind name keeps the point")
+eq(g.env.ClosestVendorCharDB.hearth.name, "Stormwind", "an unreadable bind name keeps the point")
 
 -- ---- Status window, its settings and auctioneers ----
 
 -- New saved keys get their defaults; old settings are kept.
 g = boot({ db = { cfg = { hudScale = 150, hudRow = { bags = "always" } }, hud = { point = "TOP", x = 5, y = -5 } } }); login(g)
-cfg = g.env.ClosestVendorDB.cfg
+cfg = g.env.ClosestVendorCharDB.cfg
 eq(cfg.hudScale, 150, "saved scale kept")
 eq(cfg.hudRow.bags, "always", "saved row mode kept")
-eq(g.env.ClosestVendorDB.hud.point, "TOP", "saved position kept")
+eq(g.env.ClosestVendorCharDB.hud.point, "TOP", "saved position kept")
 eq(tostring(cfg.hudLocked) .. "/" .. cfg.hudAlpha .. "/" .. cfg.instanceAnchor .. "/" .. tostring(cfg.ahEnabled), "false/80/hearth/false", "defaults: unlocked, opacity 80, hearth anchor, auction house off")
 -- Keys an earlier build saved per row, and modes that are not one, are dropped at login.
 g = boot({ db = { cfg = { hudRow = { ["prof:Mining"] = "always", ["reagent:17020"] = "never", reagents = "always", bags = "sometimes", [3] = "never" } } } }); login(g)
 local kept = {}
-for k, v in pairs(g.env.ClosestVendorDB.cfg.hudRow) do kept[#kept + 1] = tostring(k) .. "=" .. tostring(v) end
+for k, v in pairs(g.env.ClosestVendorCharDB.cfg.hudRow) do kept[#kept + 1] = tostring(k) .. "=" .. tostring(v) end
 eq(table.concat(kept, ","), "reagents=always", "only a group key with a real mode is kept")
 g = boot({ db = { cfg = { hudRow = "broken" } } }); login(g)
-eq(type(g.env.ClosestVendorDB.cfg.hudRow), "table", "a hudRow that is not a table is replaced")
+eq(type(g.env.ClosestVendorCharDB.cfg.hudRow), "table", "a hudRow that is not a table is replaced")
 g = boot(); login(g)
-cfg = g.env.ClosestVendorDB.cfg
+cfg = g.env.ClosestVendorCharDB.cfg
 eq(cfg.hudScale, 100, "default scale")
 eq(type(cfg.hudRow) == "table" and next(cfg.hudRow) == nil, true, "row modes start empty: every row has its default")
-eq(type(g.env.ClosestVendorDB.hud) == "table" and next(g.env.ClosestVendorDB.hud) == nil, true, "no saved position yet")
+eq(type(g.env.ClosestVendorCharDB.hud) == "table" and next(g.env.ClosestVendorCharDB.hud) == nil, true, "no saved position yet")
 eq(type(g.env.ClosestVendorDB.auctioneers), "table", "learned auctioneer table created")
 local g2 = boot(); login(g2)
-eq(g2.env.ClosestVendorDB.cfg.hudRow ~= cfg.hudRow, true, "each saved table is its own")
+eq(g2.env.ClosestVendorCharDB.cfg.hudRow ~= cfg.hudRow, true, "each saved table is its own")
 eq(cfg.hudAlpha .. "/" .. cfg.hudTextAlpha .. "/" .. cfg.hudColor, "80/100/000000", "defaults: background 80%, text 100%, pure black")
 -- Saved window numbers outside their ranges are held to them; a colour that is not one is black again.
 g = boot({ db = { cfg = { hudAlpha = -5, hudTextAlpha = 5, hudScale = 900, hudColor = "fff" } } }); login(g)
-cfg = g.env.ClosestVendorDB.cfg
+cfg = g.env.ClosestVendorCharDB.cfg
 eq(cfg.hudAlpha .. "/" .. cfg.hudTextAlpha .. "/" .. cfg.hudScale .. "/" .. cfg.hudColor, "0/20/200/000000", "held to the limits, a bad colour is black")
 g = boot({ db = { cfg = { hudAlpha = 150, hudTextAlpha = 400, hudColor = 7 } } }); login(g)
-cfg = g.env.ClosestVendorDB.cfg
+cfg = g.env.ClosestVendorCharDB.cfg
 eq(cfg.hudAlpha .. "/" .. cfg.hudTextAlpha .. "/" .. cfg.hudColor, "100/100/000000", "held to 100")
 g = boot({ db = { cfg = { hudAlpha = "dim", hudTextAlpha = false, hudColor = "1a2b3c" } } }); login(g)
-cfg = g.env.ClosestVendorDB.cfg
+cfg = g.env.ClosestVendorCharDB.cfg
 eq(cfg.hudAlpha .. "/" .. cfg.hudTextAlpha .. "/" .. cfg.hudColor, "80/100/1a2b3c", "not a number: the default; a real colour is kept")
 g = boot({ db = { cfg = { hudAlpha = 0 } } }); login(g)
-eq(g.env.ClosestVendorDB.cfg.hudAlpha, 0, "background 0 is kept, not replaced by the default")
+eq(g.env.ClosestVendorCharDB.cfg.hudAlpha, 0, "background 0 is kept, not replaced by the default")
 
 -- The window: built at login, drawn once per burst of events by one short timer.
 local function window(game)
@@ -1294,7 +1295,7 @@ eq(#g.hudTimers, 0, "another unit's inventory: no redraw")
 -- Reagents and display-only items in the window; the warning switch does not hide a row.
 g = boot(); login(g); g.autoAccept = false
 g.spells = { [23028] = true, [5504] = true }; g.counts = { [17020] = 3, [5350] = 3, [2288] = 10 }
-g.env.ClosestVendorDB.cfg.reagentOff[17020] = true
+g.env.ClosestVendorCharDB.cfg.reagentOff[17020] = true
 g.onEvent("SPELLS_CHANGED"); flush(g)
 eq(shownRows(g), "Arcane Powder: 3", "a low reagent shows even with its warning switched off")
 eq(g.popup, nil, "and no question is asked about it")
@@ -1303,10 +1304,10 @@ eq(shownRows(g), "Arcane Powder: 3 | Conjured Water: 13", "Reagents always shows
 
 -- Clicking a row pins at once, without a question, and is logged.
 g = boot({ tomtom = true }); login(g); g.autoAccept = false
-g.env.ClosestVendorDB.log.enabled = true
+g.env.ClosestVendorCharDB.log.enabled = true
 g.env.SlashCmdList.CLOSESTVENDOR("hud row durability always")
 w = window(g)
-eq(g.env.ClosestVendorDB.cfg.vendorMode, "ask", "choice mode is ask")
+eq(g.env.ClosestVendorCharDB.cfg.vendorMode, "ask", "choice mode is ask")
 w.rows[1].scripts.OnClick()
 eq(g.tomtom[#g.tomtom], "Far Repairer", "click on the durability row pins the repair vendor")
 eq(g.popup, nil, "no question")
@@ -1340,17 +1341,17 @@ eq(moved, 0, "dragging a row without Shift does nothing")
 g.env.IsShiftKeyDown = function() return true end
 w.rows[1].scripts.OnDragStart(); w.rows[1].scripts.OnDragStop()
 eq(moved, 1, "Shift-drag moves the window")
-eq(g.env.ClosestVendorDB.hud.x .. ":" .. g.env.ClosestVendorDB.hud.y, "40:-50", "position saved")
+eq(g.env.ClosestVendorCharDB.hud.x .. ":" .. g.env.ClosestVendorCharDB.hud.y, "40:-50", "position saved")
 g.env.SlashCmdList.CLOSESTVENDOR("hud lock")
 w.rows[1].scripts.OnDragStart()
 eq(moved, 1, "locked: Shift-drag does nothing")
 g.env.SlashCmdList.CLOSESTVENDOR("hud reset")
-eq(next(g.env.ClosestVendorDB.hud), nil, "/cvn hud reset forgets the position")
+eq(next(g.env.ClosestVendorCharDB.hud), nil, "/cvn hud reset forgets the position")
 local point
 w.frame.SetPoint = function(_, p, _, _, x, y) point = p .. ":" .. x .. ":" .. y end
 g.env.SlashCmdList.CLOSESTVENDOR("hud scale 150")
 eq(point, "LEFT:60:60", "the window is at its default position")
-eq(g.env.ClosestVendorDB.cfg.hudScale, 150, "scale saved")
+eq(g.env.ClosestVendorCharDB.cfg.hudScale, 150, "scale saved")
 
 -- The cog opens the main settings page, or says it cannot.
 g = boot({ settings = true }); login(g)
@@ -1361,7 +1362,7 @@ window(g).cog.scripts.OnClick()
 eq(has(lastPrinted(g), "settings page is not available"), true, "no settings page: chat says so")
 -- A settings-page change redraws the window at once.
 g = boot({ settings = true }); login(g)
-g.env.ClosestVendorDB.cfg.hudRow.bags = "always"
+g.env.ClosestVendorCharDB.cfg.hudRow.bags = "always"
 for _, st in ipairs(g.settings.settings) do if st.key == "hudLocked" then st:SetValue(true) end end
 eq(shownRows(g), "Bag space: 20 free", "changing a setting on the page redraws the window")
 
@@ -1370,7 +1371,7 @@ g = boot(); login(g)
 local skillReads = 0
 g.skillLines = { { "Mining", 70, 75 } }
 g.env.GetNumSkillLines = function() skillReads = skillReads + 1 return #g.skillLines end
-g.env.ClosestVendorDB.professions.Mining = true
+g.env.ClosestVendorCharDB.professions.Mining = true
 g.onEvent("BAG_UPDATE_DELAYED"); flush(g)
 g.onEvent("BAG_UPDATE_DELAYED"); flush(g)
 eq(shownRows(g), "Mining: 70/75", "a profession near its cap shows")
@@ -1397,13 +1398,13 @@ eq(skillReads - before .. "/" .. bagReads, "0/0", "every row never: the redraw r
 
 -- No frames for the window: the addon works without it.
 g = boot(); g.frameThrows = "ClosestVendorTracker"; login(g)
-g.env.ClosestVendorDB.log.enabled = true
+g.env.ClosestVendorCharDB.log.enabled = true
 g.free = 1
 g.onEvent("BAG_UPDATE_DELAYED")
 eq(#g.hudTimers, 0, "no window: no redraw timer")
 eq(has(lastPrinted(g), "Ally Seller"), true, "warnings still work")
 g.env.SlashCmdList.CLOSESTVENDOR("hud scale 120")
-eq(g.env.ClosestVendorDB.cfg.hudScale, 120, "and so do the window commands")
+eq(g.env.ClosestVendorCharDB.cfg.hudScale, 120, "and so do the window commands")
 -- No timers: the window is redrawn directly.
 g = boot(); login(g); flush(g)
 g.env.C_Timer = nil
@@ -1476,8 +1477,8 @@ local function deep(t)
     return "{" .. table.concat(parts, ",") .. "}"
 end
 g = boot({ tomtom = true }); login(g); g.autoAccept = false; flush(g)
-g.env.ClosestVendorDB.cfg.hudRow.bags = "never"
-local savedCfg, savedHud = deep(g.env.ClosestVendorDB.cfg), deep(g.env.ClosestVendorDB.hud)
+g.env.ClosestVendorCharDB.cfg.hudRow.bags = "never"
+local savedCfg, savedHud = deep(g.env.ClosestVendorCharDB.cfg), deep(g.env.ClosestVendorCharDB.hud)
 g.time = 123.456
 g.env.SlashCmdList.CLOSESTVENDOR("demo")
 w = window(g)
@@ -1487,13 +1488,13 @@ eq(g.popup ~= nil or #g.tomtom > 0, true, "demo: and a warning, as a question or
 eq(#g.timers, 1, "demo: one timer to end it")
 g.onEvent("BAG_UPDATE_DELAYED"); flush(g)
 eq(shownRows(g), demoRows, "demo: an ordinary redraw does not bring the real rows back early")
-eq(deep(g.env.ClosestVendorDB.cfg), savedCfg, "demo: saved settings untouched while it runs")
+eq(deep(g.env.ClosestVendorCharDB.cfg), savedCfg, "demo: saved settings untouched while it runs")
 g.timers[1]()
 eq(w.frame.shown, false, "demo over: the real window (nothing low, so hidden) is back")
 eq(g.popup, nil, "demo over: no question left open")
 eq(#g.tomtom == 0 or g.tomtom.removed == true, true, "demo over: a waypoint it set is removed")
-eq(deep(g.env.ClosestVendorDB.cfg), savedCfg, "demo over: saved settings exactly as before")
-eq(deep(g.env.ClosestVendorDB.hud), savedHud, "demo over: saved position exactly as before")
+eq(deep(g.env.ClosestVendorCharDB.cfg), savedCfg, "demo over: saved settings exactly as before")
+eq(deep(g.env.ClosestVendorCharDB.hud), savedHud, "demo over: saved position exactly as before")
 -- The same game time rolls the same demo; other times roll others, through every kind of warning.
 g.env.SlashCmdList.CLOSESTVENDOR("demo")
 eq(shownRows(g), demoRows, "the same time gives the same window")
@@ -1524,7 +1525,7 @@ eq(sawReminder, true, "and so does a reminder")
 local n = 0
 for _ in pairs(windowsSeen) do n = n + 1 end
 eq(n > 10, true, "and the windows differ")
-eq(deep(g.env.ClosestVendorDB.cfg), savedCfg, "after 42 demos the saved settings are still exactly as before")
+eq(deep(g.env.ClosestVendorCharDB.cfg), savedCfg, "after 42 demos the saved settings are still exactly as before")
 -- A second demo during the first re-rolls and restarts the time: the first timer does nothing.
 g.time = 300; g.env.SlashCmdList.CLOSESTVENDOR("demo")
 local firstTimer = g.timers[#g.timers]
@@ -1572,17 +1573,17 @@ do
     eq(p.shown, true, "/cvn hud color opens the picker")
     eq(p.rgb[1] .. "," .. p.rgb[2] .. "," .. p.rgb[3], "0,0,0", "at the saved colour")
     p.rgb = { 1, 0, 0.5 }; p.func() -- the player picks
-    eq(g.env.ClosestVendorDB.cfg.hudColor, "ff0080", "a pick from the command is saved")
+    eq(g.env.ClosestVendorCharDB.cfg.hudColor, "ff0080", "a pick from the command is saved")
     -- No picker, no button maker: say so in chat, log the reasons, show them in the report.
     g = boot({ settings = true }); login(g)
     g.env.SlashCmdList.CLOSESTVENDOR("hud color")
     eq(has(lastPrinted(g), "This game has no color picker; use /cvn hud color #rrggbb"), true, "chat says there is no picker")
     local text = reportOf(g)
     eq(has(text, "color picker: missing, settings button: missing, background color control not built, missing: color picker (ColorPickerFrame), CreateSettingsButtonInitializer"), true, "report names what is missing: " .. text)
-    g = boot({ settings = true }); g.env.SlashCmdList = g.env.SlashCmdList; g.env.ClosestVendorDB = { log = { enabled = true, entries = {} } }
+    g = boot({ settings = true }); g.env.SlashCmdList = g.env.SlashCmdList; g.env.ClosestVendorCharDB = { log = { enabled = true, entries = {} } }
     login(g)
     local logged = false
-    for _, e in ipairs(g.env.ClosestVendorDB.log.entries) do if has(e.msg, "background color control not built, missing:") then logged = true end end
+    for _, e in ipairs(g.env.ClosestVendorCharDB.log.entries) do if has(e.msg, "background color control not built, missing:") then logged = true end end
     eq(logged, true, "the reason is in the debug log")
     -- Era and Forever: the game's own swatch row, where its picker takes the swatch's calls.
     g = boot({ settings = true, swatch = true }); g.env.CreateSettingsButtonInitializer = function(n, t, onClick) return { text = t, onClick = onClick, data = {} } end
@@ -1591,7 +1592,7 @@ do
     eq(#g.settings.swatches .. "/" .. #g.settings.buttons, "1/0", "swatch row, not a button")
     eq(has(reportOf(g), "background color control built as a swatch"), true, "report: swatch")
     g.settings.swatches[1].setting:SetValue("ff336699")
-    eq(g.env.ClosestVendorDB.cfg.hudColor, "336699", "a swatch pick is saved")
+    eq(g.env.ClosestVendorCharDB.cfg.hudColor, "336699", "a swatch pick is saved")
     -- A client with no settings page at all.
     g = boot(); login(g)
     eq(has(reportOf(g), "background color control not built, missing: the Settings API"), true, "report: no settings API")
@@ -1639,10 +1640,10 @@ eq(g.popup, nil, "master switch off")
 g = supplyGame("WARRIOR", { { 117, 1 } }); g.env.SlashCmdList.CLOSESTVENDOR("food off"); g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "food switched off")
 g = supplyGame("WARRIOR", { { 117, 8 } }); g.env.SlashCmdList.CLOSESTVENDOR("food 10"); g.onEvent("BAG_UPDATE_DELAYED")
-eq(g.env.ClosestVendorDB.cfg.foodThreshold, 10, "/cvn food sets the threshold")
+eq(g.env.ClosestVendorCharDB.cfg.foodThreshold, 10, "/cvn food sets the threshold")
 eq(g.popup ~= nil, true, "and it applies at once")
 g = supplyGame("WARRIOR", { { 117, 1 } }); g.env.SlashCmdList.CLOSESTVENDOR("food 99")
-eq(g.env.ClosestVendorDB.cfg.foodThreshold, 5, "out of range: unchanged")
+eq(g.env.ClosestVendorCharDB.cfg.foodThreshold, 5, "out of range: unchanged")
 g = supplyGame("WARRIOR", { { 117, 1 } }); g.bag = nil
 g.bag = {}
 g.env.GetContainerItemInfo = function() error("unreadable") end
@@ -1663,7 +1664,7 @@ g = supplyGame("HUNTER", { { 117, 2 }, { 159, 30 }, { 4540, 30 } })
 g.env.UnitCreatureFamily = function() return "Wolf", 1 end
 g.onEvent("UNIT_PET")
 g.env.SlashCmdList.CLOSESTVENDOR("petfood off")
-eq(g.env.ClosestVendorDB.cfg.petFoodEnabled, false, "/cvn petfood off")
+eq(g.env.ClosestVendorCharDB.cfg.petFoodEnabled, false, "/cvn petfood off")
 
 -- Reminders.
 g = supplyGame("MAGE", { { 117, 1 }, { 159, 30 } }, { spells = { [587] = true } })
@@ -1693,7 +1694,7 @@ do
     g = chimeGame("MAGE", { { 117, 1 }, { 159, 30 } }, { [587] = true })
     g.env.SlashCmdList.CLOSESTVENDOR("sound ping")
     eq(table.concat(g.played, ","), "3175", "/cvn sound plays the new choice as a preview")
-    eq(g.env.ClosestVendorDB.cfg.remindSound, "ping", "and saves it")
+    eq(g.env.ClosestVendorCharDB.cfg.remindSound, "ping", "and saves it")
     g.onEvent("BAG_UPDATE_DELAYED")
     eq(table.concat(g.played, ","), "3175,3175", "the reminder uses it")
     g.env.SlashCmdList.CLOSESTVENDOR("sound none")
@@ -1710,7 +1711,7 @@ do
     g = chimeGame("WARRIOR", { { 117, 1 } })
     g.env.PlaySound = nil
     g.env.SlashCmdList.CLOSESTVENDOR("sound ping")
-    eq(g.env.ClosestVendorDB.cfg.remindSound, "ping", "a client without PlaySound: still saved, no error")
+    eq(g.env.ClosestVendorCharDB.cfg.remindSound, "ping", "a client without PlaySound: still saved, no error")
 end
 
 -- Status window: the Supplies rows follow the bags and the pet.
@@ -1751,7 +1752,7 @@ eq(g.env.ClosestVendorDB.learned[82][10], 17, "a shipped food vendor keeps food 
 
 -- Defaults, old saved data and the report line.
 g = boot({ tomtom = true, db = { cfg = { ammoThreshold = 100, foodThreshold = 9 } } }); login(g)
-local c = g.env.ClosestVendorDB.cfg
+local c = g.env.ClosestVendorCharDB.cfg
 eq(c.foodEnabled and c.waterEnabled and c.petFoodEnabled and c.healthstoneRemind, true, "new switches default on")
 eq(c.waterThreshold .. "/" .. c.petFoodThreshold, "5/5", "new thresholds default to 5")
 eq(c.foodThreshold, 9, "a saved value is kept")
@@ -1767,3 +1768,22 @@ eq(has(table.concat(g.printed, "\n"), "Reminder sound: Whisper ping"), true, "so
 eq(has(swin.box.text, "reminder sound whisper"), true, "sound in the report header")
 
 H.done()
+
+-- Settings are per character; vendors learned are shared by the account.
+do
+    local legacy = { cfg = { bagThreshold = 7, reagentOff = { [1] = true } }, hud = { point = "TOP" }, learned = {} }
+    local a = boot({ db = legacy }); login(a)
+    eq(a.env.ClosestVendorCharDB.cfg.bagThreshold, 7, "a first character starts from the settings the account had")
+    eq(a.env.ClosestVendorCharDB.hud.point, "TOP", "and the window position")
+    a.env.ClosestVendorCharDB.cfg.bagThreshold = 30
+    a.env.ClosestVendorCharDB.cfg.reagentOff[2] = true
+    eq(legacy.cfg.bagThreshold, 7, "changing one character leaves the account copy alone")
+    eq(legacy.cfg.reagentOff[2], nil, "nested tables are copied, not shared")
+    local b = boot({ db = legacy }); login(b)
+    eq(b.env.ClosestVendorCharDB.cfg.bagThreshold, 7, "the next character starts from it too, not from the other character")
+    local c = boot({ db = legacy, charDb = a.env.ClosestVendorCharDB }); login(c)
+    eq(c.env.ClosestVendorCharDB.cfg.bagThreshold, 30, "a known character keeps its own settings")
+    local d = boot(); login(d)
+    eq(d.env.ClosestVendorCharDB.cfg.bagThreshold, 2, "no earlier settings: defaults")
+    eq(d.env.ClosestVendorDB.cfg, nil, "and nothing is written to the account table")
+end
