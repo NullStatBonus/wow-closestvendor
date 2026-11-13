@@ -4,14 +4,16 @@ local eq = H.eq
 
 local ns = {}
 H.locale(ns)
-for _, f in ipairs({ "Triggers", "Professions", "Reagents", "Status" }) do
+for _, f in ipairs({ "Triggers", "Professions", "Reagents", "Supplies", "Status" }) do
     loadfile("ClosestVendor/" .. f .. ".lua")("ClosestVendor", ns)
 end
 local S = ns.Status
 
 local function cfg(over)
     local c = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10, reagentThreshold = 5,
-        bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, hudRow = {} }
+        bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, hudRow = {},
+        foodEnabled = true, waterEnabled = true, petFoodEnabled = true, healthstoneRemind = true,
+        foodThreshold = 5, waterThreshold = 5, petFoodThreshold = 5 }
     for k, v in pairs(over or {}) do c[k] = v end
     return c
 end
@@ -95,7 +97,7 @@ eq(rows[1].text .. "/" .. tostring(rows[1].routable) .. "/" .. tostring(rows[1].
 eq(#S.Rows({ display = { { item = display("WARLOCK", 1), count = 3 } }, reagents = { { item = POWDER, count = 1 } } }, cfg(), "ROGUE"), 0, "entries of another class are dropped")
 
 -- Groups, modes and defaults: one mode per group, every row of the group follows it.
-eq(table.concat(S.GROUPS, ","), "ammo,reagents,bags,durability,professions", "the groups, in window order")
+eq(table.concat(S.GROUPS, ","), "ammo,reagents,supplies,bags,durability,professions", "the groups, in window order")
 eq(S.Group("prof:Mining") .. "," .. S.Group("reagent:17020") .. "," .. S.Group("reagent:6265") .. "," .. S.Group("bags"),
     "professions,reagents,reagents,bags", "a row key to its group")
 eq(S.Group("prof:") or S.Group("reagent:x") or S.Group("bag") or S.Group(nil), nil, "not a row key: no group")
@@ -185,9 +187,47 @@ snap = S.Snapshot(src(), c, "MAGE")
 eq(next(reads), nil, "every group never: nothing is read")
 eq(#S.Rows(snap, c, "MAGE"), 0, "and there are no rows")
 
+-- Supply rows: Food for everyone, Water for mana classes, Pet food for a hunter with a diet; low by the warnings' test.
+local function sup(class, totals, knows) return { supplies = { class = class, totals = totals, knows = knows or function() end } } end
+local function srows(class, totals, over, knows) return S.Rows(sup(class, totals, knows), cfg(over), class) end
+eq(keys(srows("WARRIOR", { food = 3, water = 2, healthstone = 0 })), "supply:food!", "a warrior: food only, low")
+eq(keys(srows("MAGE", { food = 20, water = 3, healthstone = 0 })), "supply:food,supply:water!", "a mage: water is low, food is not")
+eq(keys(srows("MAGE", { food = 3, water = 3, healthstone = 0 }, nil, function() return true end)), "supply:food!,supply:water!",
+    "a mage who can conjure: the row is low too (it is reminded)")
+eq(keys(srows("PRIEST", { food = 5, water = 6, healthstone = 0 })), "supply:food!,supply:water", "at the threshold is low, above is not")
+eq(keys(srows("MAGE", { food = 3, water = 3, healthstone = 0 }, { ammoEnabled = false })), "supply:food,supply:water", "master switch off: never low")
+eq(keys(srows("MAGE", { food = 3, water = 3, healthstone = 0 }, { foodEnabled = false })), "supply:food,supply:water!", "food off: the row stays, not low")
+eq(keys(srows("HUNTER", { food = 9, water = 9, pet = 2, healthstone = 0 })), "supply:food,supply:water,supply:pet!", "a hunter with a pet diet: pet food row")
+eq(keys(srows("HUNTER", { food = 9, water = 9, healthstone = 0 })), "supply:food,supply:water", "no pet diet: no pet row")
+eq(keys(srows("WARRIOR", { food = 9, pet = 1, healthstone = 0 })), "supply:food", "pet food is for hunters only")
+eq(#S.Rows({ supplies = { class = "MAGE" } }, cfg(), "MAGE"), 0, "unreadable bags: no rows")
+eq(#S.Rows({}, cfg(), "MAGE"), 0, "no supplies read: no rows")
+do
+    local r = srows("MAGE", { food = 3, water = 9, healthstone = 0 })
+    eq(r[1].text .. "/" .. r[1].kind .. "/" .. r[1].id .. "/" .. tostring(r[1].routable), "Food: 3/supply/food/true", "text, kind, id, routable")
+    eq(r[2].text, "Water: 9", "water text")
+    eq(S.Group("supply:food") .. S.Group("supply:pet"), "suppliessupplies", "rows belong to the Supplies group")
+    eq(S.Find("food") .. S.Find("Pet Food") .. S.Find("water") .. S.Find("supplies"), "suppliessuppliessuppliessupplies", "names for the group")
+    eq(S.Mode(cfg(), "supply:food"), "low", "default mode")
+    eq(keys(S.Visible(srows("MAGE", { food = 3, water = 9, healthstone = 0 }), cfg())), "supply:food!", "mode low: only the low row")
+    eq(keys(S.Visible(srows("MAGE", { food = 3, water = 9, healthstone = 0 }), cfg({ hudRow = { supplies = "always" } }))), "supply:food!,supply:water", "always: both")
+    eq(#S.Visible(srows("MAGE", { food = 3, water = 9, healthstone = 0 }), cfg({ hudRow = { supplies = "never" } })), 0, "never: none")
+end
+do -- the bags are not read for a group set to never
+    local reads = 0
+    local src = { freeSlots = function() end, lowestDurability = function() end, ammo = function() end,
+        knows = function() end, itemCount = function() end, itemName = function() end, skills = function() end,
+        supplies = function() reads = reads + 1 return { class = "MAGE", totals = { food = 1, water = 1, healthstone = 0 } } end }
+    S.Snapshot(src, cfg({ hudRow = { supplies = "never" } }), "MAGE")
+    eq(reads, 0, "Supplies never: no read")
+    local snap = S.Snapshot(src, cfg(), "MAGE")
+    eq(reads .. "/" .. tostring(snap.supplies ~= nil), "1/true", "otherwise one read")
+end
+
 -- Names and lookup by name.
 eq(table.concat({ S.KeyName("ammo"), S.KeyName("reagents"), S.KeyName("bags"), S.KeyName("durability"), S.KeyName("professions") }, ","),
     "Ammo,Reagents,Bag space,Durability,Professions", "group names")
+eq(S.KeyName("supplies"), "Supplies", "the Supplies group name")
 eq(S.Find("  Bag   SPACE ") .. S.Find("dur") .. S.Find("arrows") .. S.Find("Reagents") .. S.Find("profession"),
     "bagsdurabilityammoreagentsprofessions", "groups by name and short name, case and spaces ignored")
 eq(S.Find("arcane powder") or S.Find("mining") or S.Find("prof:Mining") or S.Find(""), nil, "a single reagent or profession is not a group")
@@ -235,6 +275,15 @@ local different = 0
 for _ in pairs(windows) do different = different + 1 end
 eq(different > 50, true, "the windows differ from one roll to the next")
 eq(kinds.ammo and kinds.sell and kinds.repair and kinds.reagent and kinds.trainer, true, "every kind of row turns up")
+do -- the made-up window shows the supply rows too, low or not, whatever the real class
+    local seen = {}
+    for seed = 1, 120 do
+        local dsnap, fake = S.Demo(S.Roller(seed), cfg())
+        for _, r in ipairs(S.Rows(dsnap, fake)) do if r.kind == "supply" then seen[r.key] = (seen[r.key] or 0) + 1 end end
+    end
+    eq((seen["supply:food"] or 0) > 0 and (seen["supply:water"] or 0) > 0 and (seen["supply:pet"] or 0) > 0, true,
+        "food, water and pet food rows all turn up in the demo")
+end
 local a1, a2 = S.Demo(S.Roller(7), cfg()), S.Demo(S.Roller(7), cfg())
 eq(keys(S.Rows(a1, cfg())), keys(S.Rows(a2, cfg())), "the same seed gives the same window")
 

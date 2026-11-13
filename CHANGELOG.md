@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.0
+
+- Food, water and pet food: the addon counts the food, drink and pet food in your bags (bought, cooked, looted or conjured) and, at 5 or fewer by default, asks about the closest vendor that sells it. Water is for classes that use mana. Pet food is for a hunter with a pet out, and it follows the pet's diet (Meat, Fish, Bread, Cheese, Fruit, Fungus), found from the pet's creature family, so it works in every game language.
+- Reminders instead of trips: a mage who knows Conjure Food or Conjure Water is reminded to conjure it. A warlock who knows Create Healthstone and carries none is reminded to create one. A reminder is a notice with no question and no pin.
+- Reminder sound: a reminder plays a sound. The default is the whisper ping. Choose another (minimap ping, group invite, ready check) or none on the Supplies page or with `/cvn sound <name>`.
+- Status window: a new Supplies group with Food, Water and Pet food rows. It follows the same Only when low, Always or Never modes. Click a row to pin the closest seller.
+- Settings: a new Supplies page with a switch and a threshold (1 to 40) for each of food, water and pet food, a healthstone reminder switch for warlocks, and the reminder sound. The "Ammo and reagents" switch also turns these off.
+- Commands: `/cvn food`, `/cvn water`, `/cvn petfood` (count, on or off), `/cvn sound`, `/cvn test food|water|petfood|remind` and `/cvn hud row supplies`. `/cvn test remind` always works and plays the sound. The unlisted `/cvn demo` now shows supplies and reminders too.
+- Priority order is now repair, ammo, reagent, food, water, pet food, sell, then profession trainer.
+- Vendor data records which vendors sell food, water and each pet diet. Vendors you open are learned with their supplies. The item lists come from the game's client data.
+- The debug report lists the new settings.
+
 ## 1.0.0
 
 This is a major version bump made by request; nothing saved by earlier versions breaks.

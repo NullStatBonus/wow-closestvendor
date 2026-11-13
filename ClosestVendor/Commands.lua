@@ -1,6 +1,6 @@
 -- Pure slash-command handling: no WoW globals.
 -- Run() edits cfg and returns the lines to print, plus an optional action for the caller:
--- {"test", kind} with kind "sell", "repair", "arrow", "bullet" or "reagent"; {"open"} for the settings page;
+-- {"test", kind} with kind "sell", "repair", "arrow", "bullet", "reagent", "food", "water", "petfood" or "remind"; {"open"} for the settings page;
 -- {"debug", on}; {"log"} to show the report; {"log", "clear"}; {"hud", "pick"} for /cvn hud color with no colour (open the colour picker); {"hud", "reset"} to put the status
 -- window back at its default position (lock, scale, opacity, text opacity, colour and row modes are
 -- plain settings); {"demo"} for /cvn demo, which is not in the help on purpose.
@@ -13,7 +13,7 @@ local M = {}
 ns.Commands = M
 
 -- Allowed whole-number range of each threshold: used by the commands and the settings panel.
-M.LIMITS = { bag = { 0, 200 }, dur = { 1, 100 }, ammo = { 0, 2000 }, trade = { 0, 300 }, reagent = { 1, 40 },
+M.LIMITS = { bag = { 0, 200 }, dur = { 1, 100 }, ammo = { 0, 2000 }, trade = { 0, 300 }, reagent = { 1, 40 }, food = { 1, 40 }, water = { 1, 40 }, petFood = { 1, 40 },
     hudScale = { 50, 200 }, hudAlpha = { 0, 100 }, hudTextAlpha = { 20, 100 }, reagentBuyTarget = { 0, 100 } }
 
 -- Chat treats "|" as an escape character, so no printed line may contain one.
@@ -23,6 +23,9 @@ local HELP = {
     L["/cvn bags <slots>, /cvn dur <percent>, /cvn ammo <count>, /cvn reagent <count>, /cvn trade <points>  set a threshold"],
     L["/cvn bags on/off  switch a question on or off (same for dur, ammo, trade); ammo also switches reagents"],
     L["/cvn reagents  list your class reagents; /cvn reagent on/off <name>  switch one"],
+    L["/cvn food <count>, /cvn water <count>, /cvn petfood <count>  set when to ask about food, water or pet food"],
+    L["/cvn food on/off  switch it on or off (same for water, petfood)"],
+    L["/cvn sound <name>  choose the reminder sound (whisper, ping, invite, ready or none) and play it"],
     L["/cvn buy on/off  buy ammo at merchants; /cvn buy ask/auto  ask first or buy at once"],
     L["/cvn arrows, /cvn bullets  equipped, best or cheapest: which ammo to buy"],
     L["/cvn reagentbuy on/off  buy class reagents at merchants; /cvn reagentbuy ask/auto  ask first or buy at once; /cvn reagentbuy <0-100>  how many of each to carry"],
@@ -32,10 +35,11 @@ local HELP = {
     L["/cvn hud lock/unlock/reset  lock, unlock or reset the status window; /cvn hud scale <50-200>  its size in percent"],
     L["/cvn hud opacity <0-100>  how solid the status window background is (0 shows only text and icons); /cvn hud textopacity <20-100>  how solid its text and icons are"],
     L["/cvn hud color  open the color picker; /cvn hud color <#rrggbb/black/reset>  set the status window background color (black unless you change it)"],
-    L["/cvn hud row <ammo/reagents/professions/bags/durability> low/always/never  when that group of status window rows shows"],
+    L["/cvn hud row <ammo/reagents/supplies/professions/bags/durability> low/always/never  when that group of status window rows shows"],
     L["/cvn anchor hearth/last  where a row click searches from inside a dungeon or raid"],
     L["/cvn ah on/off  let a row click go to the auction house when it is closer than a vendor"],
     L["/cvn test sell, repair, arrows, bullets, reagent  ask the question now"],
+    L["/cvn test food, water, petfood  ask about food, water or pet food now; /cvn test remind  show the conjure or healthstone reminder now"],
     L["/cvn debug on/off  record what the addon sees; /cvn log  show the report; /cvn log clear  empty it"],
 }
 
@@ -71,6 +75,12 @@ local function changedRows(cfg)
     return out
 end
 
+-- The name of a saved reminder sound key, for chat.
+local function soundName(key)
+    for _, s in ipairs(ns.Supplies.SOUNDS) do if s[1] == key then return s[3] end end
+    return ns.Supplies.SOUNDS[1][3]
+end
+
 local function status(cfg)
     local lines = {
         L["Bags: %s, trigger at %d free slot(s) or fewer"]:format(cfg.bagEnabled and L["on"] or L["off"], cfg.bagThreshold),
@@ -86,7 +96,12 @@ local function status(cfg)
     table.insert(lines, 4, L["Reagents: %s, trigger at %d or fewer"]:format(cfg.ammoEnabled and L["on"] or L["off"], cfg.reagentThreshold))
     local off = reagentNamesOff(cfg)
     if #off > 0 then table.insert(lines, 5, L["Reagents switched off: %s"]:format(table.concat(off, ", "))) end
-    table.insert(lines, #off > 0 and 6 or 5, L["Reagent buying: %s, %s, up to %d of each"]:format(
+    table.insert(lines, #off > 0 and 6 or 5, L["Supplies: food %s (%d), water %s (%d), pet food %s (%d), healthstone reminder %s"]:format(
+        cfg.foodEnabled ~= false and L["on"] or L["off"], cfg.foodThreshold or 5, cfg.waterEnabled ~= false and L["on"] or L["off"],
+        cfg.waterThreshold or 5, cfg.petFoodEnabled ~= false and L["on"] or L["off"], cfg.petFoodThreshold or 5,
+        cfg.healthstoneRemind ~= false and L["on"] or L["off"]))
+    table.insert(lines, #off > 0 and 7 or 6, L["Reminder sound: %s"]:format(soundName(cfg.remindSound)))
+    table.insert(lines, #off > 0 and 8 or 7, L["Reagent buying: %s, %s, up to %d of each"]:format(
         cfg.reagentBuyEnabled and L["on"] or L["off"], cfg.reagentBuyPrompt ~= false and L["asks first"] or L["buys at once"],
         cfg.reagentBuyTarget or 20))
     lines[#lines + 1] = L["Status window: %s, scale %d%%, background %d%% of color #%s, text and icons %d%%"]:format(
@@ -153,7 +168,7 @@ local function hudCommand(cfg, arg, rest)
         end
         local key = ns.Status.Find(name)
         if not key then
-            return { L["No status window row group named %s. Use ammo, reagents, professions, bags or durability."]:format(name) }
+            return { L["No status window row group named %s. Use ammo, reagents, supplies, professions, bags or durability."]:format(name) }
         end
         if type(cfg.hudRow) ~= "table" then cfg.hudRow = {} end
         -- Only a changed mode is kept: a group not in the table has the default.
@@ -215,6 +230,23 @@ local function reagentList(cfg, class)
     return lines
 end
 
+local function soundChoices()
+    local names = {}
+    for _, s in ipairs(ns.Supplies.SOUNDS) do names[#names + 1] = s[1] end
+    return table.concat(names, ", ")
+end
+
+-- /cvn sound [name]: show the choices, or pick one (it plays as a preview; "none" is silent).
+local function soundCommand(cfg, name)
+    if name == "" then
+        return { L["Reminder sound: %s"]:format(soundName(cfg.remindSound)), L["Choose a sound: %s."]:format(soundChoices()) }
+    end
+    local key = ns.Supplies.FindSound(name)
+    if not key then return { L["Choose a sound: %s."]:format(soundChoices()) } end
+    cfg.remindSound = key
+    return { L["Reminder sound: %s"]:format(soundName(key)) }, { "sound" }
+end
+
 -- key: "bag", "dur", "ammo" or "trade"; lo/hi: allowed whole-number range; what: the (translated) name of the threshold.
 local function setting(cfg, key, arg, lo, hi, what)
     local enabled, threshold = key .. "Enabled", key .. "Threshold"
@@ -234,9 +266,13 @@ function M.Run(cfg, msg, class)
     local cmd, rest = (msg or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
     local arg = rest:match("^%S*")
     if cmd == "" then return status(cfg) end
+    if cmd == "sound" then return soundCommand(cfg, rest) end
     if cmd == "reagents" then return reagentList(cfg, class) end
     if cmd == "reagentbuy" then return reagentBuyCommand(cfg, arg, class) end
     if cmd == "reagent" and arg ~= "" then return reagentCommand(cfg, arg, rest:match("^%S*%s*(.*)$"), class) end
+    if cmd == "food" and arg ~= "" then return setting(cfg, "food", arg, M.LIMITS.food[1], M.LIMITS.food[2], L["Food threshold"]) end
+    if cmd == "water" and arg ~= "" then return setting(cfg, "water", arg, M.LIMITS.water[1], M.LIMITS.water[2], L["Water threshold"]) end
+    if cmd == "petfood" and arg ~= "" then return setting(cfg, "petFood", arg, M.LIMITS.petFood[1], M.LIMITS.petFood[2], L["Pet food threshold"]) end
     if cmd == "bags" and arg ~= "" then return setting(cfg, "bag", arg, M.LIMITS.bag[1], M.LIMITS.bag[2], L["Bag threshold"]) end
     if cmd == "debug" and (arg == "on" or arg == "off") then
         local on = arg == "on"
@@ -250,6 +286,12 @@ function M.Run(cfg, msg, class)
     if cmd == "test" and (arg == "sell" or arg == "repair") then
         local line = arg == "repair" and L["Asking about the nearest repair vendor..."] or L["Asking about the nearest sell vendor..."]
         return { line }, { "test", arg }
+    end
+    if cmd == "test" and (arg == "food" or arg == "water" or arg == "petfood") then
+        return { L["Asking about the nearest vendor selling what you need..."] }, { "test", arg }
+    end
+    if cmd == "test" and arg == "remind" then
+        return { L["Showing the reminder for your class..."] }, { "test", "remind" }
     end
     if cmd == "test" and arg == "reagent" then
         return { L["Asking about the nearest vendor selling your reagent..."] }, { "test", "reagent" }

@@ -8,11 +8,14 @@ local function boot(game)
     local errors = {}
     local env = setmetatable(game or {}, { __index = _G })
     local ns = {}
-    for _, f in ipairs({ "Triggers", "Ammo", "Reagents", "Adapter" }) do
+    require("harness").locale(ns)
+    for _, f in ipairs({ "Triggers", "Ammo", "Reagents", "Supplies", "Adapter" }) do
         local chunk = assert(loadfile("ClosestVendor/" .. f .. ".lua"))
         setfenv(chunk, env)
         chunk("ClosestVendor", ns)
     end
+    ns.PetFamilies = { [1] = 4, [2] = 12, [4] = 252, [21] = 200 } -- Wolf Meat, Cat Meat+Fish, Bear all, Turtle Fish+Fungus+Fruit
+    ns.SupplyItems = { [300] = 1 + 16, [200] = 2, [17020] = 1 } -- food + Bread, drink, food (fixture ids)
     ns.Adapter.onError = function(name, err) errors[#errors + 1] = name .. ": " .. err end
     return ns.Adapter, errors
 end
@@ -162,6 +165,11 @@ eq(mer.name, "Fresh Vendor", "name")
 eq(mer.faction, 2, "faction")
 eq(mer.repair, true, "repair")
 eq(mer.ammo, 3, "sells arrows and bullets")
+eq(mer.supplies, 19, "supply mask: item 300 is food and Bread, item 200 is drink")
+eq(boot(merchantGame({ GetMerchantNumItems = boom })).merchant().supplies, 0, "stock unreadable: sells no supplies")
+eq(boot(merchantGame({ GetMerchantNumItems = function() return 1 end,
+    GetMerchantItemLink = function() return "item:4242:0" end,
+    GetItemInfoInstant = function(id) return id, "", "", "", 0, 0, 0 end })).merchant().supplies, 0, "not a supply item")
 -- auctioneer.
 local ah = boot(merchantGame()).auctioneer()
 eq(ah.id, 1234, "auctioneer id from the GUID")
@@ -429,6 +437,41 @@ eq(boot({}).bagSlots(), nil, "no bag API: unknown")
 eq(boot(reagentGame(false, { GetContainerNumFreeSlots = function(b) if b == 0 then error("x") end return 1, 0 end })).bagSlots(), nil, "backpack unreadable: unknown")
 eq(#boot(reagentGame(false, { GetContainerNumFreeSlots = function(b) if b == 2 then error("x") end return 1, b == 1 and 1 or 0 end })).bagSlots(), 2, "a bag of unknown kind is left out")
 eq(boot(reagentGame(false, { GetContainerItemInfo = boom, GetContainerItemID = boom })).bagSlots(), nil, "a slot unreadable: unknown")
+-- petDiet: the family id (second value of UnitCreatureFamily) maps to diets; no text is read.
+local function dietNames(d) local n = {} for k in pairs(d or {}) do n[#n + 1] = k end table.sort(n) return table.concat(n, ",") end
+eq(dietNames(boot({ UnitCreatureFamily = function() return "Cat", 2 end }).petDiet()), "Fish,Meat", "Cat: Meat and Fish")
+eq(dietNames(boot({ UnitCreatureFamily = function() return "Bär", 4 end }).petDiet()), "Bread,Cheese,Fish,Fruit,Fungus,Meat", "a localized name changes nothing")
+eq(boot({ UnitCreatureFamily = function() end }).petDiet(), nil, "no pet: nothing returned")
+eq(boot({ UnitCreatureFamily = function() return "Cat" end }).petDiet(), nil, "no id: no diet")
+eq(boot({ UnitCreatureFamily = function() return "Dragonkin", 99999 end }).petDiet(), nil, "unknown family: no diet")
+eq(boot({ UnitCreatureFamily = function() return "Moth", 10 end }).petDiet(), nil, "family that eats nothing: no diet")
+eq(boot({ UnitCreatureFamily = boom }).petDiet(), nil, "throws: no diet")
+eq(boot({}).petDiet(), nil, "missing: no diet")
+-- playSound: one guarded call; a bad id, a missing call and a throwing call are all quiet.
+do
+    local played = {}
+    local a = boot({ PlaySound = function(id) played[#played + 1] = id end })
+    a.playSound(3081)
+    a.playSound(nil)
+    a.playSound("3081")
+    eq(table.concat(played, ","), "3081", "only a number is played")
+    local b, be = boot({})
+    b.playSound(3081)
+    b.playSound(3081)
+    eq(#be, 1, "a missing PlaySound is reported once")
+    local c, ce = boot({ PlaySound = boom })
+    c.playSound(3081)
+    eq(#ce, 1, "a throwing PlaySound is reported and skipped")
+end
+local pd, pe = boot({})
+pd.petDiet()
+eq(#pe, 1, "a missing call is reported once")
+
+local sc = boot(reagentGame(false)).supplyCounts()
+eq(sc[17020], 5, "supply counts: the 17020 stack in the backpack")
+eq(sc[99999], nil, "only supply ids are counted")
+eq(boot({}).supplyCounts(), nil, "no bag API: unknown, never zero")
+eq(boot(reagentGame(false, { GetContainerItemInfo = boom, GetContainerItemID = boom })).supplyCounts(), nil, "a slot unreadable: unknown")
 eq(boot({}).stackSize(17020), nil, "no item info: stack unknown")
 eq(boot({ GetItemInfo = function() return "n" end }).stackSize(17020), nil, "item info without a stack: unknown")
 local calls = {}

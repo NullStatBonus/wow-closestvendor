@@ -2,7 +2,7 @@
 
 Closest Vendor is a World of Warcraft addon for WoW Forever and Classic Era.
 It shows you the closest vendor, trainer or auctioneer when you need one.
-It reacts when your gear needs repair, your bags are nearly full, or your ammo, reagents or skills are low.
+It reacts when your gear needs repair, your bags are nearly full, or your ammo, reagents, food, water or skills are low.
 
 ## Quick start
 
@@ -27,11 +27,25 @@ When a warning fires, the addon shows the closest vendor that fits.
   - Druid: Rebirth seeds, Wild Berries, Wild Thornroot.
   - The addon watches a reagent only after you know a spell that uses it.
   - You can turn off each reagent on its own.
+- **Food:** the food in your bags is at or below the threshold (default **5**). All classes. The addon counts every food item: bought, cooked, looted or conjured. The addon shows the closest vendor that sells food.
+- **Water:** the drinks in your bags are at or below the threshold (default **5**). Only classes that use mana: Mage, Priest, Paladin, Shaman, Druid, Warlock and Hunter. Warriors and rogues never see it. The addon shows the closest vendor that sells drink.
+- **Pet food:** the food your pet eats is at or below the threshold (default **5**). Hunters only, and only while a pet is out.
+  - The addon reads the pet's diet from the game: Meat, Fish, Bread, Cheese, Fruit or Fungus.
+  - It counts the items that the pet eats.
+  - With no pet out, the addon watches nothing.
+- **Reminders:** some classes can make their own supplies.
+  - A mage who knows Conjure Food or Conjure Water gets a reminder in chat. The addon does not send that mage to a vendor. A mage who does not know the spell goes to a vendor like other classes.
+  - A warlock who knows Create Healthstone and has no healthstone gets a reminder to make one.
+  - The reminder shows once, until the cause is gone. It also shows on screen if the on-screen notice is on.
+  - The reminder waits while you are in combat or in an instance.
+  - A reminder plays a sound. The default is the whisper ping. You can pick another sound or none (see Supplies settings).
 - **Professions:** a profession is within the threshold (default **10**) points of its current skill limit. The addon shows the closest trainer for that profession that you opened before. It asks on every skill-up and every craft.
 
 If more than one warning is active, the addon asks one question at a time.
-The order is: repair, ammo, reagent, sell, trainer.
+The order is: repair, ammo, reagent, food, water, pet food, sell, trainer.
 A repair trip or an ammo trip also covers selling.
+A food, water or pet food trip does not cover selling.
+If no known vendor sells what you need, the addon prints one chat line and shows no question.
 
 ### Buying
 
@@ -69,7 +83,7 @@ The question has three buttons: the vendor on your map, the closest vendor, and 
 - Your preference decides the first button. The default is the vendor on your map.
 - To skip the question, type `/cvn choice auto`. The addon then sets the waypoint at once with the same preference.
 - In auto mode, the addon prints one chat line. The line names the target with its zone and distance. It also names the other choice, if there was one.
-- In auto mode, the addon also shows the same text on screen for about five seconds. This text is silent, because the map pin already makes a sound.
+- In auto mode, the addon also shows the same text on screen for about five seconds. This text is silent, because the map pin already makes a sound. A reminder sets no pin, so it plays its own sound.
 - To turn off the on-screen text, type `/cvn notice off`.
 - The same rules apply to trainers.
 
@@ -78,7 +92,7 @@ The question has three buttons: the vendor on your map, the closest vendor, and 
 The status window is a small window that you can move.
 It lists what the addon tracks, one row for each item.
 
-- The rows are: ammo (arrows or bullets, with a ranged weapon), each class reagent, bag space, durability, and each profession close to its limit.
+- The rows are: ammo (arrows or bullets, with a ranged weapon), each class reagent, food, water (mana classes), pet food (a hunter with a pet out), bag space, durability, and each profession close to its limit.
 - A row turns red when that item is low. It uses the same threshold as its warning.
 - The window shows only when at least one row qualifies.
 - The window never shows empty.
@@ -86,9 +100,9 @@ It lists what the addon tracks, one row for each item.
 
 ### Visibility per group
 
-- The rows come in five groups: Ammo, Reagents, Bag space, Durability and Professions.
+- The rows come in six groups: Ammo, Reagents, Supplies, Bag space, Durability and Professions.
 - Each group is set to **Only when low** (the default), **Always** or **Never**.
-- One setting covers the whole group. Every profession row follows Professions. Every reagent row follows Reagents.
+- One setting covers the whole group. Every profession row follows Professions. Every reagent row follows Reagents. The food, water and pet food rows follow Supplies.
 - Set it on the Status window settings page.
 - Or type `/cvn hud row <group> low/always/never`.
 
@@ -180,7 +194,7 @@ The addon has one TOC file for each game:
 ## Settings page
 
 To open it, go to Options, AddOns, **Closest Vendor**.
-This is the main page. It has three subcategories.
+This is the main page. It has four subcategories.
 On a client without subcategories, everything is on the one page under section headings.
 
 The settings page changes the same settings as the commands below.
@@ -190,7 +204,7 @@ Type `/cvn config` to open the main page.
 
 - **Warnings:** a checkbox and a slider for each warning (bags, durability, ammo and reagents, professions).
 - **Warnings:** a checkbox for the on-screen notice.
-- The ammo checkbox is the one switch for both ammo and reagents.
+- The ammo checkbox is the one switch for ammo, reagents, food, water and pet food. The label stays "Ammo and reagents". When it is off, the addon does not watch any of them.
 - **Navigation:** a dropdown for when the closest target is on another map. You choose to ask which one, or to navigate without asking.
 - **Navigation:** a dropdown to prefer the target on your map or the closest target.
 - **Navigation:** a dropdown for the search anchor inside instances.
@@ -206,6 +220,15 @@ Type `/cvn config` to open the main page.
   - A slider for how many of each reagent to carry (0-100, default 20). The value 0 buys none.
 - For a class without vendor reagents, these three controls are greyed out. A tooltip says why.
 
+### Supplies
+
+- A checkbox and a slider (1-40, default 5) for each of food, water and pet food.
+- A row shows only if your class can use it. A warrior sees no water. Only a hunter sees pet food.
+- A warlock also gets a **Healthstone reminder** checkbox.
+- Every class gets a **Reminder sound** dropdown (only mages and warlocks are reminded): Whisper ping (default), Minimap ping, Group invite, Ready check or None. Choosing one plays it.
+- All are on by default.
+- The main switch "Ammo and reagents" also turns these off.
+
 ### Ammo
 
 - A checkbox to buy ammo.
@@ -218,7 +241,7 @@ Type `/cvn config` to open the main page.
 - **Lock window position** is the first control.
 - Sliders for scale, background opacity, and text and icon opacity.
 - The background color. It is a swatch that opens the game's color picker, where the game has one.
-- An Only when low / Always / Never dropdown for each group, in window order: Ammo, Reagents, Bag space, Durability, Professions.
+- An Only when low / Always / Never dropdown for each group, in window order: Ammo, Reagents, Supplies, Bag space, Durability, Professions.
 - A group that does not apply to your class is still listed. This is Ammo, or Reagents for a class with no reagents.
 - The addon greys out that group. A tooltip says why.
 
@@ -243,11 +266,24 @@ Type `/cvn config` to open the main page.
 /cvn trade 25
 /cvn trade off
 /cvn trade on
+/cvn food 8
+/cvn food off
+/cvn food on
+/cvn water 8
+/cvn water off
+/cvn water on
+/cvn petfood 8
+/cvn petfood off
+/cvn petfood on
 /cvn test sell
 /cvn test repair
 /cvn test arrows
 /cvn test bullets
 /cvn test reagent
+/cvn test food
+/cvn test water
+/cvn test petfood
+/cvn test remind
 /cvn debug on
 /cvn debug off
 /cvn log
@@ -301,6 +337,12 @@ Type `/cvn config` to open the main page.
 - `/cvn reagents` lists the reagents of your class and shows if each is on.
 - `/cvn reagent off <name>` turns off one reagent. Case does not matter.
 - `/cvn reagent on <name>` turns on one reagent. Case does not matter.
+- `/cvn food <count>` sets the food threshold (1 to 40).
+- `/cvn water <count>` sets the water threshold (1 to 40).
+- `/cvn petfood <count>` sets the pet food threshold (1 to 40).
+- `/cvn food on`, `/cvn water on` and `/cvn petfood on` turn that warning on. Use `off` to turn it off.
+- The healthstone reminder has a switch on the Supplies page only.
+- `/cvn sound` shows the reminder sound. `/cvn sound <name>` picks whisper, ping, invite, ready or none, and plays it.
 
 ### Navigation
 
@@ -349,6 +391,10 @@ Type `/cvn config` to open the main page.
 ### Test and debug
 
 - `/cvn test sell`, `/cvn test repair`, `/cvn test arrows`, `/cvn test bullets` and `/cvn test reagent` ask the question now for that kind of vendor.
+- `/cvn test food`, `/cvn test water` and `/cvn test petfood` do the same for food, water and pet food.
+  - A rogue or warrior who tests water gets "Your class does not use water."
+  - Without a pet, the pet food test says "There is no pet to feed."
+- `/cvn test remind` shows the conjure reminder for a mage, or the healthstone reminder for a warlock, and plays the reminder sound. It always works: any other class gets a plain test line and the sound.
 - They ignore the state of your bags, gear and ammo.
 - Yes sets the pin.
 - Opening any vendor window clears the pin.
@@ -363,7 +409,7 @@ The addon ships a list of about 900 vendors.
 It learns more as you play.
 
 - Each time you open a vendor window, the addon records that vendor.
-- It records the position, whether the vendor repairs, and which ammo and reagents the vendor sells.
+- It records the position, whether the vendor repairs, and which ammo, reagents, food and drink the vendor sells.
 - A learned vendor replaces a shipped vendor with the same NPC id.
 - The addon saves learned vendors between sessions.
 
@@ -429,6 +475,16 @@ The new zones are Mount Hyjal, Riverglades, Zephras Isle, Darkspear Islands and 
 - Reagents go in ordinary bags only. They do not go in quivers, soul bags or profession bags.
 - If gold or bag room runs out, the addon buys what it can. It follows the reagent table order. It says so in chat.
 - The addon takes into account the money left after an ammo purchase at the same merchant.
+
+### Food, water and pet food
+
+- The addon ships vendor data for food, water and pet diets. It learns more when you open a vendor window.
+- Some pets eat only meat or fish. Few vendors sell those. If no known vendor sells it, the addon prints one chat line and shows no question.
+- The addon finds your pet's diet from its family, not from text. It works in every language. A pet family the addon does not know is not watched.
+- The addon counts items in your bags, not in the bank.
+- The addon does not buy food, water or pet food for you.
+- The status window has no rows for them.
+- The Conjured Food and Conjured Water rows in the status window are unchanged.
 
 ### Skill levels
 

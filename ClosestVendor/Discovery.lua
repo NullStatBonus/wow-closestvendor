@@ -1,6 +1,6 @@
 -- Pure learned-vendor store: no WoW globals.
 -- Vendor record: {npcId, name, uiMapID, mx, my, faction (0 both, 1 Alliance, 2 Horde), repair, ammo (0-3),
---   reagents (bitmask, see Reagents.lua)}
+--   reagents (bitmask, see Reagents.lua), supplies (bits 0-7, see Supplies.lua)}
 local _, ns = ...
 
 local D = {}
@@ -10,11 +10,11 @@ ns.Discovery = D
 function D.Record(learned, rec)
     local id = rec and rec[1]
     if type(id) ~= "number" or id <= 0 then return false end
-    local new = { rec[1], rec[2], rec[3], rec[4], rec[5], rec[6], rec[7], rec[8] or 0, rec[9] or 0 }
+    local new = { rec[1], rec[2], rec[3], rec[4], rec[5], rec[6], rec[7], rec[8] or 0, rec[9] or 0, rec[10] or 0 }
     local old = learned[id]
     if old then
         local same = true
-        for i = 1, 9 do if (old[i] or (i >= 8 and 0)) ~= new[i] then same = false break end end
+        for i = 1, 10 do if (old[i] or (i >= 8 and 0)) ~= new[i] then same = false break end end
         if same then return false end
     end
     learned[id] = new
@@ -60,12 +60,23 @@ end
 
 -- Shipped list plus learned records; a learned record replaces a shipped one with the same id.
 -- Does not modify its inputs.
+-- A learned record saved before supplies existed has no supply field: it takes the shipped one.
 function D.Merge(shipped, learned)
-    local out = {}
+    local out, shippedById = {}, {}
     for i = 1, #shipped do
         local v = shipped[i]
+        shippedById[v[1]] = v
         if not learned[v[1]] then out[#out + 1] = v end
     end
-    for _, v in pairs(learned) do out[#out + 1] = v end
+    for id, v in pairs(learned) do
+        local s = shippedById[id]
+        if s and v[10] == nil and s[10] then
+            local copy = {}
+            for i = 1, 9 do copy[i] = v[i] end
+            copy[10] = s[10]
+            v = copy
+        end
+        out[#out + 1] = v
+    end
     return out
 end

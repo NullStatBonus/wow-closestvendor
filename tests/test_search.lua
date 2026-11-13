@@ -1,5 +1,8 @@
+package.path = "tests/?.lua;" .. package.path
 local ns = {}
+require("harness").locale(ns)
 loadfile("ClosestVendor/Reagents.lua")("ClosestVendor", ns)
+loadfile("ClosestVendor/Supplies.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Search.lua")("ClosestVendor", ns)
 local S = ns.Search
 local bucket = dofile("tests/fixtures/vendors.lua")
@@ -110,6 +113,20 @@ eq(S.Nearest({ rv[1], rv[5] }, 0, 0, { reagent = powder }, ALLIANCE), nil, "none
 o, m = S.Nearest(rv, 0, 0, { reagent = powder }, ALLIANCE, 10)
 eq(name(o), "Powder Near", "overall nearest seller is on another map")
 eq(name(m), "Both Home", "nearest seller on the player's map")
+
+-- Supplies: a vendor qualifies when its supply mask (index 12) has any wanted bit; no field sells none.
+local sv = {
+    { 1, "No Field",  10, 0, 0, 0, false, 0, 3, 0, 0 },
+    { 2, "Cheese",    10, 0, 0, 0, false, 0, 10, 0, 0, 1 + 32 },   -- food + Cheese
+    { 3, "Water",     10, 0, 0, 0, false, 0, 20, 0, 0, 2 },
+    { 4, "Horde Bread", 10, 0, 0, 2, false, 0, 5, 0, 0, 1 + 16 },
+}
+eq(name(S.Nearest(sv, 0, 0, { supply = ns.Supplies.FOOD }, ALLIANCE)), "Cheese", "nearest food seller")
+eq(name(S.Nearest(sv, 0, 0, { supply = ns.Supplies.FOOD }, HORDE)), "Horde Bread", "horde takes the horde seller")
+eq(name(S.Nearest(sv, 0, 0, { supply = ns.Supplies.WATER }, ALLIANCE)), "Water", "water seller")
+eq(name(S.Nearest(sv, 0, 0, { supply = ns.Supplies.DietBits({ Bread = true, Cheese = true }) }, ALLIANCE)), "Cheese", "any of several diets")
+eq(S.Nearest(sv, 0, 0, { supply = ns.Supplies.DietBits({ Fruit = true }) }, ALLIANCE), nil, "no fruit seller")
+eq(S.Nearest({ sv[1] }, 0, 0, { supply = ns.Supplies.FOOD }, ALLIANCE), nil, "old record sells no supplies")
 
 -- From an anchor: the search starts at the given place (its continent, position and map), not at
 -- the player.

@@ -55,6 +55,26 @@ local m = D.Merge({ { 600, "Shipped", 1429, 0.1, 0.1, 0, false, 0, 8 } }, { [600
 eq(m[1][2], "Reagents", "learned record used")
 eq(m[1][9], 0, "its own mask, not the shipped one")
 
+-- The supply mask is the 10th field: stored, compared, 0 when missing, and a record saved before it
+-- existed (nil field) takes the shipped value in Merge, while a scanned record keeps its own.
+local sup = {}
+eq(D.Record(sup, { 900, "Baker", 1429, 0.5, 0.5, 0, false, 0, 0, 17 }), true, "supply vendor stored")
+eq(sup[900][10], 17, "supply mask stored")
+eq(D.Record(sup, { 900, "Baker", 1429, 0.5, 0.5, 0, false, 0, 0, 17 }), false, "same supplies: no change")
+eq(D.Record(sup, { 900, "Baker", 1429, 0.5, 0.5, 0, false, 0, 0, 1 }), true, "changed stock updates the mask")
+eq(D.Record(sup, { 900, "Baker", 1429, 0.5, 0.5, 0, false, 0, 0 }), true, "an offer without supplies clears the mask")
+eq(sup[900][10], 0, "missing supply mask is 0")
+sup[901] = { 901, "Saved Before", 1429, 0.5, 0.5, 0, false, 0, 0 } -- nine fields: saved by an older version
+eq(D.Record(sup, { 901, "Saved Before", 1429, 0.5, 0.5, 0, false, 0, 0, 0 }), false, "old record equals an empty supply mask")
+sup[902] = { 902, "Saved Before", 1429, 0.5, 0.5, 0, false, 0, 0 }
+local sm = D.Merge({ { 902, "Shipped", 1429, 0.5, 0.5, 0, false, 0, 0, 21 }, { 900, "Shipped", 1429, 0.5, 0.5, 0, false, 0, 0, 21 } },
+    { [902] = sup[902], [900] = sup[900] })
+local sById = {}
+for _, v in ipairs(sm) do sById[v[1]] = v end
+eq(sById[902][10], 21, "old learned record takes the shipped supplies")
+eq(sup[902][10], nil, "and the learned table is not changed")
+eq(sById[900][10], 0, "a scanned record keeps its own mask")
+
 -- The stored record is a copy, not the caller's table.
 local rec = { 200, "Copy", 1429, 0.1, 0.1, 0, false, 1 }
 D.Record(learned, rec)

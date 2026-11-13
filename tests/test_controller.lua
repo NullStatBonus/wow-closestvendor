@@ -4,7 +4,7 @@ local eq = H.eq
 
 local ns = {}
 H.locale(ns)
-for _, f in ipairs({ "Triggers", "Professions", "Reagents", "Search", "Controller" }) do
+for _, f in ipairs({ "Triggers", "Professions", "Reagents", "Supplies", "Search", "Controller" }) do
     loadfile("ClosestVendor/" .. f .. ".lua")("ClosestVendor", ns)
 end
 
@@ -19,12 +19,14 @@ local VENDORS = {
 
 local function world(over)
     local w = { free = 10, dur = nil, combat = false, pos = { 1, 0, 0 }, calls = {}, setCount = 0, clearCount = 0,
-                prompts = {}, notes = {}, cancelCount = 0, ammoKind = nil, ammoCount = 0, logs = {}, says = {}, known = {}, open = false }
+                prompts = {}, notes = {}, cancelCount = 0, ammoKind = nil, ammoCount = 0, logs = {}, says = {}, sounds = {}, known = {}, open = false }
     for k, v in pairs(over or {}) do w[k] = v end
     local env = {
         cfg = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true,
                  tradeThreshold = 10, tradeEnabled = true, reagentThreshold = 5 },
         reagents = function() return w.reagents end,
+        supplies = function() return w.supplies end,
+        playSound = function(key) w.sounds[#w.sounds + 1] = key or "unset" end,
         skills = function() return w.skills end,
         known = w.known,
         trainerBuckets = w.trainers or {},
@@ -1295,5 +1297,263 @@ eq(w.c.Demo(rolls(1, 1)), false, "timers refuse: no demo")
 eq(w.setCount, 0, "nothing pinned")
 w = world({ noAfter = true })
 eq(w.c.Demo(rolls(1, 1)), false, "no timer function: no demo")
+
+-- Supplies: food, water and pet food, and the notice-only reminders -------------------------------------------
+-- { npcId, name, uiMapID, mx, my, faction, repair, ammo, wx, wy, reagents, supplies }
+local SV = {
+    { 1, "Plain Seller", 100, 0.1, 0.1, 0, false, 0, 5, 0, 0, 0 },
+    { 2, "Baker",        100, 0.3, 0.1, 0, false, 0, 30, 0, 0, 1 + 16 },  -- food, Bread
+    { 3, "Well",         100, 0.6, 0.1, 0, false, 0, 60, 0, 0, 2 },       -- water
+    { 4, "Butcher",      100, 0.8, 0.1, 0, false, 0, 80, 0, 0, 1 + 4 },   -- food, Meat
+}
+local SUPCFG = { foodEnabled = true, waterEnabled = true, petFoodEnabled = true, healthstoneRemind = true,
+                 foodThreshold = 5, waterThreshold = 5, petFoodThreshold = 5, remindSound = "whisper" }
+-- class token, bag totals, optional pet diets and known spells; over adds world fields.
+local function supply(class, totals, diets, knows, over)
+    local o = { buckets = { [1] = SV }, cfg = {}, supplies = { class = class, totals = totals, diets = diets,
+        knows = function(id) return (knows or {})[id] == true end } }
+    for k, v in pairs(SUPCFG) do o.cfg[k] = v end
+    for k, v in pairs(over or {}) do
+        if k == "cfg" then for ck, cv in pairs(v) do o.cfg[ck] = cv end else o[k] = v end
+    end
+    return world(o)
+end
+
+-- Food: nearest vendor that sells food, not the nearest vendor; the question names food and the count.
+w = supply("WARRIOR", { food = 3, water = 0, healthstone = 0 })
+w.c.Evaluate()
+eq(#w.prompts, 1, "food question asked")
+eq(w.prompts[1].kind, "supply", "supply kind")
+eq(w.prompts[1].vendor[2], "Baker", "nearest food seller")
+eq(w.prompts[1].count, 3, "count passed")
+eq(w.prompts[1].trade, "food", "named food")
+eq(w.setCount, 1, "Yes sets the pin")
+w.c.Evaluate()
+eq(#w.prompts, 1, "not asked again while low")
+eq(ns.Controller.PromptText("supply", SV[2], nil, 3, "food"), "You are low on food (3 left).\n\nNavigate to the closest vendor that sells food, Baker?", "question text")
+w.supplies.totals = { food = 30, water = 0, healthstone = 0 }
+w.c.Evaluate()
+eq(w.clearCount >= 1, true, "restocked: the pin is withdrawn")
+
+-- Water is for mana classes; food comes first, water after the food question resolves.
+w = supply("PRIEST", { food = 30, water = 2, healthstone = 0 })
+w.c.Evaluate()
+eq(w.prompts[1].trade, "water", "water asked for a priest")
+eq(w.prompts[1].vendor[2], "Well", "nearest water seller")
+w = supply("ROGUE", { food = 30, water = 0, healthstone = 0 })
+w.c.Evaluate()
+eq(#w.prompts, 0, "a rogue is never asked about water")
+w = supply("PRIEST", { food = 1, water = 1, healthstone = 0 }, nil, nil, { autoAccept = false })
+w.c.Evaluate()
+eq(#w.prompts, 1, "one question at a time")
+eq(w.prompts[1].trade, "food", "food first")
+
+-- Pet food: the pet's diet picks the vendor; no diet means nothing is asked.
+w = supply("HUNTER", { food = 30, water = 30, healthstone = 0, pet = 2 }, { Meat = true })
+w.c.Evaluate()
+eq(w.prompts[1].trade, "pet food (Meat)", "named with the diet")
+eq(w.prompts[1].vendor[2], "Butcher", "the Meat seller, not the nearer Baker")
+w = supply("HUNTER", { food = 30, water = 30, healthstone = 0 }, nil)
+w.c.Evaluate()
+eq(#w.prompts, 0, "no pet: nothing asked")
+w = supply("HUNTER", { food = 30, water = 30, healthstone = 0, pet = 1 }, { Bread = true, Cheese = true })
+w.c.Evaluate()
+eq(w.prompts[1].trade, "pet food (Bread, Cheese)", "several diets in table order")
+eq(w.prompts[1].vendor[2], "Baker", "any of the diets")
+
+-- No known seller: one chat line, no question; once per supply.
+w = supply("HUNTER", { food = 30, water = 30, healthstone = 0, pet = 1 }, { Fruit = true })
+w.c.Evaluate()
+eq(#w.prompts, 0, "no fruit seller: no dialog")
+eq(#w.says, 1, "one chat line")
+eq(w.says[1], "No known vendor sells food your pet eats on this continent yet. Open a vendor that sells it once and the addon will remember it.", "pet line")
+w.c.Evaluate()
+eq(#w.says, 1, "said once")
+w = supply("WARRIOR", { food = 1, water = 0, healthstone = 0 }, nil, nil, { buckets = { [1] = { SV[1], SV[3] } } })
+w.c.Evaluate()
+eq(w.says[1], "No known vendor sells food on this continent yet. Open a vendor that sells it once and the addon will remember it.", "food line")
+
+-- Switches and the master switch.
+w = supply("PRIEST", { food = 1, water = 1, healthstone = 0 }, nil, nil, { cfg = { foodEnabled = false } })
+w.c.Evaluate()
+eq(w.prompts[1].trade, "water", "food switched off")
+w = supply("PRIEST", { food = 1, water = 1, healthstone = 0 }, nil, nil, { cfg = { ammoEnabled = false } })
+w.c.Evaluate()
+eq(#w.prompts, 0, "master switch off: nothing asked")
+w = supply("WARRIOR", { food = 1, water = 0, healthstone = 0 }, nil, nil, { combat = true })
+w.c.Evaluate()
+eq(#w.prompts, 0, "combat holds it back")
+w = supply("WARRIOR", { food = nil, water = 0, healthstone = 0 })
+w.c.Evaluate()
+eq(#w.prompts, 0, "unknown count is never low")
+w = supply("WARRIOR", nil)
+w.c.Evaluate()
+eq(#w.prompts, 0, "unreadable bags: nothing asked")
+
+-- Auto mode pins and says what to buy.
+w = supply("WARRIOR", { food = 1, water = 0, healthstone = 0 }, nil, nil, { cfg = { vendorMode = "auto" } })
+w.c.Evaluate()
+eq(#w.prompts, 0, "auto: no question")
+eq(w.last[2], "Baker", "auto pin")
+eq(w.says[1], "Navigating to Baker (30 yards) to buy food.", "auto says what to buy")
+
+-- A reagent is asked before food.
+w = supply("MAGE", { food = 1, water = 30, healthstone = 0 }, nil, nil, { reagents = { { item = POWDER, count = 3, name = "Arcane Powder" } },
+    buckets = { [1] = { SV[2], RV[2] } }, autoAccept = false })
+w.c.Evaluate()
+eq(w.prompts[1].kind, "reagent", "reagent before food")
+
+-- Reminders: a mage who can conjure is reminded, never sent; a warlock is reminded to make a healthstone.
+w = supply("MAGE", { food = 2, water = 30, healthstone = 0 }, nil, { [587] = true })
+w.c.Evaluate()
+eq(#w.prompts, 0, "mage who can conjure: no vendor question")
+eq(w.setCount, 0, "and no pin")
+eq(w.says[1], "You are low on food (2 left). Cast Conjure Food to make more.", "conjure reminder")
+eq(w.notes[1], w.says[1], "also on screen")
+w.c.Evaluate()
+eq(#w.says, 1, "once")
+w = supply("MAGE", { food = 2, water = 30, healthstone = 0 }, nil, {})
+w.c.Evaluate()
+eq(#w.prompts, 1, "mage without the spell is sent to a vendor")
+eq(#w.says, 0, "and not reminded")
+w = supply("WARLOCK", { food = 30, water = 30, healthstone = 0 }, nil, { [6201] = true })
+w.c.Evaluate()
+eq(w.says[1], "You have no healthstone. Cast Create Healthstone to make one.", "healthstone reminder")
+eq(#w.prompts, 0, "no question")
+w = supply("WARLOCK", { food = 30, water = 30, healthstone = 1 }, nil, { [6201] = true })
+w.c.Evaluate()
+eq(#w.says, 0, "has a healthstone")
+w = supply("MAGE", { food = 2, water = 30, healthstone = 0 }, nil, { [587] = true }, { combat = true })
+w.c.Evaluate()
+eq(#w.says, 0, "combat: not shown")
+w.combat = false
+w.c.Evaluate()
+eq(#w.says, 1, "shown after combat")
+w = supply("MAGE", { food = 2, water = 30, healthstone = 0 }, nil, { [587] = true }, { noNotify = true })
+w.c.Evaluate()
+eq(#w.says, 1, "chat line without an on-screen notice function")
+w = supply("MAGE", { food = 2, water = 30, healthstone = 0 }, nil, { [587] = true }, { cfg = { autoNotice = false } })
+w.c.Evaluate()
+eq(#w.notes, 0, "on-screen notice switched off")
+
+-- The reminder sound: the saved key goes to the game side once per batch; a vendor question makes none.
+w = supply("MAGE", { food = 2, water = 30, healthstone = 0 }, nil, { [587] = true })
+w.c.Evaluate()
+eq(table.concat(w.sounds, ","), "whisper", "a reminder plays the chosen sound")
+w.c.Evaluate()
+eq(#w.sounds, 1, "once, not on every check")
+local WATER_SPELL = ns.Reagents.DisplayOnly("MAGE")[1].id == 5349 and ns.Reagents.DisplayOnly("MAGE")[2].spells[1] or ns.Reagents.DisplayOnly("MAGE")[1].spells[1]
+w = supply("MAGE", { food = 2, water = 2, healthstone = 0 }, nil, { [587] = true, [WATER_SPELL] = true })
+w.c.Evaluate()
+eq(#w.says .. "/" .. #w.sounds, "2/1", "food and water together: two lines, one sound")
+w = supply("MAGE", { food = 2, water = 30, healthstone = 0 }, nil, {})
+w.c.Evaluate()
+eq(#w.sounds, 0, "a vendor question is silent here (the pin has its own sound)")
+w = supply("MAGE", { food = 2, water = 30, healthstone = 0 }, nil, { [587] = true }, { combat = true })
+w.c.Evaluate()
+eq(#w.sounds, 0, "combat: no sound until the reminder shows")
+w.combat = false
+w.c.Evaluate()
+eq(#w.sounds, 1, "after combat")
+w = supply("MAGE", { food = 2, water = 30, healthstone = 0 }, nil, { [587] = true }, { cfg = { remindSound = "none" } })
+w.c.Evaluate()
+eq(table.concat(w.sounds, ","), "none", "none is passed on; the game side plays nothing for it")
+w = supply("WARLOCK", { food = 30, water = 30, healthstone = 0 }, nil, { [6201] = true })
+w.c.Evaluate()
+eq(#w.sounds, 1, "the healthstone reminder too")
+w = supply("MAGE", { food = 7, water = 1, healthstone = 0 })
+w.c.Test("remind")
+eq(#w.sounds, 1, "/cvn test remind plays it")
+w = supply("WARRIOR", { food = 7, water = 0, healthstone = 0 })
+w.c.Test("remind")
+eq(#w.sounds .. "/" .. #w.says .. "/" .. #w.notes, "1/1/1", "any other class: a test line, on screen, and the sound")
+w = supply("MAGE", { food = 7, water = 1, healthstone = 0 }, nil, nil, { combat = true, instance = "party" })
+w.c.Test("remind")
+eq(#w.says .. "/" .. #w.sounds, "1/1", "works in combat and in an instance")
+w = supply("MAGE", { food = 7, water = 1, healthstone = 0 }, nil, nil, { cfg = { ammoEnabled = false, foodEnabled = false } })
+w.c.Test("remind")
+eq(#w.says .. "/" .. #w.sounds, "1/1", "works with the warnings switched off")
+w = world({})
+eq(w.c.Test("remind"), nil, "no supply source: still no error")
+eq(#w.says .. "/" .. #w.sounds, "1/1", "and still a line and a sound")
+
+-- A click on a supply row pins the nearest seller at once.
+w = supply("WARRIOR", { food = 3, water = 0, healthstone = 0 }, nil, nil, { autoAccept = false })
+eq(w.c.Go("supply", "food"), true, "food row clicked")
+eq(w.last[2], "Baker", "the nearest food seller, not the nearest vendor")
+eq(#w.prompts, 0, "no question")
+w = supply("PRIEST", { food = 30, water = 3, healthstone = 0 })
+eq(w.c.Go("supply", "water"), true, "water row clicked")
+eq(w.last[2], "Well", "the water seller")
+w = supply("HUNTER", { food = 30, water = 30, pet = 2, healthstone = 0 }, { Meat = true })
+eq(w.c.Go("supply", "pet"), true, "pet food row clicked")
+eq(w.last[2], "Butcher", "a seller of the pet's diet")
+w = supply("HUNTER", { food = 30, water = 30, healthstone = 0 })
+eq(w.c.Go("supply", "pet"), false, "no pet diet: nothing to look for")
+w = supply("WARRIOR", { food = 3, water = 0, healthstone = 0 }, nil, nil, { buckets = { [1] = { SV[3] } } })
+eq(w.c.Go("supply", "food"), false, "no food seller known")
+eq(w.says[#w.says], "No known vendor selling food on this continent for your faction.", "chat says so")
+w = supply("WARRIOR", { food = 3, water = 0, healthstone = 0 }, nil, nil, { autoAccept = false, combat = true })
+w.c.Evaluate()
+eq(#w.prompts, 0, "in combat the question waits")
+eq(w.c.Go("supply", "food"), true, "a click pins in combat")
+w.combat = false
+w.c.Evaluate()
+eq(#w.prompts, 0, "the click counted as the answer: the food question is not asked afterwards")
+
+-- /cvn test.
+w = supply("WARRIOR", { food = 30, water = 0, healthstone = 0 })
+eq(w.c.Test("food"), nil, "test food asks regardless of count")
+eq(w.prompts[1].vendor[2], "Baker", "test food target")
+eq(supply("ROGUE", { food = 1, water = 0, healthstone = 0 }).c.Test("water"), "Your class does not use water.", "test water for a rogue")
+eq(supply("HUNTER", { food = 1, water = 1, healthstone = 0 }).c.Test("petfood"), "There is no pet to feed.", "test petfood without a pet")
+eq(supply("MAGE", { food = 1, water = 1, healthstone = 0 }).c.Test("petfood"), "There is no pet to feed.", "test petfood for another class")
+w = supply("HUNTER", { food = 1, water = 1, healthstone = 0, pet = 0 }, { Meat = true })
+eq(w.c.Test("petfood"), nil, "test petfood with a pet")
+eq(w.prompts[1].vendor[2], "Butcher", "test petfood target")
+w = supply("MAGE", { food = 7, water = 1, healthstone = 0 })
+eq(w.c.Test("remind"), nil, "test remind for a mage")
+eq(w.says[1], "You are low on food (7 left). Cast Conjure Food to make more.", "test reminder text")
+w = supply("WARLOCK", { food = 7, water = 1, healthstone = 3 })
+w.c.Test("remind")
+eq(w.says[1], "You have no healthstone. Cast Create Healthstone to make one.", "test remind for a warlock")
+w = supply("WARRIOR", { food = 7, water = 0, healthstone = 0 })
+eq(w.c.Test("remind"), nil, "test remind for a warrior")
+eq(w.says[1], "This is a test reminder. Only mages and warlocks get real ones.", "a plain test line")
+eq(world({ buckets = { [1] = { SV[3] } }, supplies = { class = "WARRIOR", totals = { food = 1 }, knows = function() return false end } }).c.Test("food"),
+    "No known vendor selling food on this continent for your faction.", "test food with no seller")
+eq(world().c.Test("food"), "Your bags cannot be read right now.", "no supply source")
+
+-- /cvn demo with supplies: a made-up count and diet, a reminder, and a direct pin; nothing real is changed.
+w = supply("WARRIOR", { food = 30, water = 0, healthstone = 0 }, nil, nil, { autoAccept = false })
+w.c.Demo(rolls(2, 5, 3))
+eq(w.prompts[1].kind .. "/" .. tostring(w.prompts[1].trade) .. "/" .. w.prompts[1].count .. "/" .. w.prompts[1].vendor[2], "supply/food/2/Baker", "demo question about food, made-up count")
+w.timers[#w.timers].fn()
+eq(w.cancelCount >= 1, true, "and taken back after the demo")
+w = supply("WARRIOR", { food = 30, water = 0, healthstone = 0 }, nil, nil, { autoAccept = false })
+w.c.Demo(rolls(2, 6, 1))
+eq(w.prompts[1].trade, "food", "water for a class without mana is shown as food")
+w = supply("PRIEST", { food = 30, water = 30, healthstone = 0 }, nil, nil, { autoAccept = false })
+w.c.Demo(rolls(2, 6, 1))
+eq(w.prompts[1].trade .. "/" .. w.prompts[1].vendor[2], "water/Well", "water for a priest")
+w = supply("HUNTER", { food = 30, water = 30, healthstone = 0 }, nil, nil, { autoAccept = false })
+w.c.Demo(rolls(2, 7, 1, 4))
+eq(w.prompts[1].trade .. "/" .. w.prompts[1].vendor[2], "pet food (Meat)/Butcher", "no pet out: a made-up diet")
+w = supply("HUNTER", { food = 30, water = 30, pet = 20, healthstone = 0 }, { Bread = true }, nil, { autoAccept = false })
+w.c.Demo(rolls(2, 7, 2))
+eq(w.prompts[1].trade .. "/" .. w.prompts[1].vendor[2], "pet food (Bread)/Baker", "a pet out: its own diet, no diet roll")
+w = supply("WARRIOR", { food = 30, water = 0, healthstone = 0 })
+w.c.Demo(rolls(1, 5, 1))
+eq(w.setCount .. "/" .. w.last[2], "1/Baker", "pin without asking for a supply")
+w = supply("MAGE", { food = 30, water = 30, healthstone = 0 })
+w.c.Demo(rolls(1, 8))
+eq(#w.says .. "/" .. #w.sounds .. "/" .. #w.prompts .. "/" .. w.setCount, "1/1/0/0", "a demo reminder: a line and the sound, no question, no pin")
+eq(w.says[1], "You are low on food (30 left). Cast Conjure Food to make more.", "the mage reminder text")
+w = supply("WARRIOR", { food = 30, water = 0, healthstone = 0 })
+w.c.Demo(rolls(3, 3))
+eq(w.setCount .. "/" .. w.last[2] .. "/" .. #w.prompts, "1/Baker/0", "direct pin for food")
+w = supply("WARRIOR", { food = 30, water = 0, healthstone = 0 }, nil, nil, { buckets = { [1] = { SV[1] } } })
+w.c.Demo(rolls(2, 5, 1))
+eq(w.says[#w.says], "No known vendor selling food on this continent for your faction.", "no seller: says so, no question")
 
 H.done()
