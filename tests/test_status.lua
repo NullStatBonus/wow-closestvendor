@@ -11,7 +11,7 @@ local S = ns.Status
 
 local function cfg(over)
     local c = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10, reagentThreshold = 5,
-        bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, suppliesEnabled = true, hudRow = {},
+        bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, suppliesEnabled = true, reagentsEnabled = true, hudRow = {},
         foodEnabled = true, waterEnabled = true, petFoodEnabled = true, healthstoneRemind = true,
         foodThreshold = 5, waterThreshold = 5, petFoodThreshold = 5 }
     for k, v in pairs(over or {}) do c[k] = v end
@@ -78,7 +78,8 @@ eq(keys(S.Rows({ reagents = { { item = POWDER, count = 5 } } }, cfg())), "reagen
 eq(keys(S.Rows({ reagents = { { item = POWDER, count = 6 } } }, cfg())), "reagent:17020", "reagent above its threshold")
 -- A switched-off warning is never low.
 eq(keys(S.Rows({ free = 0, dur = 1, ammoKind = "arrow", ammoCount = 0, reagents = { { item = POWDER, count = 0 } } },
-    cfg({ bagEnabled = false, durEnabled = false, ammoEnabled = false }))), "ammo,reagent:17020,bags,durability", "warnings off: rows but none low")
+    cfg({ bagEnabled = false, durEnabled = false, ammoEnabled = false, reagentsEnabled = false }))), "ammo,reagent:17020,bags,durability", "warnings off: rows but none low")
+eq(keys(S.Rows({ ammoKind = "arrow", ammoCount = 0, reagents = { { item = POWDER, count = 0 } } }, cfg({ ammoEnabled = false }))), "ammo,reagent:17020!", "ammo off: the reagent row is still low")
 
 -- Professions: a row per known profession below the last cap, low when within the threshold.
 local skills = { { name = "Mining", rank = 70, max = 75 }, { name = "Cooking", rank = 100, max = 150 },

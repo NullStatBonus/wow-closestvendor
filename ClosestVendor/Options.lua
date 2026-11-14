@@ -13,8 +13,6 @@ local ROWS = {
     { key = "dur", label = L["Durability"], slider = L["Ask when an item is below (%)"],
       tip = L["Ask about the nearest repair vendor when any equipped item falls below this durability."], step = 1,
       format = function(v) return v .. "%" end },
-    { key = "ammo", label = L["Ammo and reagents"], slider = L["Ask when ammo is at or below"],
-      tip = L["Ask about the nearest vendor selling your ammo when the equipped ammo drops to this number or fewer. Turning this off also stops the reagent questions."], step = 50 },
     { key = "trade", label = L["Professions"], slider = L["Ask when a skill is this close to its limit"],
       tip = L["Ask about the nearest trainer when a profession is this many points or fewer from its current skill limit."], step = 1 },
 }
@@ -122,8 +120,13 @@ end
 -- The reagent slider and one checkbox per reagent of the player's class. The saved setting is a list
 -- of reagents switched off, so a checkbox shows "on" when the item is not in it: a small proxy table
 -- turns that around, and anything not switched off (including reagents added later) is on.
--- masterCheckbox/masterSetting (the ammo switch) only grey these out when they share the page.
-local function registerReagents(category, cfg, defaults, onChange, class, masterCheckbox, masterSetting)
+local function registerReagents(category, cfg, defaults, onChange, class)
+    local on = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_REAGENTS_ENABLED", "reagentsEnabled", cfg,
+        Settings.VarType.Boolean, L["Reagents"], defaults.reagentsEnabled)
+    local masterCheckbox = Settings.CreateCheckbox(category, on,
+        L["Ask about the nearest vendor selling a class reagent when it runs low."])
+    on:SetValueChangedCallback(onChange)
+    local masterSetting = on
     local amount = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_REAGENT_THRESHOLD", "reagentThreshold", cfg,
         Settings.VarType.Number, L["Ask when a reagent is at or below"], defaults.reagentThreshold)
     local limits = ns.Commands.LIMITS.reagent
@@ -203,8 +206,23 @@ local function registerSupplies(category, cfg, defaults, onChange, class, master
     end)
 end
 
--- Ammo buying. The grade dropdowns need a newer part of the API; without it use /cvn arrows and /cvn bullets.
+-- Ammo: its switch and threshold, then buying. The grade dropdowns need a newer part of the API; without it
+-- use /cvn arrows and /cvn bullets.
 local function registerAmmoBuying(category, cfg, defaults, onChange)
+    local on = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AMMO_ENABLED", "ammoEnabled", cfg,
+        Settings.VarType.Boolean, L["Ammo"], defaults.ammoEnabled)
+    local checkbox = Settings.CreateCheckbox(category, on,
+        L["Ask about the nearest vendor selling your ammo when the equipped ammo drops to the number below or fewer."])
+    local amount = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AMMO_THRESHOLD", "ammoThreshold", cfg,
+        Settings.VarType.Number, L["Ask when ammo is at or below"], defaults.ammoThreshold)
+    local limits = ns.Commands.LIMITS.ammo
+    local options = Settings.CreateSliderOptions(limits[1], limits[2], 50)
+    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+    local slider = Settings.CreateSlider(category, amount, options,
+        L["Ask about the nearest vendor selling your ammo when the equipped ammo drops to this number or fewer."])
+    if slider.SetParentInitializer then slider:SetParentInitializer(checkbox, function() return on:GetValue() end) end
+    on:SetValueChangedCallback(onChange)
+    amount:SetValueChangedCallback(onChange)
     local buy = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AMMOBUY_ENABLED", "ammoBuyEnabled", cfg,
         Settings.VarType.Boolean, L["Buy ammo"], defaults.ammoBuyEnabled)
     Settings.CreateCheckbox(category, buy, L["Fill your quiver or ammo pouch with ammo when a merchant window opens."])
@@ -366,7 +384,7 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note, swatchPicke
     end
     local category = remember(Settings.RegisterVerticalLayoutCategory(L["Closest Vendor"]))
     header(category, L["Warnings"])
-    local ammoSwitch, ammoSetting, suppliesSwitch, suppliesSetting
+    local suppliesSwitch, suppliesSetting
     for _, row in ipairs(ROWS) do
         local tag = row.key:upper()
         local on = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_" .. tag .. "_ENABLED",
@@ -386,7 +404,6 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note, swatchPicke
 
         on:SetValueChangedCallback(onChange)
         amount:SetValueChangedCallback(onChange)
-        if row.key == "ammo" then ammoSwitch, ammoSetting = checkbox, on end
     end
     -- Food, water, pet food and the healthstone reminder: one switch here, each also on the Supplies page.
     local suppliesOn = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_SUPPLIES_ENABLED", "suppliesEnabled", cfg,
@@ -424,17 +441,18 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note, swatchPicke
     Settings.CreateCheckbox(category, ah, L["When a status window row item can be traded, navigate to the auction house if it is closer than a vendor."])
     ah:SetValueChangedCallback(onChange)
 
+    -- The pages are in alphabetical order, with the status window last.
+    local ammo = page(category, L["Ammo"])
+    if ammo == category then header(category, L["Ammo"]) end
+    registerAmmoBuying(ammo, cfg, defaults, onChange)
+
     local reagents = page(category, L["Reagents"])
     if reagents == category then header(category, L["Reagents"]) end
-    registerReagents(reagents, cfg, defaults, onChange, class, reagents == category and ammoSwitch or nil, ammoSetting)
+    registerReagents(reagents, cfg, defaults, onChange, class)
 
     local supplies = page(category, L["Supplies"])
     if supplies == category then header(category, L["Supplies"]) end
     registerSupplies(supplies, cfg, defaults, onChange, class, supplies == category and suppliesSwitch or nil, suppliesSetting)
-
-    local ammo = page(category, L["Ammo"])
-    if ammo == category then header(category, L["Ammo"]) end
-    registerAmmoBuying(ammo, cfg, defaults, onChange)
 
     local window = page(category, L["Status window"])
     if window == category then header(category, L["Status window"]) end

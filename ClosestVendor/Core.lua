@@ -5,7 +5,7 @@ local A = ns.Adapter
 local L = ns.L
 
 local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
-    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, suppliesEnabled = true,
+    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, suppliesEnabled = true, reagentsEnabled = true,
     ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped",
     vendorMode = "ask", vendorPrefer = "map", autoNotice = true, reagentThreshold = 5,
     -- Reagent buying: off until the player turns it on, asks first, stocks up to 20 of each.
@@ -248,6 +248,8 @@ local function init()
         if type(DB.hud) == "table" then CHAR.hud = copy(DB.hud) end
     end
     CHAR.cfg = CHAR.cfg or {}
+    -- Reagents once shared the ammo switch; a character saved before they had their own keeps that choice.
+    if CHAR.cfg.reagentsEnabled == nil and CHAR.cfg.ammoEnabled ~= nil then CHAR.cfg.reagentsEnabled = CHAR.cfg.ammoEnabled end
     for k, v in pairs(DEFAULTS) do if CHAR.cfg[k] == nil then CHAR.cfg[k] = v end end
     CHAR.cfg.reagentOff = CHAR.cfg.reagentOff or {} -- item ids the player switched off; all others are on
     -- A saved window number outside its range, or a colour that is not one, is put right.
@@ -410,8 +412,8 @@ local function reagentLine()
         if item then off[#off + 1] = item.name end
     end
     table.sort(off)
-    return ("reagents: class %s, threshold %d, watching: %s, switched off: %s"):format(tostring(A.classToken()),
-        CHAR.cfg.reagentThreshold, #watching > 0 and table.concat(watching, ", ") or "none", #off > 0 and table.concat(off, ", ") or "none")
+    return ("reagents: %s, class %s, threshold %d, watching: %s, switched off: %s"):format(CHAR.cfg.reagentsEnabled and "on" or "off",
+        tostring(A.classToken()), CHAR.cfg.reagentThreshold, #watching > 0 and table.concat(watching, ", ") or "none", #off > 0 and table.concat(off, ", ") or "none")
 end
 
 -- The report: facts about this client and addon, then the debug log.

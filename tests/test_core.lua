@@ -1063,8 +1063,10 @@ g = mage({ class = "WARRIOR" }); g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "a class without reagents")
 g = mage(); g.env.ClosestVendorCharDB.cfg.reagentOff[17020] = true; g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "switched off")
+g = mage(); g.env.SlashCmdList.CLOSESTVENDOR("reagents off"); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "reagents switch off")
 g = mage(); g.env.SlashCmdList.CLOSESTVENDOR("ammo off"); g.onEvent("BAG_UPDATE_DELAYED")
-eq(g.popup, nil, "master switch off")
+eq(g.popup ~= nil, true, "ammo switch off: the reagent question still comes")
 
 -- Learning the spell later is noticed.
 g = mage({ spells = {} }); g.onEvent("BAG_UPDATE_DELAYED")
@@ -1105,7 +1107,7 @@ g = mage(); g.env.ClosestVendorCharDB.cfg.reagentOff[17031] = true
 g.env.SlashCmdList.CLOSESTVENDOR("log")
 local rwin
 for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then rwin = f end end
-eq(has(rwin.box.text, "reagents: class MAGE, threshold 5, watching: Arcane Powder:3, switched off: Rune of Teleportation"), true, "report line")
+eq(has(rwin.box.text, "reagents: on, class MAGE, threshold 5, watching: Arcane Powder:3, switched off: Rune of Teleportation"), true, "report line")
 eq(has(rwin.box.text, "reagent buying: off, asks first, up to 20 of each"), true, "report lists reagent buying")
 
 -- Reagent buying at a merchant: off by default, asks in a dialog of its own, buys up to the amount
@@ -1894,6 +1896,18 @@ eq(has(table.concat(g.printed, "\n"), "Reminder sound: Whisper ping"), true, "so
 eq(has(swin.box.text, "reminder sound whisper"), true, "sound in the report header")
 
 H.done()
+
+-- Reagents have their own switch; a character saved before that keeps what the ammo switch said.
+do
+    local old = boot({ charDb = { cfg = { ammoEnabled = false } } }); login(old)
+    eq(old.env.ClosestVendorCharDB.cfg.reagentsEnabled, false, "ammo was off: reagents start off")
+    local on = boot({ charDb = { cfg = { ammoEnabled = true } } }); login(on)
+    eq(on.env.ClosestVendorCharDB.cfg.reagentsEnabled, true, "ammo was on: reagents start on")
+    local own = boot({ charDb = { cfg = { ammoEnabled = false, reagentsEnabled = true } } }); login(own)
+    eq(own.env.ClosestVendorCharDB.cfg.reagentsEnabled, true, "an own choice is kept")
+    local fresh = boot(); login(fresh)
+    eq(fresh.env.ClosestVendorCharDB.cfg.reagentsEnabled, true, "new: on")
+end
 
 -- Settings are per character; vendors learned are shared by the account.
 do

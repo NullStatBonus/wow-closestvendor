@@ -20,9 +20,10 @@ Each check has an action and an expected result. A line that starts with "Note" 
 ## 1. Settings page and commands
 
 - [ ] Open Esc, Options, AddOns, **Closest Vendor**. Expected: the page exists.
-- [ ] On the settings page, find Bag space, Durability, and Ammo and reagents. Expected: each has one checkbox and one slider.
-- [ ] Look under the Ammo and reagents slider. Expected: the reagent slider is there, with one checkbox for each reagent of your class.
-- [ ] Look at the rest of the settings page. Expected: the Buy ammo and Ask before buying ammo checkboxes are there. The Arrows to buy and Bullets to buy dropdowns are there.
+- [ ] On the main settings page, look at Warnings. Expected, in this order: Bag space, Durability and Professions, each with one checkbox and one slider, then a Supplies checkbox.
+- [ ] Look at the pages under Closest Vendor. Expected, in this order: Ammo, Reagents, Supplies, then Status window last.
+- [ ] On the Ammo page, find the Ammo checkbox and slider. Expected: the Buy ammo, Ask before buying and arrow and bullet dropdowns are below them.
+- [ ] On the Reagents page, find the Reagents checkbox. Expected: the reagent slider is under it, with one checkbox for each reagent of your class.
 - [ ] Move a slider. Expected: `/cvn` shows the new number.
 - [ ] Enter `/cvn ammo 500`. Reopen the settings page. Expected: the ammo slider is at 500.
 - [ ] Clear a checkbox. Expected: its slider is greyed out. That trigger stops asking.
@@ -225,8 +226,8 @@ The spell IDs and item IDs were checked against the Classic Era and WoW Forever 
 - [ ] Enter `/cvn reagent on arcane powder`. Expected: the reagent comes back.
 - [ ] Enter `/cvn reagent` with an unknown reagent name, or a reagent of another class. Expected: a message appears.
 - [ ] Open the settings page. Expected: it lists only the reagents of your class. All are on by default. Each has a checkbox that matches `/cvn reagents`.
-- [ ] Clear "Ammo and reagents". Expected: the ammo slider, the reagent slider and the reagent checkboxes are greyed out.
-- [ ] With "Ammo and reagents" cleared, trigger an ammo question and a reagent question. Expected: the addon silences both.
+- [ ] Clear "Reagents" on the Reagents page. Expected: the reagent slider and the reagent checkboxes are greyed out. Clear "Ammo" on the Ammo page. Expected: the ammo slider is greyed out and the reagent controls are not.
+- [ ] With "Ammo" cleared and "Reagents" on, trigger an ammo question and a reagent question. Expected: only the reagent question appears. Swap them with `/cvn ammo on` and `/cvn reagents off`. Expected: only the ammo question appears.
 - [ ] Use a hunter, a warrior and a warlock. Expected: no reagent checkboxes.
 - [ ] As a hunter, warrior or warlock, enter `/cvn reagents`. Expected: it says there are none.
 - [ ] As a hunter, warrior or warlock, play normally. Expected: no reagent question ever appears.
@@ -502,9 +503,9 @@ Enter `/cvn debug on`. Use `/cvn` to check the line "Supplies: food on (5), wate
 
 ### 14.4 Settings and commands
 
-- [ ] Open the settings page. Expected: a **Supplies** page sits between Reagents and Ammo. It shows only the rows your class can use. A warlock also sees **Healthstone reminder**.
+- [ ] Open the settings page. Expected: a **Supplies** page sits after Reagents. It shows only the rows your class can use. A warlock also sees **Healthstone reminder**.
 - [ ] Open the Supplies page as any class. Expected: a **Reminder sound** dropdown with Whisper ping, Minimap ping, Group invite, Ready check and None. Choose one. Expected: it plays at once.
-- [ ] Turn off the ammo and reagents switch (`/cvn ammo off`). Expected: food, water, pet food and reminders still work, and the Supplies page controls are not greyed out. Ammo and reagent questions stop.
+- [ ] Turn off the ammo switch (`/cvn ammo off`). Expected: food, water, pet food and reminders still work, and the Supplies page controls are not greyed out. Ammo and reagent questions stop.
 - [ ] Look in the Warnings section of the main page. Expected: a **Supplies** checkbox. Enter `/cvn supplies off`. Expected: no food, water or pet food question, reminder or red row, and the checkbox is cleared. `/cvn` shows "Supply warnings: off". Enter `/cvn supplies on`. Expected: they work again with the thresholds you had.
 - [ ] Turn it on again. Turn off food only (`/cvn food off`). Expected: no food question. Water and pet food still work.
 - [ ] Repeat for `/cvn water off` and `/cvn petfood off`.

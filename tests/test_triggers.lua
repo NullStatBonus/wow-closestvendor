@@ -7,7 +7,7 @@ local H = require("harness")
 local eq = H.eq
 -- A clear also names what ended (a[2], a[3]); those are checked where they matter.
 local function act(a) return a and ((a[2] and a[1] ~= "clear") and (a[1] .. ":" .. a[2]) or a[1]) or "nil" end
-local function cfg() return { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true, suppliesEnabled = true } end
+local function cfg() return { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true, suppliesEnabled = true, reagentsEnabled = true } end
 
 -- FreeSlots: sums general bags only, skips quivers/special bags.
 local fam = { [0] = { 3, 0 }, [1] = { 4, 0 }, [2] = { 10, 1 }, [3] = { nil, nil } }
@@ -199,14 +199,19 @@ eq(ract(t.Update(10, nil, false, nil, { 17020 })), "clear", "the active reagent 
 eq(ract(t.Update(10, nil, false, nil, {})), "nil", "all recovered")
 eq(ract(t.Update(10, nil, false, nil, { 17020 })), "go:reagent:17020", "falls low again: asked again")
 
--- Combat holds it back; the master switch (ammoEnabled) turns reagents off with ammo.
+-- Combat holds it back; the reagents switch (reagentsEnabled) turns reagents off, the ammo switch does not.
 t = T.New(cfg())
 eq(ract(t.Update(10, nil, true, nil, { 17020 })), "nil", "no question in combat")
 eq(ract(t.Update(10, nil, false, nil, { 17020 })), "go:reagent:17020", "asked after combat")
-local off = cfg(); off.ammoEnabled = false
+local off = cfg(); off.reagentsEnabled = false
 t = T.New(off)
-eq(ract(t.Update(10, nil, false, nil, { 17020 })), "nil", "master switch off: no reagent question")
-eq(ract(t.Update(10, nil, false, 10, { 17020 })), "nil", "and no ammo question")
+eq(ract(t.Update(10, nil, false, nil, { 17020 })), "nil", "reagents switch off: no reagent question")
+eq(ract(t.Update(10, nil, false, 10, { 17020 })), "go:ammo", "but ammo is still asked")
+off = cfg(); off.ammoEnabled = false
+t = T.New(off)
+eq(ract(t.Update(10, nil, false, nil, { 17020 })), "go:reagent:17020", "ammo switch off: reagents still asked")
+t = T.New(off)
+eq(ract(t.Update(10, nil, false, 10, {})), "nil", "and no ammo question")
 
 -- Priority: repair, ammo, reagent, sell. A reagent trip does not cover selling.
 t = T.New(cfg())

@@ -205,19 +205,28 @@ Type `/cvn config` to open the main page.
 
 ### Closest Vendor (main page)
 
-- **Warnings:** a checkbox and a slider for each warning (bags, durability, ammo and reagents, professions).
+- **Warnings:** a checkbox and a slider for each warning (bag space, durability, professions).
 - **Warnings:** a **Supplies** checkbox, the one switch for food, water, pet food and the healthstone reminder.
 - **Warnings:** a checkbox for the on-screen notice.
-- The ammo checkbox is the one switch for ammo and reagents. The label stays "Ammo and reagents". When it is off, the addon does not watch either. Food, water and pet food are controlled by the Supplies checkbox, not by this one.
 - **Navigation:** a dropdown for when the closest target is on another map. You choose to ask which one, or to navigate without asking.
 - **Navigation:** a dropdown to prefer the target on your map or the closest target.
 - **Navigation:** a dropdown for the waypoint method: Automatic (the order above), TomTom, WaypointUI or Game waypoint.
 - **Navigation:** a dropdown for the search anchor inside instances.
 - **Navigation:** a checkbox for the auction house.
 
+The other pages are in alphabetical order, with the status window last.
+
+### Ammo
+
+- An **Ammo** checkbox and a slider for the ammo threshold.
+- A checkbox to buy ammo.
+- A checkbox to ask before buying.
+- A dropdown for arrows.
+- A dropdown for bullets.
+
 ### Reagents
 
-- A slider for the reagent threshold.
+- A **Reagents** checkbox, then a slider for the reagent threshold.
 - A checkbox for each reagent of your class. All are on.
 - Below them are three controls for reagent buying:
   - **Buy reagents** (off by default).
@@ -232,14 +241,7 @@ Type `/cvn config` to open the main page.
 - A warlock also gets a **Healthstone reminder** checkbox.
 - Every class gets a **Reminder sound** dropdown (only mages and warlocks are reminded): Whisper ping (default), Minimap ping, Group invite, Ready check or None. Choosing one plays it.
 - All are on by default.
-- Each item has its own switch, and the **Supplies** checkbox on the main page turns all of them off. The "Ammo and reagents" switch does not.
-
-### Ammo
-
-- A checkbox to buy ammo.
-- A checkbox to ask before buying.
-- A dropdown for arrows.
-- A dropdown for bullets.
+- Each item has its own switch, and the **Supplies** checkbox on the main page turns all of them off. The Ammo and Reagents switches do not.
 
 ### Status window
 
@@ -266,6 +268,8 @@ Type `/cvn config` to open the main page.
 /cvn ammo 300
 /cvn ammo off
 /cvn ammo on
+/cvn reagents off
+/cvn reagents on
 /cvn reagent 8
 /cvn reagents
 /cvn reagent off arcane powder
@@ -339,7 +343,8 @@ Type `/cvn config` to open the main page.
 - `/cvn dur on` and `/cvn dur off` turn the durability warning on or off.
 - `/cvn supplies on` and `/cvn supplies off` turn the food, water, pet food and healthstone warnings on or off together.
 - `/cvn ammo <count>` sets the ammo threshold (0 to 2000).
-- `/cvn ammo on` and `/cvn ammo off` turn the ammo and reagent warnings on or off.
+- `/cvn ammo on` and `/cvn ammo off` turn the ammo warning on or off.
+- `/cvn reagents on` and `/cvn reagents off` turn the reagent warnings on or off.
 - `/cvn trade <points>` sets the profession threshold (0 to 300).
 - `/cvn trade on` and `/cvn trade off` turn the profession warning on or off.
 - `/cvn reagent <count>` sets the threshold for all class reagents (1 to 40).

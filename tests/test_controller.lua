@@ -22,7 +22,7 @@ local function world(over)
                 prompts = {}, notes = {}, cancelCount = 0, ammoKind = nil, ammoCount = 0, logs = {}, says = {}, sounds = {}, known = {}, open = false }
     for k, v in pairs(over or {}) do w[k] = v end
     local env = {
-        cfg = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true, suppliesEnabled = true,
+        cfg = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true, suppliesEnabled = true, reagentsEnabled = true,
                  tradeThreshold = 10, tradeEnabled = true, reagentThreshold = 5 },
         reagents = function() return w.reagents end,
         supplies = function() return w.supplies end,
@@ -810,10 +810,13 @@ w.combat = false
 w.c.Evaluate()
 eq(#w.prompts, 1, "asked after combat")
 
--- The master switch (ammoEnabled) turns reagent questions off.
+-- The reagents switch turns reagent questions off; the ammo switch does not.
+w = reagent({ cfg = { reagentsEnabled = false } })
+w.c.Evaluate()
+eq(#w.prompts, 0, "reagents switch off")
 w = reagent({ cfg = { ammoEnabled = false } })
 w.c.Evaluate()
-eq(#w.prompts, 0, "master switch off")
+eq(#w.prompts, 1, "ammo switch off: reagents still asked")
 
 -- Recovering withdraws the pin and the question.
 w = reagent()

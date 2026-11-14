@@ -21,8 +21,8 @@ local HELP = {
     L["/cvn  show settings"],
     L["/cvn config  open the settings page"],
     L["/cvn bags <slots>, /cvn dur <percent>, /cvn ammo <count>, /cvn reagent <count>, /cvn trade <points>  set a threshold"],
-    L["/cvn bags on/off  switch a question on or off (same for dur, ammo, trade); ammo also switches reagents"],
-    L["/cvn reagents  list your class reagents; /cvn reagent on/off <name>  switch one"],
+    L["/cvn bags on/off  switch a question on or off (same for dur, ammo, trade)"],
+    L["/cvn reagents  list your class reagents; /cvn reagents on/off  switch reagent questions; /cvn reagent on/off <name>  switch one"],
     L["/cvn food <count>, /cvn water <count>, /cvn petfood <count>  set when to ask about food, water or pet food"],
     L["/cvn food on/off  switch it on or off (same for water, petfood)"],
     L["/cvn supplies on/off  switch all food, water, pet food and healthstone warnings on or off"],
@@ -101,7 +101,7 @@ local function status(cfg)
         L["On-screen notice when choosing without asking: %s"]:format(cfg.autoNotice ~= false and L["on"] or L["off"]),
         L["Waypoint: %s"]:format(navName(cfg.navProvider)),
     }
-    table.insert(lines, 4, L["Reagents: %s, trigger at %d or fewer"]:format(cfg.ammoEnabled and L["on"] or L["off"], cfg.reagentThreshold))
+    table.insert(lines, 4, L["Reagents: %s, trigger at %d or fewer"]:format(cfg.reagentsEnabled ~= false and L["on"] or L["off"], cfg.reagentThreshold))
     local off = reagentNamesOff(cfg)
     if #off > 0 then table.insert(lines, 5, L["Reagents switched off: %s"]:format(table.concat(off, ", "))) end
     table.insert(lines, #off > 0 and 6 or 5, L["Supply warnings: %s"]:format(cfg.suppliesEnabled ~= false and L["on"] or L["off"]))
@@ -294,6 +294,10 @@ function M.Run(cfg, msg, class)
     if cmd == "" then return status(cfg) end
     if cmd == "sound" then return soundCommand(cfg, rest) end
     if cmd == "nav" then return navCommand(cfg, rest) end
+    if cmd == "reagents" and (arg == "on" or arg == "off") then
+        cfg.reagentsEnabled = (arg == "on")
+        return status(cfg)
+    end
     if cmd == "reagents" then return reagentList(cfg, class) end
     if cmd == "reagentbuy" then return reagentBuyCommand(cfg, arg, class) end
     if cmd == "reagent" and arg ~= "" then return reagentCommand(cfg, arg, rest:match("^%S*%s*(.*)$"), class) end

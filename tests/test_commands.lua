@@ -12,7 +12,7 @@ loadfile("ClosestVendor/Commands.lua")("ClosestVendor", ns)
 local M = ns.Commands
 
 local function fresh() return { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
-    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, suppliesEnabled = true,
+    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, suppliesEnabled = true, reagentsEnabled = true,
     reagentThreshold = 5, reagentOff = {} } end
 local function has(lines, text) return table.concat(lines, "\n"):find(text, 1, true) ~= nil end
 
@@ -251,7 +251,10 @@ for _, bad in ipairs({ "0", "41", "-1", "2.5", "abc" }) do
     eq(has(out, "from 1 to 40"), true, "range stated for " .. bad)
 end
 eq(M.LIMITS.reagent[1] == 1 and M.LIMITS.reagent[2] == 40, true, "limits for the settings page")
-eq(has(M.Run(c, "ammo off"), "Reagents: off"), true, "the master switch shows as reagents off")
+eq(has(M.Run(c, "reagents off"), "Reagents: off"), true, "/cvn reagents off")
+eq(c.reagentsEnabled, false, "saved")
+eq(has(M.Run(c, "reagents on"), "Reagents: on"), true, "/cvn reagents on")
+eq(has(M.Run(c, "ammo off"), "Reagents: on"), true, "the ammo switch leaves reagents alone")
 
 c = fresh()
 out = M.Run(c, "reagents", "MAGE")

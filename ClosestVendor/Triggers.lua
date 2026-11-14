@@ -72,7 +72,7 @@ function T.Conditions(cfg, free, durPct, ammo)
 end
 
 -- cfg: { bagThreshold, durThreshold, ammoThreshold, bagEnabled, durEnabled, ammoEnabled }
--- (read live, so edits apply at once). ammoEnabled is also the master switch for reagents. Food, water, pet food
+-- (read live, so edits apply at once). reagentsEnabled is the master switch for reagents. Food, water, pet food
 -- and the reminders have suppliesEnabled as their master switch, and each its own, checked by Supplies.Evaluate.
 -- Update(free, durPct, inCombat, ammo, reagents, inInstance, supplies): free is the free bag slots, or
 -- nil if unknown; ammo is a count, or nil when ammo is not monitored; reagents is the list of item ids
@@ -91,7 +91,7 @@ function T.New(cfg)
 
     function self.Update(free, durPct, inCombat, ammo, reagents, inInstance, supplies)
         local low = {}
-        if cfg.ammoEnabled then for _, id in ipairs(reagents or {}) do low[id] = true end end
+        if cfg.reagentsEnabled then for _, id in ipairs(reagents or {}) do low[id] = true end end
         local now = T.Conditions(cfg, free, durPct, ammo)
         local lowSupply = {}
         if cfg.suppliesEnabled then for _, k in ipairs(supplies or {}) do lowSupply[k] = true end end

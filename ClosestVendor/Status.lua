@@ -163,8 +163,8 @@ function S.Rows(snap, cfg, class)
         end
     end
     local lowReagent = {}
-    -- The ammo switch is also the master switch of the reagent warnings.
-    if cfg.ammoEnabled then
+    -- The reagents switch is the master switch of the reagent warnings.
+    if cfg.reagentsEnabled then
         for _, low in ipairs(ns.Reagents.Low(items, function(id) return byId[id].count end, cfg.reagentThreshold)) do
             lowReagent[low.item.id] = true
         end
@@ -256,7 +256,7 @@ local DEMO_MODES = { "always", "always", "low", "never" }
 function S.Demo(roll, cfg)
     local fake = {}
     for k, v in pairs(cfg) do fake[k] = v end
-    fake.bagEnabled, fake.durEnabled, fake.ammoEnabled, fake.tradeEnabled, fake.suppliesEnabled = true, true, true, true, true
+    fake.bagEnabled, fake.durEnabled, fake.ammoEnabled, fake.tradeEnabled, fake.suppliesEnabled, fake.reagentsEnabled = true, true, true, true, true, true
     fake.foodEnabled, fake.waterEnabled, fake.petFoodEnabled = true, true, true
     fake.hudRow = {}
     local snap = { reagents = {}, display = {}, known = {}, skills = {} }
