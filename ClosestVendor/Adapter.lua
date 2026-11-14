@@ -392,6 +392,8 @@ end
 
 local AMMO_FAMILY = { arrow = 1, bullet = 2 } -- bag family bits of a quiver and an ammo pouch
 
+local uncached = false -- see A.itemDataMissing
+
 local function itemInfo(item)
     return call("GetItemInfo", (C_Item and C_Item.GetItemInfo) or GetItemInfo, item)
 end
@@ -454,6 +456,7 @@ end
 -- Room, in items, in the carried quivers or ammo pouches of this kind for item `id`; nil if unknown.
 function A.ammoSpace(id, kind)
     local stack = select(8, itemInfo(id))
+    if type(stack) ~= "number" then uncached = true end
     local slots, readable = {}, false
     for bag = 1, NUM_BAG_SLOTS or 4 do
         local _, family = bagFree(bag)
@@ -555,8 +558,15 @@ end
 -- How many of the item fit in one bag slot, or nil when unknown (item not cached).
 function A.stackSize(id)
     local stack = select(8, itemInfo(id))
-    return type(stack) == "number" and stack or nil
+    if type(stack) == "number" then return stack end
+    uncached = true
+    return nil
 end
+
+-- Whether a read since A.resetItemData found an item the game has not loaded yet. The game loads it
+-- in the background and then fires GET_ITEM_INFO_RECEIVED.
+function A.itemDataMissing() return uncached end
+function A.resetItemData() uncached = false end
 
 -- Misc -------------------------------------------------------------------------------------------
 
