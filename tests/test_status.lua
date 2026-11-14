@@ -11,7 +11,7 @@ local S = ns.Status
 
 local function cfg(over)
     local c = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10, reagentThreshold = 5,
-        bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, hudRow = {},
+        bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, suppliesEnabled = true, reagentsEnabled = true, hudRow = {},
         foodEnabled = true, waterEnabled = true, petFoodEnabled = true, healthstoneRemind = true,
         foodThreshold = 5, waterThreshold = 5, petFoodThreshold = 5 }
     for k, v in pairs(over or {}) do c[k] = v end
@@ -78,7 +78,8 @@ eq(keys(S.Rows({ reagents = { { item = POWDER, count = 5 } } }, cfg())), "reagen
 eq(keys(S.Rows({ reagents = { { item = POWDER, count = 6 } } }, cfg())), "reagent:17020", "reagent above its threshold")
 -- A switched-off warning is never low.
 eq(keys(S.Rows({ free = 0, dur = 1, ammoKind = "arrow", ammoCount = 0, reagents = { { item = POWDER, count = 0 } } },
-    cfg({ bagEnabled = false, durEnabled = false, ammoEnabled = false }))), "ammo,reagent:17020,bags,durability", "warnings off: rows but none low")
+    cfg({ bagEnabled = false, durEnabled = false, ammoEnabled = false, reagentsEnabled = false }))), "ammo,reagent:17020,bags,durability", "warnings off: rows but none low")
+eq(keys(S.Rows({ ammoKind = "arrow", ammoCount = 0, reagents = { { item = POWDER, count = 0 } } }, cfg({ ammoEnabled = false }))), "ammo,reagent:17020!", "ammo off: the reagent row is still low")
 
 -- Professions: a row per known profession below the last cap, low when within the threshold.
 local skills = { { name = "Mining", rank = 70, max = 75 }, { name = "Cooking", rank = 100, max = 150 },
@@ -197,7 +198,8 @@ eq(keys(srows("MAGE", { food = 20, water = 3, healthstone = 0 })), "supply:food,
 eq(keys(srows("MAGE", { food = 3, water = 3, healthstone = 0 }, nil, function() return true end)), "supply:food!,supply:water!",
     "a mage who can conjure: the row is low too (it is reminded)")
 eq(keys(srows("PRIEST", { food = 5, water = 6, healthstone = 0 })), "supply:food!,supply:water", "at the threshold is low, above is not")
-eq(keys(srows("MAGE", { food = 3, water = 3, healthstone = 0 }, { ammoEnabled = false })), "supply:food,supply:water", "master switch off: never low")
+eq(keys(srows("MAGE", { food = 3, water = 3, healthstone = 0 }, { ammoEnabled = false })), "supply:food!,supply:water!", "ammo switch off: supplies are still low")
+eq(keys(srows("MAGE", { food = 3, water = 3, healthstone = 0 }, { suppliesEnabled = false })), "supply:food,supply:water", "supplies switch off: never low")
 eq(keys(srows("MAGE", { food = 3, water = 3, healthstone = 0 }, { foodEnabled = false })), "supply:food,supply:water!", "food off: the row stays, not low")
 eq(keys(srows("HUNTER", { food = 9, water = 9, pet = 2, healthstone = 0 })), "supply:food,supply:water,supply:pet!", "a hunter with a pet diet: pet food row")
 eq(keys(srows("HUNTER", { food = 9, water = 9, healthstone = 0 })), "supply:food,supply:water", "no pet diet: no pet row")

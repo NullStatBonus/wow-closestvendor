@@ -28,7 +28,7 @@ While the log is on, the addon SHALL record the game events it reacts to, failur
 - **THEN** the failing call and its error text are recorded, once per kind of failure
 
 ### Requirement: Copyable report
-`/cvn log` SHALL show a report that can be selected and copied, containing the addon version, client interface and build, locale, the navigation method in use, vendor counts, current settings, and the recorded entries. If a window cannot be created, it SHALL print the most recent entries to chat.
+`/cvn log` SHALL show a report that can be selected and copied, containing the addon version, client interface and build, locale, the waypoint method in use and the chosen preference, vendor counts, current settings, and the recorded entries. If a window cannot be created, it SHALL print the most recent entries to chat.
 
 #### Scenario: Report with the log off
 - **WHEN** the player runs `/cvn log` with the log off

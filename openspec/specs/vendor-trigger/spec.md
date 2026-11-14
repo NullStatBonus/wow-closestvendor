@@ -135,7 +135,7 @@ The addon SHALL clear a vendor waypoint when a merchant window opens at a vendor
 - **THEN** the trainer waypoint stays
 
 ### Requirement: Settings panel
-The addon SHALL add a "Closest Vendor" page under Options, AddOns. The main page SHALL hold, under "Warnings", an on/off checkbox and a threshold slider for bags, durability, ammo and reagents, and professions, with the ammo checkbox labelled "Ammo and reagents" switching both; and, under "Navigation", the target choice, the target preference, the on-screen message checkbox, the dungeon and raid anchor, and the auction house checkbox. Three subcategories SHALL follow: "Reagents" (a warning checkbox for each of the player's class reagents, then the reagent buying controls: buy, ask first and the amount to carry), "Ammo" (buy, ask first, arrow and bullet grade), and "Status window" (first the Lock checkbox, then scale, opacity, and a visibility dropdown `low`, `always` or `never` for each row that applies to the player). Changes SHALL edit the same saved settings as the slash commands, take effect at once, and the panel SHALL honor the same limits as the commands. `/cvn config` SHALL open the main page. If subcategories are unavailable, all controls SHALL appear on the one page under section headers.
+The addon SHALL add a "Closest Vendor" page under Options, AddOns. The main page SHALL hold, under "Warnings", an on/off checkbox and a threshold slider for bags, durability and professions, in that order, then an on/off checkbox for "Ammo", "Reagents" and "Supplies", whose thresholds are on their own pages; and, under "Navigation", the target choice, the target preference, the waypoint method, the on-screen message checkbox, the dungeon and raid anchor, and the auction house checkbox. Subcategories SHALL follow in alphabetical order: "Ammo" (the ammo threshold, then buy, ask first, arrow and bullet grade), "Reagents" (the reagent threshold, a warning checkbox for each of the player's class reagents, then the reagent buying controls: buy, ask first and the amount to carry), "Supplies" (food, water, pet food and the healthstone reminder, and the reminder sound), and last "Status window" (first the Lock checkbox, then scale, opacity, and a visibility dropdown `low`, `always` or `never` for each row that applies to the player). Changes SHALL edit the same saved settings as the slash commands, take effect at once, and the panel SHALL honor the same limits as the commands. `/cvn config` SHALL open the main page. If subcategories are unavailable, all controls SHALL appear on the one page under section headers.
 
 #### Scenario: Change a threshold in the panel
 - **WHEN** the player moves the bag slider to 4
@@ -157,9 +157,9 @@ The addon SHALL add a "Closest Vendor" page under Options, AddOns. The main page
 - **WHEN** the player clears a trigger's checkbox
 - **THEN** that trigger stops asking and its slider is disabled
 
-#### Scenario: Master switch off
-- **WHEN** the player clears "Ammo and reagents"
-- **THEN** the ammo slider, the reagent slider and the reagent checkboxes stop having an effect
+#### Scenario: Ammo switch off
+- **WHEN** the player clears "Ammo" in the Warnings section
+- **THEN** ammo questions stop and the ammo slider has no effect and the reagent settings are unaffected
 
 #### Scenario: Panel unavailable
 - **WHEN** the client lacks the settings API
@@ -279,3 +279,14 @@ The addon SHALL provide an on/off setting for the on-screen message shown when i
 #### Scenario: Invalid value
 - **WHEN** the player runs `/cvn notice` with anything other than `on` or `off`
 - **THEN** nothing changes and the valid choices are printed
+
+### Requirement: No needless reads
+The addon SHALL ignore events about units other than the player (a party or raid member's pet, gear or casts) and SHALL NOT read the bags for supplies while the Supplies switch is off or every supply warning and the healthstone reminder is off.
+
+#### Scenario: A party member's pet changes
+- **WHEN** the game reports a pet change for `party1`
+- **THEN** the addon evaluates nothing and reads no bag slot
+
+#### Scenario: Every supply warning off
+- **WHEN** bags change while food, water, pet food and the healthstone reminder are all off
+- **THEN** no bag slot is read for supplies

@@ -52,7 +52,7 @@ The addon SHALL check all professions whenever a skill value changes and wheneve
 - **THEN** skill changes are detected by comparing values, not by reading chat text
 
 ### Requirement: Profession threshold setting
-The addon SHALL persist a per-account profession threshold (default 10 points, 0 to 300) and an on/off switch, settable with `/cvn trade <points>`, `/cvn trade on` and `/cvn trade off`, and SHALL ask nothing while the switch is off.
+The addon SHALL persist a per-character profession threshold (default 10 points, 0 to 300) and an on/off switch, settable with `/cvn trade <points>`, `/cvn trade on` and `/cvn trade off`, and SHALL ask nothing while the switch is off.
 
 #### Scenario: Custom threshold
 - **WHEN** the player runs `/cvn trade 25` and a profession is 20 points from its cap

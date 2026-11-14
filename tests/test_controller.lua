@@ -22,7 +22,7 @@ local function world(over)
                 prompts = {}, notes = {}, cancelCount = 0, ammoKind = nil, ammoCount = 0, logs = {}, says = {}, sounds = {}, known = {}, open = false }
     for k, v in pairs(over or {}) do w[k] = v end
     local env = {
-        cfg = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true,
+        cfg = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true, suppliesEnabled = true, reagentsEnabled = true,
                  tradeThreshold = 10, tradeEnabled = true, reagentThreshold = 5 },
         reagents = function() return w.reagents end,
         supplies = function() return w.supplies end,
@@ -810,10 +810,13 @@ w.combat = false
 w.c.Evaluate()
 eq(#w.prompts, 1, "asked after combat")
 
--- The master switch (ammoEnabled) turns reagent questions off.
+-- The reagents switch turns reagent questions off; the ammo switch does not.
+w = reagent({ cfg = { reagentsEnabled = false } })
+w.c.Evaluate()
+eq(#w.prompts, 0, "reagents switch off")
 w = reagent({ cfg = { ammoEnabled = false } })
 w.c.Evaluate()
-eq(#w.prompts, 0, "master switch off")
+eq(#w.prompts, 1, "ammo switch off: reagents still asked")
 
 -- Recovering withdraws the pin and the question.
 w = reagent()
@@ -1378,13 +1381,16 @@ w = supply("WARRIOR", { food = 1, water = 0, healthstone = 0 }, nil, nil, { buck
 w.c.Evaluate()
 eq(w.says[1], "No known vendor sells food on this continent yet. Open a vendor that sells it once and the addon will remember it.", "food line")
 
--- Switches and the master switch.
+-- Switches. The ammo switch is not one of them: supplies have their own.
 w = supply("PRIEST", { food = 1, water = 1, healthstone = 0 }, nil, nil, { cfg = { foodEnabled = false } })
 w.c.Evaluate()
 eq(w.prompts[1].trade, "water", "food switched off")
 w = supply("PRIEST", { food = 1, water = 1, healthstone = 0 }, nil, nil, { cfg = { ammoEnabled = false } })
 w.c.Evaluate()
-eq(#w.prompts, 0, "master switch off: nothing asked")
+eq(w.prompts[1] and w.prompts[1].trade, "food", "ammo switch off: supplies are still asked")
+w = supply("PRIEST", { food = 1, water = 1, healthstone = 0 }, nil, nil, { cfg = { suppliesEnabled = false } })
+w.c.Evaluate()
+eq(#w.prompts, 0, "supplies switch off: nothing asked")
 w = supply("WARRIOR", { food = 1, water = 0, healthstone = 0 }, nil, nil, { combat = true })
 w.c.Evaluate()
 eq(#w.prompts, 0, "combat holds it back")

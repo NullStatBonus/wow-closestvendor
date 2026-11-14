@@ -395,7 +395,10 @@ function C.New(env)
         -- Supplies.Evaluate is the one "is it low" test for food, water and pet food, and for the reminders.
         lowSupply = {}
         local supKeys, remindKeys, remindCount = {}, {}, {}
-        local state = env.supplies and env.supplies()
+        -- Reading the bags costs a scan of every slot, so only when something supply-related can fire.
+        local c = env.cfg
+        local watching = c.suppliesEnabled and (c.foodEnabled or c.waterEnabled or c.petFoodEnabled or c.healthstoneRemind)
+        local state = watching and env.supplies and env.supplies()
         if state then
             local ev = ns.Supplies.Evaluate(state.class, state.totals, state.knows, env.cfg)
             for _, e in ipairs(ev.go) do

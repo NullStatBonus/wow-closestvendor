@@ -1063,8 +1063,10 @@ g = mage({ class = "WARRIOR" }); g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "a class without reagents")
 g = mage(); g.env.ClosestVendorCharDB.cfg.reagentOff[17020] = true; g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "switched off")
+g = mage(); g.env.SlashCmdList.CLOSESTVENDOR("reagents off"); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "reagents switch off")
 g = mage(); g.env.SlashCmdList.CLOSESTVENDOR("ammo off"); g.onEvent("BAG_UPDATE_DELAYED")
-eq(g.popup, nil, "master switch off")
+eq(g.popup ~= nil, true, "ammo switch off: the reagent question still comes")
 
 -- Learning the spell later is noticed.
 g = mage({ spells = {} }); g.onEvent("BAG_UPDATE_DELAYED")
@@ -1105,7 +1107,7 @@ g = mage(); g.env.ClosestVendorCharDB.cfg.reagentOff[17031] = true
 g.env.SlashCmdList.CLOSESTVENDOR("log")
 local rwin
 for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then rwin = f end end
-eq(has(rwin.box.text, "reagents: class MAGE, threshold 5, watching: Arcane Powder:3, switched off: Rune of Teleportation"), true, "report line")
+eq(has(rwin.box.text, "reagents: on, class MAGE, threshold 5, watching: Arcane Powder:3, switched off: Rune of Teleportation"), true, "report line")
 eq(has(rwin.box.text, "reagent buying: off, asks first, up to 20 of each"), true, "report lists reagent buying")
 
 -- Reagent buying at a merchant: off by default, asks in a dialog of its own, buys up to the amount
@@ -1146,6 +1148,75 @@ g.ns.Ammo.OnMerchant = function() return 2, 99000 end -- an ammo purchase a mome
 g.onEvent("MERCHANT_SHOW")
 eq(table.concat(g.bought, ","), "1:10", "buys at once with the money the ammo left")
 eq(has(lastPrinted(g), "(all you could afford)"), true, "partial: " .. lastPrinted(g))
+-- An item the game has not loaded yet: the purchase waits for GET_ITEM_INFO_RECEIVED instead of giving up.
+do
+    local function uncachedShop()
+        local gg = reagentShop()
+        gg.env.SlashCmdList.CLOSESTVENDOR("reagentbuy on")
+        gg.env.GetItemInfo = function() return nil end -- not cached
+        return gg
+    end
+    local function buyAsked(gg) return gg.popup ~= nil and gg.popup.which == "CLOSESTVENDOR_CONFIRM_REAGENTS" end
+    local function loadItem(gg) gg.env.GetItemInfo = function() return "Arcane Powder", "l", 1, 1, 1, "", "", 20 end end
+    local ig = uncachedShop()
+    ig.onEvent("MERCHANT_SHOW")
+    eq(buyAsked(ig), false, "stack size unknown: nothing asked yet")
+    loadItem(ig)
+    ig.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
+    eq(buyAsked(ig) and has(ig.popup.text, "Buy 17 Arcane Powder"), true, "the data arrived: the question is asked")
+    local shown = ig.shown
+    ig.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
+    eq(ig.shown, shown, "and only once")
+
+    ig = uncachedShop()
+    ig.onEvent("MERCHANT_SHOW")
+    ig.onEvent("MERCHANT_CLOSED")
+    loadItem(ig)
+    ig.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
+    eq(buyAsked(ig), false, "merchant closed: nothing is tried")
+
+    ig = uncachedShop()
+    ig.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
+    eq(buyAsked(ig), false, "no merchant open: nothing is tried")
+
+    ig = uncachedShop()
+    ig.onEvent("MERCHANT_SHOW")
+    for _ = 1, 5 do ig.onEvent("GET_ITEM_INFO_RECEIVED", 17020) end
+    eq(buyAsked(ig), false, "data that never arrives is not retried forever")
+    local reads = 0
+    local realInfo = ig.env.GetItemInfo
+    ig.env.GetItemInfo = function(...) reads = reads + 1; return realInfo(...) end
+    ig.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
+    eq(reads, 0, "after three tries it stops reading")
+
+    -- Other items loading say nothing about ours: they do not use up the tries.
+    ig = uncachedShop()
+    ig.onEvent("MERCHANT_SHOW")
+    for i = 1, 10 do ig.onEvent("GET_ITEM_INFO_RECEIVED", 9000 + i) end
+    loadItem(ig)
+    ig.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
+    eq(buyAsked(ig), true, "ten unrelated items first: ours still gets its try")
+
+    -- The money an ammo purchase left is only reserved while the game has not answered it; by the
+    -- retry the game's own number is right, so it is not taken off twice.
+    ig = uncachedShop()
+    ig.env.SlashCmdList.CLOSESTVENDOR("reagentbuy auto")
+    ig.ns.Ammo.OnMerchant = function() return 2, 99000 end
+    ig.onEvent("MERCHANT_SHOW")
+    loadItem(ig)
+    ig.bought = {}
+    ig.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
+    eq(table.concat(ig.bought, ","), "1:17", "all 17 bought: the ammo money is not subtracted a second time")
+
+    -- A part that already asked is not run again: no second question.
+    ig = reagentShop()
+    ig.env.SlashCmdList.CLOSESTVENDOR("reagentbuy on")
+    ig.onEvent("MERCHANT_SHOW")
+    local asked = ig.shown
+    ig.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
+    eq(ig.shown, asked, "already asked: an item arriving asks nothing more")
+end
+
 g = boot({ db = { cfg = { reagentBuyTarget = 150 } } }); login(g)
 eq(g.env.ClosestVendorCharDB.cfg.reagentBuyTarget, 100, "a saved amount above 100 is held to 100")
 g = boot({ db = { cfg = { reagentBuyTarget = -3 } } }); login(g)
@@ -1653,7 +1724,11 @@ g = supplyGame("ROGUE", { { 117, 30 } })
 g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "a rogue is not asked about water")
 g = supplyGame("WARRIOR", { { 117, 1 } }); g.env.SlashCmdList.CLOSESTVENDOR("ammo off"); g.onEvent("BAG_UPDATE_DELAYED")
-eq(g.popup, nil, "master switch off")
+eq(g.popup ~= nil and has(g.popup.text, "food"), true, "ammo switch off: food is still asked")
+g = supplyGame("WARRIOR", { { 117, 1 } }); g.env.SlashCmdList.CLOSESTVENDOR("supplies off"); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "supplies switch off: nothing asked")
+g.env.SlashCmdList.CLOSESTVENDOR("supplies on"); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup ~= nil and has(g.popup.text, "food"), true, "switched back on: asked")
 g = supplyGame("WARRIOR", { { 117, 1 } }); g.env.SlashCmdList.CLOSESTVENDOR("food off"); g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "food switched off")
 g = supplyGame("WARRIOR", { { 117, 8 } }); g.env.SlashCmdList.CLOSESTVENDOR("food 10"); g.onEvent("BAG_UPDATE_DELAYED")
@@ -1670,16 +1745,52 @@ eq(g.popup, nil, "unreadable bags are not an empty bag")
 -- Pet food: the pet's diet from the game picks what is counted and which vendor is offered.
 g = supplyGame("HUNTER", { { 117, 2 }, { 159, 30 }, { 4540, 30 } }, nil)
 g.env.UnitCreatureFamily = function() return "Wolf", 1 end
-g.onEvent("UNIT_PET")
+g.onEvent("UNIT_PET", "player")
 eq(g.popup ~= nil and has(g.popup.text, "pet food (Meat)") and has(g.popup.text, "2 left"), true, "pet food asks: " .. tostring(g.popup and g.popup.text))
 eq(has(g.popup.text, "Butcher") and not has(g.popup.text, "Baker"), true, "the Meat seller, not the nearer Baker")
 g = supplyGame("HUNTER", { { 117, 2 }, { 159, 30 }, { 4540, 30 } })
 g.env.UnitCreatureFamily = function() end
-g.onEvent("UNIT_PET")
+g.onEvent("UNIT_PET", "player")
 eq(g.popup, nil, "no pet out: nothing asked")
 g = supplyGame("HUNTER", { { 117, 2 }, { 159, 30 }, { 4540, 30 } })
 g.env.UnitCreatureFamily = function() return "Wolf", 1 end
-g.onEvent("UNIT_PET")
+g.onEvent("UNIT_PET", "player")
+-- Another player's pet or gear is none of our business: no evaluation, no bag scan.
+do
+    local gp = supplyGame("HUNTER", { { 117, 2 }, { 159, 30 }, { 4540, 30 } })
+    gp.env.UnitCreatureFamily = function() return "Wolf", 1 end
+    local scans = 0
+    local real = gp.env.GetContainerItemInfo
+    gp.env.GetContainerItemInfo = function(...) scans = scans + 1; return real(...) end
+    gp.onEvent("UNIT_PET", "party1")
+    gp.onEvent("UNIT_INVENTORY_CHANGED", "raid3")
+    eq(scans, 0, "events for other units read no bags")
+    eq(gp.popup, nil, "and ask nothing")
+    gp.onEvent("UNIT_PET", "player")
+    eq(scans > 0 and gp.popup ~= nil, true, "the player's own pet event does")
+    -- With every supply switch off, the bags are not scanned for supplies.
+    local gq = supplyGame("HUNTER", { { 117, 2 } })
+    local cfg = gq.env.ClosestVendorCharDB.cfg
+    cfg.foodEnabled, cfg.waterEnabled, cfg.petFoodEnabled, cfg.healthstoneRemind = false, false, false, false
+    local n = 0
+    local real2 = gq.env.GetContainerItemInfo
+    gq.env.GetContainerItemInfo = function(...) n = n + 1; return real2(...) end
+    gq.onEvent("BAG_UPDATE_DELAYED")
+    eq(n, 0, "all supply warnings off: the bags are not scanned")
+    cfg.foodEnabled = true
+    gq.onEvent("BAG_UPDATE_DELAYED")
+    eq(n > 0, true, "one switched on: they are")
+    cfg.ammoEnabled = false
+    n = 0
+    gq.onEvent("BAG_UPDATE_DELAYED")
+    eq(n > 0, true, "the ammo switch off does not stop the supply scan")
+    cfg.ammoEnabled = true
+    cfg.suppliesEnabled = false
+    n = 0
+    gq.onEvent("BAG_UPDATE_DELAYED")
+    eq(n, 0, "the supplies switch off: the bags are not scanned for supplies")
+end
+
 g.env.SlashCmdList.CLOSESTVENDOR("petfood off")
 eq(g.env.ClosestVendorCharDB.cfg.petFoodEnabled, false, "/cvn petfood off")
 
@@ -1750,7 +1861,7 @@ do
     flush(hh)
     eq(shownRows(hh), "Food: 60 | Water: 30", "no pet: no pet food row")
     hh.env.UnitCreatureFamily = function() return "Wolf", 1 end
-    hh.onEvent("UNIT_PET"); flush(hh)
+    hh.onEvent("UNIT_PET", "player"); flush(hh)
     eq(shownRows(hh), "Food: 60 | Water: 30 | Pet food: 30", "a pet out: its diet's row appears at once")
 end
 
@@ -1778,13 +1889,25 @@ g.env.SlashCmdList.CLOSESTVENDOR("water off")
 g.env.SlashCmdList.CLOSESTVENDOR("log")
 local swin
 for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then swin = f end end
-eq(has(swin.box.text, "supplies: food on (5), water off (5), pet food on (5), healthstone reminder on"), true, "report line")
+eq(has(swin.box.text, "supplies: on; food on (5), water off (5), pet food on (5), healthstone reminder on"), true, "report line")
 g.env.SlashCmdList.CLOSESTVENDOR("")
 eq(has(table.concat(g.printed, "\n"), "Supplies: food on (5), water off (5), pet food on (5), healthstone reminder on"), true, "settings line")
 eq(has(table.concat(g.printed, "\n"), "Reminder sound: Whisper ping"), true, "sound line")
 eq(has(swin.box.text, "reminder sound whisper"), true, "sound in the report header")
 
 H.done()
+
+-- Reagents have their own switch; a character saved before that keeps what the ammo switch said.
+do
+    local old = boot({ charDb = { cfg = { ammoEnabled = false } } }); login(old)
+    eq(old.env.ClosestVendorCharDB.cfg.reagentsEnabled, false, "ammo was off: reagents start off")
+    local on = boot({ charDb = { cfg = { ammoEnabled = true } } }); login(on)
+    eq(on.env.ClosestVendorCharDB.cfg.reagentsEnabled, true, "ammo was on: reagents start on")
+    local own = boot({ charDb = { cfg = { ammoEnabled = false, reagentsEnabled = true } } }); login(own)
+    eq(own.env.ClosestVendorCharDB.cfg.reagentsEnabled, true, "an own choice is kept")
+    local fresh = boot(); login(fresh)
+    eq(fresh.env.ClosestVendorCharDB.cfg.reagentsEnabled, true, "new: on")
+end
 
 -- Settings are per character; vendors learned are shared by the account.
 do

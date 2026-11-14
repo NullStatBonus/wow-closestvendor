@@ -214,7 +214,7 @@ The status window SHALL have a sixth row group, Supplies, listed after Reagents 
 - **THEN** the window shows the Conjured Food and Conjured Water rows and the Food and Water rows
 
 ### Requirement: Supply rows follow the warnings
-A supply row SHALL be marked low by the same test as the warning for that item, including the master switch. A count the game cannot read SHALL hide its row, and a group set to `never` SHALL not read the bags. Clicking a supply row SHALL pin the nearest seller of that item without a question.
+A supply row SHALL be marked low by the same test as the warning for that item, including the Supplies switch and its own switch. A count the game cannot read SHALL hide its row, and a group set to `never` SHALL not read the bags. Clicking a supply row SHALL pin the nearest seller of that item without a question.
 
 #### Scenario: Low food shown
 - **WHEN** a warrior has 3 food items and Supplies is `low`
@@ -225,7 +225,7 @@ A supply row SHALL be marked low by the same test as the warning for that item, 
 - **THEN** no Food row is shown
 
 #### Scenario: Row follows the warning
-- **WHEN** food is switched off or the master switch is off
+- **WHEN** food is switched off
 - **THEN** no supply row is marked low
 
 #### Scenario: Never reads

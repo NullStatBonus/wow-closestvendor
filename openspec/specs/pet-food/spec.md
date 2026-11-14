@@ -33,7 +33,7 @@ The addon SHALL watch pet food only for a hunter whose pet is out and whose crea
 - **THEN** pet food is not watched
 
 ### Requirement: Pet food trigger
-When pet food is watched, enabled, and at or below its threshold, and the master "Ammo and reagents" switch is on, the addon SHALL ask about navigating to the nearest vendor that sells any item the pet eats, using the same question, map-or-distance choice, automatic mode and on-screen notice as other triggers. The question SHALL name the pet's diet and the count. An unreadable count SHALL NOT count as low.
+When pet food is watched, enabled, and at or below its threshold, the addon SHALL ask about navigating to the nearest vendor that sells any item the pet eats, using the same question, map-or-distance choice, automatic mode and on-screen notice as other triggers. The question SHALL name the pet's diet and the count. An unreadable count SHALL NOT count as low.
 
 #### Scenario: Pet food runs low
 - **WHEN** a hunter's fruit-eating pet has 5 fruit items in the bags with the default threshold of 5

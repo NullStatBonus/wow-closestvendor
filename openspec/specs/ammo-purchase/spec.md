@@ -4,6 +4,7 @@
 Buy ammo at a merchant to fill the quiver or ammo pouch matching the equipped ranged weapon, choosing the item by a per-kind grade mode and limiting the purchase to what the player can afford.
 
 ## Requirements
+
 ### Requirement: Fill ammo storage at a merchant
 When a merchant window opens and a bow, crossbow or gun is equipped, the addon SHALL buy ammo of that weapon's kind (arrows for bows and crossbows, bullets for guns) until the player's quivers or ammo pouches of that kind are full, counting ammo already carried. It SHALL buy nothing for thrown weapons, wands, no ranged weapon, or when the player has no matching quiver or pouch, and SHALL NOT fill general-purpose bags.
 
@@ -63,3 +64,14 @@ The addon SHALL limit the purchase to what the player can afford and to the quan
 #### Scenario: Unreadable data
 - **WHEN** the quiver size or merchant price cannot be read
 - **THEN** nothing is bought
+
+### Requirement: Item data not loaded yet
+When buying ammo or reagents at a merchant stops because the game has not loaded an item's data, and nothing was asked or bought, the addon SHALL try again when the game reports that one of the missing items arrived (other items loading does not count), up to three times for that visit. Money an earlier purchase at the same visit reserved SHALL NOT be subtracted again on a retry. A purchase that was already asked or made SHALL NOT be repeated, and closing the merchant window SHALL end any retry.
+
+#### Scenario: Data arrives after the merchant opens
+- **WHEN** a merchant opens, a reagent's stack size is unknown, and the data arrives a moment later
+- **THEN** the purchase question is asked once
+
+#### Scenario: Data never arrives
+- **WHEN** the data is still missing after three tries
+- **THEN** the addon stops trying for that visit

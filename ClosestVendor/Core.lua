@@ -5,7 +5,7 @@ local A = ns.Adapter
 local L = ns.L
 
 local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
-    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true,
+    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, suppliesEnabled = true, reagentsEnabled = true,
     ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped",
     vendorMode = "ask", vendorPrefer = "map", autoNotice = true, reagentThreshold = 5,
     -- Reagent buying: off until the player turns it on, asks first, stocks up to 20 of each.
@@ -15,7 +15,7 @@ local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tra
     -- Row group modes are in cfg.hudRow (see init).
     hudLocked = false, hudScale = 100, hudAlpha = 80, hudTextAlpha = 100, hudColor = "000000",
     instanceAnchor = "hearth", ahEnabled = false,
-    -- Supplies: each switch is on, each threshold 5 (see Supplies.lua). The master switch is ammoEnabled.
+    -- Supplies: each switch is on, each threshold 5 (see Supplies.lua). suppliesEnabled is their master switch (the ammo switch does not affect them); each also has its own.
     foodEnabled = true, waterEnabled = true, petFoodEnabled = true, healthstoneRemind = true,
     foodThreshold = 5, waterThreshold = 5, petFoodThreshold = 5, remindSound = "whisper", navProvider = "auto" }
 local POLL_SECONDS = 5
@@ -67,7 +67,7 @@ local function closeQuestions()
     A.hidePopup(POPUP); A.hidePopup(POPUP_MAP); A.hidePopup(POPUP_DIST)
 end
 
-local DB, CHAR, controller, timerArmed, panel, log
+local DB, CHAR, controller, timerArmed, panel, log, runMerchantParts
 local colorNote = "not registered" -- what Options said about the background colour control
 local buckets, trainerBuckets, auctionBuckets = {}, {}, {}
 local tracker, windowDirty, skillCache, playerClass
@@ -77,6 +77,13 @@ local function say(text)
     print("|cff33ffccClosestVendor|r " .. (text:gsub("|", "||")))
 end
 
+-- A merchant visit reads item data the game may not have loaded yet. A part (ammo, reagents) that
+-- stopped for that, and asked and bought nothing, is run again when the game says the data arrived
+-- (GET_ITEM_INFO_RECEIVED for one of the missing items), a few times at most; closing the merchant
+-- window drops them.
+local merchantActed, retryParts, retryItems, retries = false, {}, {}, 0
+local MAX_RETRIES = 3
+
 -- What ns.Ammo needs when a merchant opens: all game reads and the purchase go through the Adapter.
 local AMMO_ENV = {
     kind = function() return (A.ammoStatus()) end,
@@ -85,10 +92,10 @@ local AMMO_ENV = {
     offers = A.merchantAmmo,
     money = A.money,
     space = A.ammoSpace,
-    buy = A.buyMerchantItem,
+    buy = function(...) merchantActed = true; return A.buyMerchantItem(...) end,
     say = say,
     log = function(text) if log then log.Add(text) end end,
-    confirm = function(text, accept) A.showPopup(POPUP, text, accept) end,
+    confirm = function(text, accept) merchantActed = true; A.showPopup(POPUP, text, accept) end,
 }
 
 -- Failures of guarded game calls go to the debug log (once per kind of failure).
@@ -241,6 +248,8 @@ local function init()
         if type(DB.hud) == "table" then CHAR.hud = copy(DB.hud) end
     end
     CHAR.cfg = CHAR.cfg or {}
+    -- Reagents once shared the ammo switch; a character saved before they had their own keeps that choice.
+    if CHAR.cfg.reagentsEnabled == nil and CHAR.cfg.ammoEnabled ~= nil then CHAR.cfg.reagentsEnabled = CHAR.cfg.ammoEnabled end
     for k, v in pairs(DEFAULTS) do if CHAR.cfg[k] == nil then CHAR.cfg[k] = v end end
     CHAR.cfg.reagentOff = CHAR.cfg.reagentOff or {} -- item ids the player switched off; all others are on
     -- A saved window number outside its range, or a colour that is not one, is put right.
@@ -291,8 +300,8 @@ end
 -- One report line: each supply switch with its threshold.
 local function supplyLine()
     local c = CHAR.cfg
-    return ("supplies: food %s (%d), water %s (%d), pet food %s (%d), healthstone reminder %s, reminder sound %s"):format(
-        c.foodEnabled and "on" or "off", c.foodThreshold, c.waterEnabled and "on" or "off", c.waterThreshold,
+    return ("supplies: %s; food %s (%d), water %s (%d), pet food %s (%d), healthstone reminder %s, reminder sound %s"):format(
+        c.suppliesEnabled and "on" or "off", c.foodEnabled and "on" or "off", c.foodThreshold, c.waterEnabled and "on" or "off", c.waterThreshold,
         c.petFoodEnabled and "on" or "off", c.petFoodThreshold, c.healthstoneRemind and "on" or "off",
         tostring(c.remindSound))
 end
@@ -310,10 +319,10 @@ local REAGENT_ENV = {
         local m = A.money()
         return m and math.max(0, m - ammoSpent) or nil
     end,
-    buy = A.buyMerchantItem,
+    buy = function(...) merchantActed = true; return A.buyMerchantItem(...) end,
     say = say,
     log = function(text) if log then log.Add(text) end end,
-    confirm = function(text, accept) A.showPopup(POPUP_REAGENTS, text, accept) end,
+    confirm = function(text, accept) merchantActed = true; A.showPopup(POPUP_REAGENTS, text, accept) end,
 }
 
 -- Status window ---------------------------------------------------------------------------------
@@ -403,8 +412,8 @@ local function reagentLine()
         if item then off[#off + 1] = item.name end
     end
     table.sort(off)
-    return ("reagents: class %s, threshold %d, watching: %s, switched off: %s"):format(tostring(A.classToken()),
-        CHAR.cfg.reagentThreshold, #watching > 0 and table.concat(watching, ", ") or "none", #off > 0 and table.concat(off, ", ") or "none")
+    return ("reagents: %s, class %s, threshold %d, watching: %s, switched off: %s"):format(CHAR.cfg.reagentsEnabled and "on" or "off",
+        tostring(A.classToken()), CHAR.cfg.reagentThreshold, #watching > 0 and table.concat(watching, ", ") or "none", #off > 0 and table.concat(off, ", ") or "none")
 end
 
 -- The report: facts about this client and addon, then the debug log.
@@ -572,9 +581,45 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
     applyWindow() -- and so may a window setting or a row mode
 end
 
+-- Run the ammo and reagent purchase parts named in order. A part that stopped because an item was not
+-- loaded, and asked and bought nothing, is kept to run again.
+local MERCHANT_PARTS = {
+    ammo = function()
+        local _, spent = ns.Ammo.OnMerchant(CHAR.cfg, AMMO_ENV)
+        ammoSpent = spent or 0
+    end,
+    reagents = function() ns.Reagents.OnMerchant(CHAR.cfg, REAGENT_ENV) end,
+}
+runMerchantParts = function(names)
+    for _, name in ipairs(names) do
+        A.resetItemData()
+        merchantActed = false
+        MERCHANT_PARTS[name]()
+        local missing = A.missingItems()
+        if missing and not merchantActed then
+            retryParts[#retryParts + 1] = name
+            for id in pairs(missing) do retryItems[id] = true end
+        end
+    end
+end
+
 ns.frame = CreateFrame("Frame")
 ns.frame:SetScript("OnEvent", function(_, event, arg1)
-    if (event == "UNIT_INVENTORY_CHANGED" or event == "UNIT_SPELLCAST_SUCCEEDED") and arg1 ~= "player" then return end
+    -- Fires for every item the game loads, so it is handled before anything is logged.
+    if event == "GET_ITEM_INFO_RECEIVED" then
+        if #retryParts > 0 and retryItems[arg1] and retries < MAX_RETRIES and DB then
+            retries = retries + 1
+            local names = retryParts
+            retryParts, retryItems = {}, {}
+            ammoSpent = 0 -- the game has answered the earlier purchase by now; money is what it says
+            if log then log.Add("item data arrived: trying the merchant purchase again") end
+            runMerchantParts(names)
+        end
+        return
+    end
+    if event == "MERCHANT_CLOSED" then retryParts, retryItems = {}, {} return end
+    -- Only the player's own gear, casts and pet matter; party and raid members fire these too.
+    if (event == "UNIT_INVENTORY_CHANGED" or event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_PET") and arg1 ~= "player" then return end
     if log and (event ~= "ADDON_LOADED" or arg1 == ADDON) then
         log.Add("event " .. event .. (arg1 ~= nil and (" " .. tostring(arg1)) or ""))
     end
@@ -586,9 +631,8 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         if DB then learnMerchant() end
         if controller then controller.OnMerchantShow() end
         if DB then
-            local _, spent = ns.Ammo.OnMerchant(CHAR.cfg, AMMO_ENV)
-            ammoSpent = spent or 0
-            ns.Reagents.OnMerchant(CHAR.cfg, REAGENT_ENV)
+            retryParts, retryItems, retries = {}, {}, 0
+            runMerchantParts({ "ammo", "reagents" })
         end
     elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
         local trades = DB and learnTrainer()
@@ -620,4 +664,6 @@ for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "Z
 end
 -- Registering an event the client does not have is an error, and this one's name is unverified.
 pcall(ns.frame.RegisterEvent, ns.frame, "AUCTION_HOUSE_SHOW")
+pcall(ns.frame.RegisterEvent, ns.frame, "GET_ITEM_INFO_RECEIVED")
+pcall(ns.frame.RegisterEvent, ns.frame, "MERCHANT_CLOSED")
 pcall(ns.frame.RegisterEvent, ns.frame, "UNIT_PET") -- the active pet, so its diet follows pet changes

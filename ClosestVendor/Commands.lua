@@ -21,10 +21,11 @@ local HELP = {
     L["/cvn  show settings"],
     L["/cvn config  open the settings page"],
     L["/cvn bags <slots>, /cvn dur <percent>, /cvn ammo <count>, /cvn reagent <count>, /cvn trade <points>  set a threshold"],
-    L["/cvn bags on/off  switch a question on or off (same for dur, ammo, trade); ammo also switches reagents"],
-    L["/cvn reagents  list your class reagents; /cvn reagent on/off <name>  switch one"],
+    L["/cvn bags on/off  switch a question on or off (same for dur, ammo, trade)"],
+    L["/cvn reagents  list your class reagents; /cvn reagents on/off  switch reagent questions; /cvn reagent on/off <name>  switch one"],
     L["/cvn food <count>, /cvn water <count>, /cvn petfood <count>  set when to ask about food, water or pet food"],
     L["/cvn food on/off  switch it on or off (same for water, petfood)"],
+    L["/cvn supplies on/off  switch all food, water, pet food and healthstone warnings on or off"],
     L["/cvn sound <name>  choose the reminder sound (whisper, ping, invite, ready or none) and play it"],
     L["/cvn nav <name>  choose the waypoint: auto, tomtom, waypointui or native"],
     L["/cvn buy on/off  buy ammo at merchants; /cvn buy ask/auto  ask first or buy at once"],
@@ -100,15 +101,16 @@ local function status(cfg)
         L["On-screen notice when choosing without asking: %s"]:format(cfg.autoNotice ~= false and L["on"] or L["off"]),
         L["Waypoint: %s"]:format(navName(cfg.navProvider)),
     }
-    table.insert(lines, 4, L["Reagents: %s, trigger at %d or fewer"]:format(cfg.ammoEnabled and L["on"] or L["off"], cfg.reagentThreshold))
+    table.insert(lines, 4, L["Reagents: %s, trigger at %d or fewer"]:format(cfg.reagentsEnabled ~= false and L["on"] or L["off"], cfg.reagentThreshold))
     local off = reagentNamesOff(cfg)
     if #off > 0 then table.insert(lines, 5, L["Reagents switched off: %s"]:format(table.concat(off, ", "))) end
-    table.insert(lines, #off > 0 and 6 or 5, L["Supplies: food %s (%d), water %s (%d), pet food %s (%d), healthstone reminder %s"]:format(
+    table.insert(lines, #off > 0 and 6 or 5, L["Supply warnings: %s"]:format(cfg.suppliesEnabled ~= false and L["on"] or L["off"]))
+    table.insert(lines, #off > 0 and 7 or 6, L["Supplies: food %s (%d), water %s (%d), pet food %s (%d), healthstone reminder %s"]:format(
         cfg.foodEnabled ~= false and L["on"] or L["off"], cfg.foodThreshold or 5, cfg.waterEnabled ~= false and L["on"] or L["off"],
         cfg.waterThreshold or 5, cfg.petFoodEnabled ~= false and L["on"] or L["off"], cfg.petFoodThreshold or 5,
         cfg.healthstoneRemind ~= false and L["on"] or L["off"]))
-    table.insert(lines, #off > 0 and 7 or 6, L["Reminder sound: %s"]:format(soundName(cfg.remindSound)))
-    table.insert(lines, #off > 0 and 8 or 7, L["Reagent buying: %s, %s, up to %d of each"]:format(
+    table.insert(lines, #off > 0 and 8 or 7, L["Reminder sound: %s"]:format(soundName(cfg.remindSound)))
+    table.insert(lines, #off > 0 and 9 or 8, L["Reagent buying: %s, %s, up to %d of each"]:format(
         cfg.reagentBuyEnabled and L["on"] or L["off"], cfg.reagentBuyPrompt ~= false and L["asks first"] or L["buys at once"],
         cfg.reagentBuyTarget or 20))
     lines[#lines + 1] = L["Status window: %s, scale %d%%, background %d%% of color #%s, text and icons %d%%"]:format(
@@ -292,9 +294,17 @@ function M.Run(cfg, msg, class)
     if cmd == "" then return status(cfg) end
     if cmd == "sound" then return soundCommand(cfg, rest) end
     if cmd == "nav" then return navCommand(cfg, rest) end
+    if cmd == "reagents" and (arg == "on" or arg == "off") then
+        cfg.reagentsEnabled = (arg == "on")
+        return status(cfg)
+    end
     if cmd == "reagents" then return reagentList(cfg, class) end
     if cmd == "reagentbuy" then return reagentBuyCommand(cfg, arg, class) end
     if cmd == "reagent" and arg ~= "" then return reagentCommand(cfg, arg, rest:match("^%S*%s*(.*)$"), class) end
+    if cmd == "supplies" and (arg == "on" or arg == "off") then
+        cfg.suppliesEnabled = (arg == "on")
+        return status(cfg)
+    end
     if cmd == "food" and arg ~= "" then return setting(cfg, "food", arg, M.LIMITS.food[1], M.LIMITS.food[2], L["Food threshold"]) end
     if cmd == "water" and arg ~= "" then return setting(cfg, "water", arg, M.LIMITS.water[1], M.LIMITS.water[2], L["Water threshold"]) end
     if cmd == "petfood" and arg ~= "" then return setting(cfg, "petFood", arg, M.LIMITS.petFood[1], M.LIMITS.petFood[2], L["Pet food threshold"]) end

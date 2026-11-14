@@ -32,7 +32,7 @@ A reagent SHALL be watched only when the player knows a spell that uses it. For 
 - **THEN** the lower-rank seed is not asked about
 
 ### Requirement: Reagent trigger
-When a watched, enabled reagent is at or below the reagent threshold, and the master "Ammo and reagents" switch is on, the addon SHALL ask about navigating to the nearest vendor that sells that reagent, using the same question, map-or-distance choice, automatic mode and on-screen notice as other triggers. The count SHALL be the number carried in the player's bags. If the count cannot be read, the reagent SHALL NOT count as low.
+When a watched, enabled reagent is at or below the reagent threshold, and the reagents switch is on, the addon SHALL ask about navigating to the nearest vendor that sells that reagent, using the same question, map-or-distance choice, automatic mode and on-screen notice as other triggers. The count SHALL be the number carried in the player's bags. If the count cannot be read, the reagent SHALL NOT count as low.
 
 #### Scenario: Reagent runs low
 - **WHEN** a mage's Arcane Powder drops to 5 with the default threshold of 5
@@ -66,12 +66,8 @@ When a watched, enabled reagent is at or below the reagent threshold, and the ma
 - **WHEN** the player opens a merchant window while a reagent question or pin is active
 - **THEN** the question closes or the pin is removed
 
-### Requirement: Reagent master switch and thresholds
-"Ammo and reagents" SHALL be one on/off switch for both ammo and reagent questions. Ammo SHALL keep its own count threshold (default 200). All reagents SHALL share one count threshold, default 5, from 1 to 40, saved per character.
-
-#### Scenario: Switch off
-- **WHEN** the player turns the master switch off
-- **THEN** neither ammo nor reagent questions are asked
+### Requirement: Reagent thresholds
+Ammo SHALL keep its own count threshold (default 200). All reagents SHALL share one count threshold, default 5, from 1 to 40, saved per character.
 
 #### Scenario: Separate scales
 - **WHEN** the player sets the ammo threshold to 300 and the reagent threshold to 10
@@ -79,7 +75,7 @@ When a watched, enabled reagent is at or below the reagent threshold, and the ma
 
 #### Scenario: Existing settings
 - **WHEN** a player who switched ammo off in an earlier version loads the addon
-- **THEN** reagent questions are off too, with no other settings lost
+- **THEN** reagent questions start off too, with no other settings lost
 
 ### Requirement: Individual reagents can be disabled
 Each watched reagent SHALL have its own on/off setting, on by default. The settings page SHALL list only the player's class reagents, each with a checkbox. A reagent the player has not switched off SHALL be on, including reagents added in later versions.
@@ -216,3 +212,18 @@ The Reagents settings page SHALL end with a "Buy reagents" checkbox, an "Ask bef
 #### Scenario: Out of range
 - **WHEN** the player runs `/cvn reagentbuy 101`
 - **THEN** the amount is unchanged and a message names the range
+
+### Requirement: Reagents have their own switch
+Reagent questions SHALL have an on/off setting of their own, on by default and saved per character, shown as a "Reagents" checkbox in the Warnings section of the main settings page (the reagent threshold and the per-reagent checkboxes are on the Reagents page), and set by `/cvn reagents on|off`. The ammo switch SHALL NOT affect reagents, and the reagents switch SHALL NOT affect ammo. A character saved before this setting existed SHALL start with its ammo switch's value.
+
+#### Scenario: Ammo off, reagents on
+- **WHEN** the player switches ammo off and reagents are on and low
+- **THEN** the reagent question is still asked and no ammo question is
+
+#### Scenario: Reagents off, ammo on
+- **WHEN** the player runs `/cvn reagents off`
+- **THEN** no reagent question is asked and ammo questions still are
+
+#### Scenario: Earlier settings
+- **WHEN** a character saved with the ammo switch off loads the addon
+- **THEN** its reagents switch starts off

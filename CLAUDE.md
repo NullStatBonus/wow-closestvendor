@@ -12,7 +12,7 @@ Bump the addon's semantic version every time a change's specs are applied to `op
 
 - Set `## Version:` in **both** `ClosestVendor/ClosestVendor_Vanilla.toc` and `ClosestVendor/ClosestVendor_Camelot.toc` to the same value. Do not hard-code the version anywhere else.
 - Below 1.0.0: a change that adds a capability or user-visible feature raises the minor number (0.2.0 -> 0.3.0); a change that only modifies or fixes existing behavior raises the patch number (0.2.0 -> 0.2.1). From 1.0.0, use the usual major.minor.patch meaning, and a change that breaks saved settings or data is a major bump.
-- Make the bump part of the same commit as the archive, name the new version in the commit message, and add a `## X.Y.Z` section to `CHANGELOG.md` in that commit (`tools/check-version.sh` fails without it).
+- Make the bump part of the same commit as the archive, name the new version in the commit message, and add a `## X.Y.Z` section to `CHANGELOG.md` in that commit (`tools/check-version.sh` fails without it). Keep each entry to one short plain-English line about what the player sees; leave out settings pages, the debug report and implementation detail (the README has those).
 - To publish, tag the archive commit `vX.Y.Z` (the version without the `v` must equal the TOC version) and push the tag; see `docs/publishing.md`.
 
 ## Git and PRs

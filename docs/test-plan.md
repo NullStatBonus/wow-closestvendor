@@ -20,9 +20,10 @@ Each check has an action and an expected result. A line that starts with "Note" 
 ## 1. Settings page and commands
 
 - [ ] Open Esc, Options, AddOns, **Closest Vendor**. Expected: the page exists.
-- [ ] On the settings page, find Bag space, Durability, and Ammo and reagents. Expected: each has one checkbox and one slider.
-- [ ] Look under the Ammo and reagents slider. Expected: the reagent slider is there, with one checkbox for each reagent of your class.
-- [ ] Look at the rest of the settings page. Expected: the Buy ammo and Ask before buying ammo checkboxes are there. The Arrows to buy and Bullets to buy dropdowns are there.
+- [ ] On the main settings page, look at Warnings. Expected, in this order: Bag space, Durability and Professions, each with one checkbox and one slider, then Ammo, Reagents and Supplies, each with one checkbox only.
+- [ ] Look at the pages under Closest Vendor. Expected, in this order: Ammo, Reagents, Supplies, then Status window last.
+- [ ] On the Ammo page, find the ammo slider. Expected: the Buy ammo, Ask before buying and arrow and bullet dropdowns are below it.
+- [ ] On the Reagents page, find the reagent slider. Expected: one checkbox for each reagent of your class is under it.
 - [ ] Move a slider. Expected: `/cvn` shows the new number.
 - [ ] Enter `/cvn ammo 500`. Reopen the settings page. Expected: the ammo slider is at 500.
 - [ ] Clear a checkbox. Expected: its slider is greyed out. That trigger stops asking.
@@ -225,8 +226,8 @@ The spell IDs and item IDs were checked against the Classic Era and WoW Forever 
 - [ ] Enter `/cvn reagent on arcane powder`. Expected: the reagent comes back.
 - [ ] Enter `/cvn reagent` with an unknown reagent name, or a reagent of another class. Expected: a message appears.
 - [ ] Open the settings page. Expected: it lists only the reagents of your class. All are on by default. Each has a checkbox that matches `/cvn reagents`.
-- [ ] Clear "Ammo and reagents". Expected: the ammo slider, the reagent slider and the reagent checkboxes are greyed out.
-- [ ] With "Ammo and reagents" cleared, trigger an ammo question and a reagent question. Expected: the addon silences both.
+- [ ] Clear "Reagents" in Warnings. Expected: reagent questions stop. Clear "Ammo" in Warnings. Expected: ammo questions stop and reagent questions are not affected.
+- [ ] With "Ammo" cleared and "Reagents" on, trigger an ammo question and a reagent question. Expected: only the reagent question appears. Swap them with `/cvn ammo on` and `/cvn reagents off`. Expected: only the ammo question appears.
 - [ ] Use a hunter, a warrior and a warlock. Expected: no reagent checkboxes.
 - [ ] As a hunter, warrior or warlock, enter `/cvn reagents`. Expected: it says there are none.
 - [ ] As a hunter, warrior or warlock, play normally. Expected: no reagent question ever appears.
@@ -502,9 +503,10 @@ Enter `/cvn debug on`. Use `/cvn` to check the line "Supplies: food on (5), wate
 
 ### 14.4 Settings and commands
 
-- [ ] Open the settings page. Expected: a **Supplies** page sits between Reagents and Ammo. It shows only the rows your class can use. A warlock also sees **Healthstone reminder**.
+- [ ] Open the settings page. Expected: a **Supplies** page sits after Reagents. It shows only the rows your class can use. A warlock also sees **Healthstone reminder**.
 - [ ] Open the Supplies page as any class. Expected: a **Reminder sound** dropdown with Whisper ping, Minimap ping, Group invite, Ready check and None. Choose one. Expected: it plays at once.
-- [ ] Turn off the ammo and reagents master switch (`/cvn ammo off`). Expected: no food, water, pet food or reminder shows.
+- [ ] Turn off the ammo switch (`/cvn ammo off`). Expected: food, water, pet food and reminders still work, and the Supplies page controls are not greyed out. Ammo and reagent questions stop.
+- [ ] Look in the Warnings section of the main page. Expected: a **Supplies** checkbox. Enter `/cvn supplies off`. Expected: no food, water or pet food question, reminder or red row, and the checkbox is cleared. `/cvn` shows "Supply warnings: off". Enter `/cvn supplies on`. Expected: they work again with the thresholds you had.
 - [ ] Turn it on again. Turn off food only (`/cvn food off`). Expected: no food question. Water and pet food still work.
 - [ ] Repeat for `/cvn water off` and `/cvn petfood off`.
 - [ ] Enter `/cvn food 10`. Carry 10 food items. Expected: the addon asks. Carry 11. Expected: it does not ask.
@@ -521,7 +523,7 @@ Enter `/cvn debug on`. Use `/cvn` to check the line "Supplies: food on (5), wate
 - [ ] Open the status window settings. Expected: a **Show: Supplies** dropdown sits between Reagents and Bag space. `/cvn hud row supplies always` does the same.
 - [ ] Set Supplies to Always. Expected: a Food row for every class, a Water row for mana classes, and a Pet food row for a hunter with a pet out. A warrior has no Water row.
 - [ ] Set Supplies to Only when low and carry plenty of food. Expected: no supply row. Drop to 5 or fewer food. Expected: the Food row shows in red, at the same time as the warning.
-- [ ] Switch food off (`/cvn food off`) or the master switch off. Expected: the Food row is not red.
+- [ ] Switch food off (`/cvn food off`). Expected: the Food row is not red. Switch ammo off instead. Expected: the Food row is still red when food is low.
 - [ ] Call a pet, then dismiss it. Expected: the Pet food row appears and goes away. Call a different pet. Expected: the count changes to that pet's food.
 - [ ] Click the Food row. Expected: the closest food seller is pinned at once, with no question. Click it in combat. Expected: the same.
 - [ ] As a mage with Reagents set to Always, look at the window. Expected: the Conjured Food and Conjured Water rows and the Food and Water rows. They are separate rows and do not conflict.
@@ -548,6 +550,12 @@ Enter `/cvn debug on`. Use `/cvn` to check the line "Supplies: food on (5), wate
 - [ ] Choose a method that is not installed (for example `/cvn nav waypointui`). Expected: the usual order is used and a waypoint still appears.
 - [ ] Open the settings page. Expected: a Waypoint dropdown under Navigation with the same four choices.
 - [ ] Enter `/cvn nav banana`. Expected: it lists the choices and changes nothing.
+
+## 18. Fewer reads and late item data
+
+- [ ] Join a group with another hunter or warlock. Enter `/cvn debug on`. Have them dismiss and summon their pet several times. Enter `/cvn log`. Expected: no `event UNIT_PET party1` lines. Dismiss and summon your own pet. Expected: `event UNIT_PET player` lines.
+- [ ] Turn off food, water, pet food and the healthstone reminder. Change your bags. Expected: nothing is asked, and the other warnings still work.
+- [ ] With reagent buying on, open a merchant that sells your reagent right after a fresh login, before the item has been seen. Expected: the purchase question appears, possibly a moment after the window opens, and only once. This is hard to cause on purpose, so it is fine to skip.
 
 ## Not covered yet
 
