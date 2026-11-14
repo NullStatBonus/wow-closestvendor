@@ -87,6 +87,12 @@ eq(keys(ev("WARLOCK", {}, nil, knowing()).remind), "", "spell not known")
 eq(keys(ev("WARLOCK", {}, nil, knowing(6201), cfg({ healthstoneRemind = false })).remind), "", "switched off")
 eq(keys(ev("MAGE", {}, nil, knowing(6201)).remind), "", "not a warlock")
 eq(#S.Evaluate("WARLOCK", nil, knowing(6201), cfg()).remind, 0, "unreadable bags")
+do -- the healthstone reminder does not read the Soul Shard entry
+    local real = ns.Reagents.DisplayOnly
+    ns.Reagents.DisplayOnly = function() return {} end
+    eq(#ev("WARLOCK", { [5509] = 0 }, nil, knowing(11730)).remind, 1, "reminder still works without the shard entry")
+    ns.Reagents.DisplayOnly = real
+end
 
 -- Reminder sounds: stable keys, game ids, the default, and lookup by key or label.
 do

@@ -8,7 +8,7 @@ Copy-ready text and field values for the CurseForge and Wago projects. Create th
 |---|---|
 | Project name | Closest Vendor |
 | Slug / URL name | closest-vendor (use whatever is free) |
-| Summary (one line, keep under 250 characters) | A gentle nudge when it is time to repair, restock ammo or reagents, or make bag space, with the closest vendor or trainer one click away. For WoW Forever and Classic Era. |
+| Summary (one line, keep under 250 characters) | A gentle nudge when it is time to repair, restock ammo, reagents, food or water, or make bag space, with the closest vendor or trainer one click away. For WoW Forever and Classic Era. |
 | Main category | Map & Minimap |
 | Additional categories | Bags & Inventory, Miscellaneous |
 | Game versions | Classic Era (1.15.x) and WoW Forever (1.60.x). The packager reads `## Interface` from each TOC: 11509 for `ClosestVendor_Vanilla.toc`, 16001 for `ClosestVendor_Camelot.toc`. |
@@ -38,7 +38,7 @@ Closest Vendor tells you when it is a good time to repair, restock or make bag s
 - Your ammo is running low: it offers the closest vendor that sells it.
 - A class reagent is running low: it offers the closest vendor that sells it.
 - Food, water or pet food is running low: it offers the closest vendor that sells it. Mages and warlocks who can make their own get a reminder with a sound instead.
-- A profession is near its skill limit: it offers the closest trainer you have visited.
+- A profession is near its skill limit and you are high enough level to learn the next tier: it offers the closest trainer you have visited.
 
 **Restock without the trip planning.** At any merchant, it can fill your quiver or ammo pouch. It can also top up your class reagents (off by default). It buys only what you can afford and tells you in chat.
 
@@ -50,6 +50,7 @@ Closest Vendor tells you when it is a good time to repair, restock or make bag s
 
 - It ships with about 900 vendors and learns the ones you open.
 - TomTom and WaypointUI are optional. Classic Era needs TomTom to show an arrow.
+- Settings are saved per character. The vendors, trainers and auctioneers the addon learns are shared by the whole account.
 - Pet food works for hunters with a pet out, in every game language.
 - Open a vendor or trainer once so the addon learns it. This matters most in WoW Forever's new zones.
 - Problems? Type `/cvn debug on`, repeat the problem, then type `/cvn log` and post the report.

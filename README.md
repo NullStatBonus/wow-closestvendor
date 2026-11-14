@@ -483,13 +483,13 @@ The new zones are Mount Hyjal, Riverglades, Zephras Isle, Darkspear Islands and 
 - The addon finds your pet's diet from its family, not from text. It works in every language. A pet family the addon does not know is not watched.
 - The addon counts items in your bags, not in the bank.
 - The addon does not buy food, water or pet food for you.
-- The status window has no rows for them.
-- The Conjured Food and Conjured Water rows in the status window are unchanged.
+- The status window shows Food, Water and Pet food rows in its Supplies group. They are separate from the Conjured Food and Conjured Water rows.
 
 ### Skill levels
 
 - The addon takes the last skill tier to end at 300.
 - The addon never asks about a profession whose limit is already 300.
+- The addon does not ask about a profession while you are too low a level to learn its next tier from a trainer (level 10 for 75, 20 for 150, 35 for 225).
 - It is not verified if WoW Forever has tiers above 300.
 - The addon does not check the level requirement of the trainer.
 - A character that is too low can be sent to a trainer who cannot teach the next tier yet.

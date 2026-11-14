@@ -323,6 +323,7 @@ local STATUS_SRC = {
     freeSlots = A.freeSlots, lowestDurability = A.lowestDurability, ammo = A.ammoStatus,
     knows = A.knowsSpell, itemCount = A.itemCount, itemName = A.itemName,
     supplies = supplyState,
+    level = A.level,
     skills = function()
         if not skillCache then skillCache = A.skills() end
         return skillCache
@@ -485,6 +486,7 @@ local function start()
         cancelConfirm = closeQuestions,
         questionOpen = function() return A.popupShown(POPUP) or A.popupShown(POPUP_MAP) or A.popupShown(POPUP_DIST) end,
         skills = A.skills,
+        level = A.level,
         known = CHAR.professions,
         trainerBuckets = trainerBuckets,
         auctionBuckets = auctionBuckets,
