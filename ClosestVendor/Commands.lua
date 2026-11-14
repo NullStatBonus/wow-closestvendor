@@ -26,6 +26,7 @@ local HELP = {
     L["/cvn food <count>, /cvn water <count>, /cvn petfood <count>  set when to ask about food, water or pet food"],
     L["/cvn food on/off  switch it on or off (same for water, petfood)"],
     L["/cvn sound <name>  choose the reminder sound (whisper, ping, invite, ready or none) and play it"],
+    L["/cvn nav <name>  choose the waypoint: auto, tomtom, waypointui or native"],
     L["/cvn buy on/off  buy ammo at merchants; /cvn buy ask/auto  ask first or buy at once"],
     L["/cvn arrows, /cvn bullets  equipped, best or cheapest: which ammo to buy"],
     L["/cvn reagentbuy on/off  buy class reagents at merchants; /cvn reagentbuy ask/auto  ask first or buy at once; /cvn reagentbuy <0-100>  how many of each to carry"],
@@ -75,6 +76,11 @@ local function changedRows(cfg)
     return out
 end
 
+local function navName(key)
+    for _, p in ipairs(ns.Nav.PROVIDERS) do if p[1] == key then return p[2] end end
+    return ns.Nav.PROVIDERS[1][2]
+end
+
 -- The name of a saved reminder sound key, for chat.
 local function soundName(key)
     for _, s in ipairs(ns.Supplies.SOUNDS) do if s[1] == key then return s[3] end end
@@ -92,6 +98,7 @@ local function status(cfg)
         L["Target choice: %s, prefers the target %s"]:format(cfg.vendorMode == "auto" and L["navigates without asking"] or L["asks which one"],
             cfg.vendorPrefer == "distance" and L["that is closest"] or L["on your map"]),
         L["On-screen notice when choosing without asking: %s"]:format(cfg.autoNotice ~= false and L["on"] or L["off"]),
+        L["Waypoint: %s"]:format(navName(cfg.navProvider)),
     }
     table.insert(lines, 4, L["Reagents: %s, trigger at %d or fewer"]:format(cfg.ammoEnabled and L["on"] or L["off"], cfg.reagentThreshold))
     local off = reagentNamesOff(cfg)
@@ -247,6 +254,23 @@ local function soundCommand(cfg, name)
     return { L["Reminder sound: %s"]:format(soundName(key)) }, { "sound" }
 end
 
+local function navChoices()
+    local names = {}
+    for _, p in ipairs(ns.Nav.PROVIDERS) do names[#names + 1] = p[1] end
+    return table.concat(names, ", ")
+end
+
+-- /cvn nav [name]: show the waypoint choice, or pick one. A choice that is not installed falls back to the usual order.
+local function navCommand(cfg, name)
+    if name == "" then
+        return { L["Waypoint: %s"]:format(navName(cfg.navProvider)), L["Choose a waypoint: %s."]:format(navChoices()) }
+    end
+    local key = ns.Nav.FindProvider(name)
+    if not key then return { L["Choose a waypoint: %s."]:format(navChoices()) } end
+    cfg.navProvider = key
+    return { L["Waypoint: %s"]:format(navName(key)) }
+end
+
 -- key: "bag", "dur", "ammo" or "trade"; lo/hi: allowed whole-number range; what: the (translated) name of the threshold.
 local function setting(cfg, key, arg, lo, hi, what)
     local enabled, threshold = key .. "Enabled", key .. "Threshold"
@@ -267,6 +291,7 @@ function M.Run(cfg, msg, class)
     local arg = rest:match("^%S*")
     if cmd == "" then return status(cfg) end
     if cmd == "sound" then return soundCommand(cfg, rest) end
+    if cmd == "nav" then return navCommand(cfg, rest) end
     if cmd == "reagents" then return reagentList(cfg, class) end
     if cmd == "reagentbuy" then return reagentBuyCommand(cfg, arg, class) end
     if cmd == "reagent" and arg ~= "" then return reagentCommand(cfg, arg, rest:match("^%S*%s*(.*)$"), class) end

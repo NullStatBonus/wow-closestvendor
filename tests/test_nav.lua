@@ -53,6 +53,27 @@ eq(N.Select(env({ wui = true, native = true })), "waypointui", "waypointui befor
 eq(N.Select(env({ wui = "missing", native = true })), "native", "waypointui missing method -> native")
 eq(N.Select(env({})), "chat", "era without anything -> chat")
 
+-- A preferred adapter goes first; a missing or failing one falls back to the usual order.
+local all = { tomtom = true, loaded = { TomTom = true }, wui = true, native = true }
+eq(N.Select(env(all), "auto"), "tomtom", "auto: usual order")
+eq(N.Select(env(all), nil), "tomtom", "no preference: usual order")
+eq(N.Select(env(all), "native"), "native", "native preferred over TomTom")
+eq(N.Select(env(all), "waypointui"), "waypointui", "waypointui preferred")
+eq(N.Select(env({ wui = true }), "native"), "waypointui", "preferred but missing: usual order")
+eq(N.Select(env({}), "tomtom"), "chat", "nothing available: chat")
+eq(N.Select(env(all), "chat"), "tomtom", "chat is never a preference")
+eq(N.Select(env(all), "bogus"), "tomtom", "an unknown preference is ignored")
+do
+    local a, lg = env(all)
+    eq(N.Set(a, V, "native").kind, "native", "Set uses the preferred adapter")
+    eq(lg[1], "native:set 1429 0.415", "and only that one was used")
+    local a2 = env({ tomtom = true, loaded = { TomTom = true }, native = true, canSet = false })
+    eq(N.Set(a2, V, "native").kind, "tomtom", "a preferred adapter that refuses falls through")
+end
+eq(N.FindProvider("Game Waypoint"), "native", "label matches, case ignored")
+eq(N.FindProvider("tomtom"), "tomtom", "key matches")
+eq(N.FindProvider("x"), nil, "unknown")
+
 -- TomTom: 0-1 coords, title, crazy arrow; remove with returned uid.
 local api, log = env({ tomtom = true, loaded = { TomTom = true } })
 local h = N.Set(api, V)

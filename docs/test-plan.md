@@ -540,6 +540,15 @@ Enter `/cvn debug on`. Use `/cvn` to check the line "Supplies: food on (5), wate
 - [ ] Reach level 20 and change a skill or craft. Expected: the trainer question appears.
 - [ ] Open the status window with Professions set to Always. Expected: the profession row still shows below the level, not red.
 
+## 17. Waypoint choice
+
+- [ ] Enter `/cvn nav`. Expected: it shows Waypoint: Automatic and the choices.
+- [ ] With TomTom loaded, enter `/cvn nav native`, then `/cvn test sell` and answer Yes. Expected: the game's own waypoint is set, not a TomTom arrow.
+- [ ] Enter `/cvn nav tomtom` and repeat. Expected: a TomTom arrow.
+- [ ] Choose a method that is not installed (for example `/cvn nav waypointui`). Expected: the usual order is used and a waypoint still appears.
+- [ ] Open the settings page. Expected: a Waypoint dropdown under Navigation with the same four choices.
+- [ ] Enter `/cvn nav banana`. Expected: it lists the choices and changes nothing.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

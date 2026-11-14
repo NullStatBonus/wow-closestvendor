@@ -10,7 +10,7 @@ local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tra
     vendorMode = "ask", vendorPrefer = "map", autoNotice = true, reagentThreshold = 5,
     reagentBuyEnabled = false, reagentBuyPrompt = true, reagentBuyTarget = 20,
     foodEnabled = true, waterEnabled = true, petFoodEnabled = true, healthstoneRemind = true,
-    foodThreshold = 5, waterThreshold = 5, petFoodThreshold = 5, remindSound = "whisper",
+    foodThreshold = 5, waterThreshold = 5, petFoodThreshold = 5, remindSound = "whisper", navProvider = "auto",
     instanceAnchor = "hearth", ahEnabled = false, hudLocked = false, hudScale = 100, hudAlpha = 80, hudTextAlpha = 100, hudColor = "000000" }
 
 -- Load Commands and Options with the fake globals in their environment.
@@ -18,7 +18,7 @@ local function load(settings, class)
     local env = setmetatable({ Settings = settings, MinimalSliderWithSteppersMixin = { Label = { Right = "right" } },
         CreateSettingsListSectionHeaderInitializer = function(text) return { text = text } end }, { __index = _G })
     local ns = {}
-    for _, f in ipairs({ "Locales/enUS", "Reagents", "Supplies", "Status", "Commands", "Options" }) do
+    for _, f in ipairs({ "Locales/enUS", "Reagents", "Supplies", "Nav", "Status", "Commands", "Options" }) do
         local chunk = assert(loadfile("ClosestVendor/" .. f .. ".lua"))
         setfenv(chunk, env)
         chunk("ClosestVendor", ns)
@@ -38,7 +38,7 @@ local category = ns.Options.Register(cfg, DEFAULTS, function() changes = changes
 eq(category, rec.category, "returns the category")
 eq(category.name, "Closest Vendor", "page name")
 eq(rec.registered, category, "category registered under AddOns")
-eq(#rec.settings, 39, "main 13 (two per trigger, notice, three dropdowns, auction), reagents 7 (threshold, three reagents, three for buying), supplies 5 (a mage: food and water, a switch and a threshold each, and the reminder sound), ammo buying 4, window 10 (lock, three sliders, six row groups)")
+eq(#rec.settings, 40, "main 14 (two per trigger, notice, four dropdowns, auction), reagents 7 (threshold, three reagents, three for buying), supplies 5 (a mage: food and water, a switch and a threshold each, and the reminder sound), ammo buying 4, window 10 (lock, three sliders, six row groups)")
 eq(#rec.checkboxes, 16, "a checkbox per trigger, per mage reagent, two for reagent buying, two for ammo buying, notice, auction and lock")
 eq(#rec.sliders, 11, "a slider per trigger, the reagent slider, the reagent amount, scale, background and text opacity")
 local cbByKey, slByKey = {}, {}
@@ -55,7 +55,7 @@ local function inPage(c)
     for _, s in ipairs(rec.settings) do if s.category == c then n[#n + 1] = s end end
     return n
 end
-eq(#inPage(category), 13, "main page controls")
+eq(#inPage(category), 14, "main page controls")
 eq(#inPage(subs["Reagents"]), 7, "reagents page")
 eq(#inPage(subs["Supplies"]), 5, "supplies page for a mage: food and water, and the reminder sound")
 eq(#inPage(subs["Ammo"]), 4, "ammo page")
@@ -80,7 +80,7 @@ for _, s in ipairs(rec.settings) do
     if s.key ~= "mode" then keys[s.key] = s end
     if s.key ~= "mode" then
     eq(s.default, DEFAULTS[s.key], "default for " .. s.key)
-    eq(s.vtype, (s.key:find("Enabled") or s.key == "ammoBuyPrompt" or s.key == "reagentBuyPrompt" or s.key == "autoNotice" or s.key == "hudLocked") and "boolean" or (s.key:find("Grade") or s.key:find("^vendor") or s.key == "instanceAnchor" or s.key == "remindSound") and "string" or "number", "type of " .. s.key)
+    eq(s.vtype, (s.key:find("Enabled") or s.key == "ammoBuyPrompt" or s.key == "reagentBuyPrompt" or s.key == "autoNotice" or s.key == "hudLocked") and "boolean" or (s.key:find("Grade") or s.key:find("^vendor") or s.key == "instanceAnchor" or s.key == "remindSound" or s.key == "navProvider") and "string" or "number", "type of " .. s.key)
     end
   end
 end
@@ -94,7 +94,7 @@ for _, k in ipairs({ "ammoBuyEnabled", "ammoBuyPrompt", "arrowGrade", "bulletGra
 end
 eq(cbByKey.ammoBuyEnabled ~= nil, true, "buy switch")
 eq(cbByKey.ammoBuyPrompt ~= nil, true, "ask-first switch")
-eq(#rec.dropdowns, 3 + 2 + 6 + 1, "three navigation choices, a dropdown per ammo kind, a mode per window row group, the reminder sound")
+eq(#rec.dropdowns, 4 + 2 + 6 + 1, "four navigation choices, a dropdown per ammo kind, a mode per window row group, the reminder sound")
 local ddByKey = {}
 for _, d in ipairs(rec.dropdowns) do ddByKey[d.setting.key] = d end
 eq(ddByKey.arrowGrade ~= nil and ddByKey.bulletGrade ~= nil, true, "arrow and bullet dropdowns")
@@ -408,7 +408,7 @@ for k, v in pairs(DEFAULTS) do cfg10[k] = v end
 cfg10.reagentOff = {}
 local cat10 = ns10.Options.Register(cfg10, DEFAULTS, function() end, "MAGE")
 eq(#rec10.subcategories, 0, "no subcategories")
-eq(#rec10.settings, 39, "same controls")
+eq(#rec10.settings, 40, "same controls")
 for _, st in ipairs(rec10.settings) do eq(st.category, cat10, "all on one page: " .. tostring(st.key)) end
 local h10 = {}
 for _, h in ipairs(rec10.headers) do h10[#h10 + 1] = h.text end
@@ -426,6 +426,11 @@ local anchors = {}
 for _, o in ipairs(ddByKey.instanceAnchor.options) do anchors[#anchors + 1] = o.value end
 eq(table.concat(anchors, ","), "hearth,last", "anchor choices")
 eq(keys.instanceAnchor:GetValue(), "hearth", "anchor defaults to the hearthstone")
+eq(ddByKey.navProvider.setting.category, category, "waypoint dropdown on the main page")
+local provs = {}
+for _, o in ipairs(ddByKey.navProvider.options) do provs[#provs + 1] = o.value end
+eq(table.concat(provs, ","), "auto,tomtom,waypointui,native", "waypoint choices")
+eq(keys.navProvider:GetValue(), "auto", "waypoint defaults to automatic")
 eq(keys.ahEnabled:GetValue(), false, "auction routing defaults to off")
 eq(keys.ahEnabled.category, category, "auction checkbox on the main page")
 eq(cbByKey.ahEnabled ~= nil, true, "auction checkbox exists")

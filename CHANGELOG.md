@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0
+
+- Waypoint method: choose which method shows the vendor (Automatic, TomTom, WaypointUI or the game's own waypoint) with `/cvn nav` or the new Waypoint dropdown on the settings page. A WoW Forever player with TomTom installed can now use the game's own waypoint. A method that is not available falls back to the usual order. The choice is saved per character.
+
 ## 1.2.1
 
 - Professions: the addon no longer asks about a trainer, or marks the profession low in the status window, while your level is too low for the next tier (level 10 for 75, 20 for 150, 35 for 225).

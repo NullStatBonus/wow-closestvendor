@@ -403,6 +403,10 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note, swatchPicke
         dropdown(category, cfg, defaults, onChange, "CLOSESTVENDOR_VENDOR_PREFER", "vendorPrefer", L["Preferred target"],
             { { "map", L["On your map"] }, { "distance", L["Closest"] } },
             L["On your map prefers the nearest target in the zone you are in. Closest prefers the nearest by distance, whatever the map."])
+        local providers = {}
+        for _, p in ipairs(ns.Nav.PROVIDERS) do providers[#providers + 1] = { p[1], p[2] } end
+        dropdown(category, cfg, defaults, onChange, "CLOSESTVENDOR_NAV_PROVIDER", "navProvider", L["Waypoint"], providers,
+            L["Automatic uses TomTom if you have it, then WaypointUI, then the game's own waypoint. Choose one to use it first; if it is not available the usual order applies."])
         dropdown(category, cfg, defaults, onChange, "CLOSESTVENDOR_INSTANCE_ANCHOR", "instanceAnchor",
             L["Search from, inside an instance"],
             { { "hearth", L["Hearthstone location"] }, { "last", L["Last outdoor position"] } },
