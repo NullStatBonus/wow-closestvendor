@@ -549,6 +549,12 @@ Enter `/cvn debug on`. Use `/cvn` to check the line "Supplies: food on (5), wate
 - [ ] Open the settings page. Expected: a Waypoint dropdown under Navigation with the same four choices.
 - [ ] Enter `/cvn nav banana`. Expected: it lists the choices and changes nothing.
 
+## 18. Fewer reads and late item data
+
+- [ ] Join a group with another hunter or warlock. Enter `/cvn debug on`. Have them dismiss and summon their pet several times. Enter `/cvn log`. Expected: no `event UNIT_PET party1` lines. Dismiss and summon your own pet. Expected: `event UNIT_PET player` lines.
+- [ ] Turn off food, water, pet food and the healthstone reminder. Change your bags. Expected: nothing is asked, and the other warnings still work.
+- [ ] With reagent buying on, open a merchant that sells your reagent right after a fresh login, before the item has been seen. Expected: the purchase question appears, possibly a moment after the window opens, and only once. This is hard to cause on purpose, so it is fine to skip.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.
