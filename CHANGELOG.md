@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1
+
+- Professions: the addon no longer asks about a trainer, or marks the profession low in the status window, while your level is too low for the next tier (level 10 for 75, 20 for 150, 35 for 225).
+
 ## 1.2.0
 
 - Settings are now saved per character: thresholds, switches, the reminder sound, the status window options and position, known professions, the hearthstone point and the debug log. The vendors, trainers and auctioneers the addon learns are still shared by the account.

@@ -88,6 +88,8 @@ eq(keys(rows), "prof:Cooking,prof:Mining!", "known professions below the last ca
 eq(row(rows, "prof:Mining").text, "Mining: 70/75", "profession text")
 eq(row(rows, "prof:Mining").kind .. ":" .. row(rows, "prof:Mining").id, "trainer:Mining", "a profession row goes to a trainer")
 eq(keys(S.Rows({ skills = skills, known = { Mining = true } }, cfg({ tradeEnabled = false }))), "prof:Mining", "profession warning off: not low")
+eq(keys(S.Rows({ skills = { { name = "Mining", rank = 75, max = 75 } }, known = { Mining = true }, level = 5 }, cfg())), "prof:Mining", "too low a level for the next tier: shown, not low")
+eq(keys(S.Rows({ skills = { { name = "Mining", rank = 75, max = 75 } }, known = { Mining = true }, level = 10 }, cfg())), "prof:Mining!", "level reached: low")
 eq(keys(S.Rows({ skills = "broken", known = { Mining = true } }, cfg())), "", "unreadable skills: no rows")
 
 -- Display-only items: a row that is never low and cannot be routed to.

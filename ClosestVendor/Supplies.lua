@@ -129,8 +129,11 @@ local function anySpell(list, knows)
     return false
 end
 
--- The spells that conjure food and water (mage) or create a healthstone (warlock), read from the
--- display-only reagent entries.
+-- Create Healthstone, ranks 1 to 5. Kept here, not read from the Soul Shard display entry, so the
+-- reminder does not depend on what that entry lists.
+local HEALTHSTONE_SPELLS = { 5699, 6201, 6202, 11729, 11730 }
+
+-- The spells that conjure food and water (mage), read from the display-only reagent entries.
 local function spellsOf(class, itemId)
     for _, item in ipairs(ns.Reagents.DisplayOnly(class)) do
         if item.id == itemId then return item.spells end
@@ -158,7 +161,7 @@ function S.Evaluate(class, totals, knows, cfg)
     if S.UsesMana(class) then check("water", cfg.waterEnabled, cfg.waterThreshold, 5350) end
     if class == "HUNTER" then check("pet", cfg.petFoodEnabled, cfg.petFoodThreshold) end
     if class == "WARLOCK" and cfg.healthstoneRemind and totals.healthstone == 0
-            and anySpell(spellsOf("WARLOCK", 6265), knows) then
+            and anySpell(HEALTHSTONE_SPELLS, knows) then
         out.remind[#out.remind + 1] = { key = "healthstone", count = 0 }
     end
     return out

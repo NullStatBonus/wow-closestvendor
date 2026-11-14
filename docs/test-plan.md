@@ -534,6 +534,12 @@ Enter `/cvn debug on`. Use `/cvn` to check the line "Supplies: food on (5), wate
 - [ ] Open a merchant the addon does not know on A. Log in B. Expected: B can be directed to it.
 - [ ] Log in a character that never used the addon, on an account with earlier settings. Expected: it starts with those settings.
 
+## 16. Profession level gate
+
+- [ ] With a character below level 20 and a profession at 150/150, change a skill or craft. Expected: no trainer question and the profession row is not red.
+- [ ] Reach level 20 and change a skill or craft. Expected: the trainer question appears.
+- [ ] Open the status window with Professions set to Always. Expected: the profession row still shows below the level, not red.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

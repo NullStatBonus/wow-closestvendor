@@ -265,7 +265,7 @@ function C.New(env)
     -- known trainer. Runs on every skill change and craft: there is deliberately no latch.
     local function checkTrade(skills)
         if not env.cfg.tradeEnabled then return end
-        local within = ns.Professions.Within(skills, env.known or {}, env.cfg.tradeThreshold)
+        local within = ns.Professions.Within(skills, env.known or {}, env.cfg.tradeThreshold, env.level and env.level())
         -- A trainer waypoint ends once its profession is no longer near the cap.
         if pinTrade then
             local still = false
@@ -579,7 +579,7 @@ function C.New(env)
         elseif kind == "trainer" then
             -- Only while the profession is near its cap: otherwise the next skill check would clear the pin.
             local near = false
-            for _, p in ipairs(ns.Professions.Within(env.skills and env.skills(), env.known or {}, env.cfg.tradeThreshold)) do
+            for _, p in ipairs(ns.Professions.Within(env.skills and env.skills(), env.known or {}, env.cfg.tradeThreshold, env.level and env.level())) do
                 if p.name == id then near = true end
             end
             if not near then log("direct pin: profession is not near its cap") return false end

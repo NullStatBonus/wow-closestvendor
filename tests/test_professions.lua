@@ -31,6 +31,17 @@ eq(names(P.Within(nil, known, 10)), "", "no skills")
 eq(names(P.Within({ { name = "Mining", rank = "x", max = 75 } }, known, 10)), "", "non-numeric rank")
 eq(names(P.Within({ { name = "Mining", rank = 10, max = nil } }, known, 10)), "", "missing max")
 eq(names(P.Within({ { name = "Mining", rank = 80, max = 75 } }, known, 10)), "", "rank above max is unreadable")
+
+-- Level gate: the trainer refuses the next tier below level 10 / 20 / 35.
+local at75, at150, at225 = { { name = "Mining", rank = 75, max = 75 } }, { { name = "Mining", rank = 150, max = 150 } }, { { name = "Mining", rank = 225, max = 225 } }
+eq(names(P.Within(at75, known, 10, 9)), "", "75 at level 9: Journeyman not teachable yet")
+eq(names(P.Within(at75, known, 10, 10)), "Mining:0", "75 at level 10")
+eq(names(P.Within(at150, known, 10, 19)), "", "150 at level 19")
+eq(names(P.Within(at150, known, 10, 20)), "Mining:0", "150 at level 20")
+eq(names(P.Within(at225, known, 10, 34)), "", "225 at level 34")
+eq(names(P.Within(at225, known, 10, 35)), "Mining:0", "225 at level 35")
+eq(names(P.Within(at150, known, 10, nil)), "Mining:0", "unknown level gates nothing")
+eq(names(P.Within({ { name = "Mining", rank = 100, max = 100 } }, known, 100, 1)), "Mining:0", "a cap with no listed tier is not gated")
 eq(names(P.Within({ { name = "Mining", rank = 0, max = 0 } }, known, 10)), "", "zero cap")
 
 -- Order: closest to the cap first, ties by name.

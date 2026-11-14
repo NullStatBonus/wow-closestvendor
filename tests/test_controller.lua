@@ -29,6 +29,7 @@ local function world(over)
         playSound = function(key) w.sounds[#w.sounds + 1] = key or "unset" end,
         skills = function() return w.skills end,
         known = w.known,
+        level = w.level and function() return w.level end,
         trainerBuckets = w.trainers or {},
         auctionBuckets = w.auction,
         say = function(t) w.says[#w.says + 1] = t end,
@@ -417,6 +418,10 @@ w = trade({ known = {} }); w.c.OnCraft()
 eq(#w.prompts, 0, "profession not known")
 w = trade({ skills = false }); w.c.OnCraft()
 eq(#w.prompts, 0, "skills unreadable")
+w = trade({ skills = mining(150, 150), level = 15 }); w.c.OnCraft()
+eq(#w.prompts, 0, "150/150 at level 15: the trainer would refuse Expert, no question")
+w = trade({ skills = mining(150, 150), level = 20 }); w.c.OnCraft()
+eq(#w.prompts, 1, "150/150 at level 20: ask")
 
 -- Declined: asked again on the next craft (no latch). Open question: not asked twice.
 w = trade({ autoAccept = false })

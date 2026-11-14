@@ -90,7 +90,7 @@ end
 
 -- Reads what the window shows. src supplies the game reads (each may return nil for "unknown"):
 --   src.freeSlots(), src.lowestDurability(), src.ammo() -> kind, count
---   src.knows(spellId), src.itemCount(itemId), src.itemName(itemId), src.skills()
+--   src.knows(spellId), src.itemCount(itemId), src.itemName(itemId), src.skills(), src.level()
 --   src.known   set of profession names the addon has seen
 -- Nothing is read for a group whose mode is "never", nor for display-only items unless Reagents is
 -- "always" (they are never low, so nothing else shows them). The result (the snapshot Rows takes):
@@ -102,7 +102,7 @@ end
 --                                   count summed over every item id of the entry
 --   supplies                        { class, totals, knows } as Controller's supplies(), or nil: the bag
 --                                   totals of food, water and pet food (nil when unreadable)
---   skills, known                   the skill list and the set of seen professions
+--   skills, known, level            the skill list, the set of seen professions and the player level (nil: unknown)
 function S.Snapshot(src, cfg, class)
     local snap = { reagents = {}, display = {}, known = src.known or {} }
     if S.Mode(cfg, "bags") ~= "never" then snap.free = src.freeSlots() end
@@ -131,7 +131,7 @@ function S.Snapshot(src, cfg, class)
         end
     end
     if S.Mode(cfg, "supplies") ~= "never" and src.supplies then snap.supplies = src.supplies() end
-    if next(snap.known) and S.Mode(cfg, "professions") ~= "never" then snap.skills = src.skills() end
+    if next(snap.known) and S.Mode(cfg, "professions") ~= "never" then snap.skills = src.skills(); snap.level = src.level and src.level() end
     return snap
 end
 
@@ -199,7 +199,7 @@ function S.Rows(snap, cfg, class)
     if type(snap.skills) == "table" then
         local near = {}
         if cfg.tradeEnabled then
-            for _, p in ipairs(ns.Professions.Within(snap.skills, snap.known or {}, cfg.tradeThreshold)) do near[p.name] = true end
+            for _, p in ipairs(ns.Professions.Within(snap.skills, snap.known or {}, cfg.tradeThreshold, snap.level)) do near[p.name] = true end
         end
         local profs = {}
         for _, s in ipairs(snap.skills) do
