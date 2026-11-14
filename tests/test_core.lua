@@ -1722,7 +1722,11 @@ g = supplyGame("ROGUE", { { 117, 30 } })
 g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "a rogue is not asked about water")
 g = supplyGame("WARRIOR", { { 117, 1 } }); g.env.SlashCmdList.CLOSESTVENDOR("ammo off"); g.onEvent("BAG_UPDATE_DELAYED")
-eq(g.popup, nil, "master switch off")
+eq(g.popup ~= nil and has(g.popup.text, "food"), true, "ammo switch off: food is still asked")
+g = supplyGame("WARRIOR", { { 117, 1 } }); g.env.SlashCmdList.CLOSESTVENDOR("supplies off"); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "supplies switch off: nothing asked")
+g.env.SlashCmdList.CLOSESTVENDOR("supplies on"); g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup ~= nil and has(g.popup.text, "food"), true, "switched back on: asked")
 g = supplyGame("WARRIOR", { { 117, 1 } }); g.env.SlashCmdList.CLOSESTVENDOR("food off"); g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "food switched off")
 g = supplyGame("WARRIOR", { { 117, 8 } }); g.env.SlashCmdList.CLOSESTVENDOR("food 10"); g.onEvent("BAG_UPDATE_DELAYED")
@@ -1777,7 +1781,12 @@ do
     cfg.ammoEnabled = false
     n = 0
     gq.onEvent("BAG_UPDATE_DELAYED")
-    eq(n, 0, "the master switch off: the bags are not scanned for supplies either")
+    eq(n > 0, true, "the ammo switch off does not stop the supply scan")
+    cfg.ammoEnabled = true
+    cfg.suppliesEnabled = false
+    n = 0
+    gq.onEvent("BAG_UPDATE_DELAYED")
+    eq(n, 0, "the supplies switch off: the bags are not scanned for supplies")
 end
 
 g.env.SlashCmdList.CLOSESTVENDOR("petfood off")
@@ -1878,7 +1887,7 @@ g.env.SlashCmdList.CLOSESTVENDOR("water off")
 g.env.SlashCmdList.CLOSESTVENDOR("log")
 local swin
 for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then swin = f end end
-eq(has(swin.box.text, "supplies: food on (5), water off (5), pet food on (5), healthstone reminder on"), true, "report line")
+eq(has(swin.box.text, "supplies: on; food on (5), water off (5), pet food on (5), healthstone reminder on"), true, "report line")
 g.env.SlashCmdList.CLOSESTVENDOR("")
 eq(has(table.concat(g.printed, "\n"), "Supplies: food on (5), water off (5), pet food on (5), healthstone reminder on"), true, "settings line")
 eq(has(table.concat(g.printed, "\n"), "Reminder sound: Whisper ping"), true, "sound line")

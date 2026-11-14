@@ -504,7 +504,8 @@ Enter `/cvn debug on`. Use `/cvn` to check the line "Supplies: food on (5), wate
 
 - [ ] Open the settings page. Expected: a **Supplies** page sits between Reagents and Ammo. It shows only the rows your class can use. A warlock also sees **Healthstone reminder**.
 - [ ] Open the Supplies page as any class. Expected: a **Reminder sound** dropdown with Whisper ping, Minimap ping, Group invite, Ready check and None. Choose one. Expected: it plays at once.
-- [ ] Turn off the ammo and reagents master switch (`/cvn ammo off`). Expected: no food, water, pet food or reminder shows.
+- [ ] Turn off the ammo and reagents switch (`/cvn ammo off`). Expected: food, water, pet food and reminders still work, and the Supplies page controls are not greyed out. Ammo and reagent questions stop.
+- [ ] Look in the Warnings section of the main page. Expected: a **Supplies** checkbox. Enter `/cvn supplies off`. Expected: no food, water or pet food question, reminder or red row, and the checkbox is cleared. `/cvn` shows "Supply warnings: off". Enter `/cvn supplies on`. Expected: they work again with the thresholds you had.
 - [ ] Turn it on again. Turn off food only (`/cvn food off`). Expected: no food question. Water and pet food still work.
 - [ ] Repeat for `/cvn water off` and `/cvn petfood off`.
 - [ ] Enter `/cvn food 10`. Carry 10 food items. Expected: the addon asks. Carry 11. Expected: it does not ask.
@@ -521,7 +522,7 @@ Enter `/cvn debug on`. Use `/cvn` to check the line "Supplies: food on (5), wate
 - [ ] Open the status window settings. Expected: a **Show: Supplies** dropdown sits between Reagents and Bag space. `/cvn hud row supplies always` does the same.
 - [ ] Set Supplies to Always. Expected: a Food row for every class, a Water row for mana classes, and a Pet food row for a hunter with a pet out. A warrior has no Water row.
 - [ ] Set Supplies to Only when low and carry plenty of food. Expected: no supply row. Drop to 5 or fewer food. Expected: the Food row shows in red, at the same time as the warning.
-- [ ] Switch food off (`/cvn food off`) or the master switch off. Expected: the Food row is not red.
+- [ ] Switch food off (`/cvn food off`). Expected: the Food row is not red. Switch ammo off instead. Expected: the Food row is still red when food is low.
 - [ ] Call a pet, then dismiss it. Expected: the Pet food row appears and goes away. Call a different pet. Expected: the count changes to that pet's food.
 - [ ] Click the Food row. Expected: the closest food seller is pinned at once, with no question. Click it in combat. Expected: the same.
 - [ ] As a mage with Reagents set to Always, look at the window. Expected: the Conjured Food and Conjured Water rows and the Food and Water rows. They are separate rows and do not conflict.

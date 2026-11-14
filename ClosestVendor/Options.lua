@@ -366,7 +366,7 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note, swatchPicke
     end
     local category = remember(Settings.RegisterVerticalLayoutCategory(L["Closest Vendor"]))
     header(category, L["Warnings"])
-    local ammoSwitch, ammoSetting
+    local ammoSwitch, ammoSetting, suppliesSwitch, suppliesSetting
     for _, row in ipairs(ROWS) do
         local tag = row.key:upper()
         local on = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_" .. tag .. "_ENABLED",
@@ -388,6 +388,13 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note, swatchPicke
         amount:SetValueChangedCallback(onChange)
         if row.key == "ammo" then ammoSwitch, ammoSetting = checkbox, on end
     end
+    -- Food, water, pet food and the healthstone reminder: one switch here, each also on the Supplies page.
+    local suppliesOn = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_SUPPLIES_ENABLED", "suppliesEnabled", cfg,
+        Settings.VarType.Boolean, L["Supplies"], defaults.suppliesEnabled)
+    suppliesSwitch = Settings.CreateCheckbox(category, suppliesOn,
+        L["Ask about the nearest vendor when food, water or pet food runs low, and remind a mage or warlock who can make their own. Set each one on the Supplies page."])
+    suppliesOn:SetValueChangedCallback(onChange)
+    suppliesSetting = suppliesOn
     local notice = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AUTO_NOTICE", "autoNotice", cfg,
         Settings.VarType.Boolean, L["On-screen notice"], defaults.autoNotice)
     Settings.CreateCheckbox(category, notice, L["Show a message on screen when a target is chosen without asking."])
@@ -423,7 +430,7 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note, swatchPicke
 
     local supplies = page(category, L["Supplies"])
     if supplies == category then header(category, L["Supplies"]) end
-    registerSupplies(supplies, cfg, defaults, onChange, class, supplies == category and ammoSwitch or nil, ammoSetting)
+    registerSupplies(supplies, cfg, defaults, onChange, class, supplies == category and suppliesSwitch or nil, suppliesSetting)
 
     local ammo = page(category, L["Ammo"])
     if ammo == category then header(category, L["Ammo"]) end

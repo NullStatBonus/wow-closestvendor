@@ -206,8 +206,9 @@ Type `/cvn config` to open the main page.
 ### Closest Vendor (main page)
 
 - **Warnings:** a checkbox and a slider for each warning (bags, durability, ammo and reagents, professions).
+- **Warnings:** a **Supplies** checkbox, the one switch for food, water, pet food and the healthstone reminder.
 - **Warnings:** a checkbox for the on-screen notice.
-- The ammo checkbox is the one switch for ammo, reagents, food, water and pet food. The label stays "Ammo and reagents". When it is off, the addon does not watch any of them.
+- The ammo checkbox is the one switch for ammo and reagents. The label stays "Ammo and reagents". When it is off, the addon does not watch either. Food, water and pet food are controlled by the Supplies checkbox, not by this one.
 - **Navigation:** a dropdown for when the closest target is on another map. You choose to ask which one, or to navigate without asking.
 - **Navigation:** a dropdown to prefer the target on your map or the closest target.
 - **Navigation:** a dropdown for the waypoint method: Automatic (the order above), TomTom, WaypointUI or Game waypoint.
@@ -231,7 +232,7 @@ Type `/cvn config` to open the main page.
 - A warlock also gets a **Healthstone reminder** checkbox.
 - Every class gets a **Reminder sound** dropdown (only mages and warlocks are reminded): Whisper ping (default), Minimap ping, Group invite, Ready check or None. Choosing one plays it.
 - All are on by default.
-- The main switch "Ammo and reagents" also turns these off.
+- Each item has its own switch, and the **Supplies** checkbox on the main page turns all of them off. The "Ammo and reagents" switch does not.
 
 ### Ammo
 
@@ -260,6 +261,8 @@ Type `/cvn config` to open the main page.
 /cvn dur 30
 /cvn dur off
 /cvn dur on
+/cvn supplies off
+/cvn supplies on
 /cvn ammo 300
 /cvn ammo off
 /cvn ammo on
@@ -334,6 +337,7 @@ Type `/cvn config` to open the main page.
 - `/cvn bags on` and `/cvn bags off` turn the bag warning on or off.
 - `/cvn dur <percent>` sets the durability threshold (1 to 100).
 - `/cvn dur on` and `/cvn dur off` turn the durability warning on or off.
+- `/cvn supplies on` and `/cvn supplies off` turn the food, water, pet food and healthstone warnings on or off together.
 - `/cvn ammo <count>` sets the ammo threshold (0 to 2000).
 - `/cvn ammo on` and `/cvn ammo off` turn the ammo and reagent warnings on or off.
 - `/cvn trade <points>` sets the profession threshold (0 to 300).

@@ -397,7 +397,7 @@ function C.New(env)
         local supKeys, remindKeys, remindCount = {}, {}, {}
         -- Reading the bags costs a scan of every slot, so only when something supply-related can fire.
         local c = env.cfg
-        local watching = c.ammoEnabled and (c.foodEnabled or c.waterEnabled or c.petFoodEnabled or c.healthstoneRemind)
+        local watching = c.suppliesEnabled and (c.foodEnabled or c.waterEnabled or c.petFoodEnabled or c.healthstoneRemind)
         local state = watching and env.supplies and env.supplies()
         if state then
             local ev = ns.Supplies.Evaluate(state.class, state.totals, state.knows, env.cfg)

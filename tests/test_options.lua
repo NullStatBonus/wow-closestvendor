@@ -5,7 +5,7 @@ local H = require("harness")
 local eq = H.eq
 
 local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
-    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true,
+    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, suppliesEnabled = true,
     ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped",
     vendorMode = "ask", vendorPrefer = "map", autoNotice = true, reagentThreshold = 5,
     reagentBuyEnabled = false, reagentBuyPrompt = true, reagentBuyTarget = 20,
@@ -38,8 +38,8 @@ local category = ns.Options.Register(cfg, DEFAULTS, function() changes = changes
 eq(category, rec.category, "returns the category")
 eq(category.name, "Closest Vendor", "page name")
 eq(rec.registered, category, "category registered under AddOns")
-eq(#rec.settings, 40, "main 14 (two per trigger, notice, four dropdowns, auction), reagents 7 (threshold, three reagents, three for buying), supplies 5 (a mage: food and water, a switch and a threshold each, and the reminder sound), ammo buying 4, window 10 (lock, three sliders, six row groups)")
-eq(#rec.checkboxes, 16, "a checkbox per trigger, per mage reagent, two for reagent buying, two for ammo buying, notice, auction and lock")
+eq(#rec.settings, 41, "main 15 (two per trigger, supplies, notice, four dropdowns, auction), reagents 7 (threshold, three reagents, three for buying), supplies 5 (a mage: food and water, a switch and a threshold each, and the reminder sound), ammo buying 4, window 10 (lock, three sliders, six row groups)")
+eq(#rec.checkboxes, 17, "a checkbox per trigger, the supplies switch, per mage reagent, two for reagent buying, two for ammo buying, notice, auction and lock")
 eq(#rec.sliders, 11, "a slider per trigger, the reagent slider, the reagent amount, scale, background and text opacity")
 local cbByKey, slByKey = {}, {}
 for _, c in ipairs(rec.checkboxes) do cbByKey[c.setting.key] = c end
@@ -55,7 +55,7 @@ local function inPage(c)
     for _, s in ipairs(rec.settings) do if s.category == c then n[#n + 1] = s end end
     return n
 end
-eq(#inPage(category), 14, "main page controls")
+eq(#inPage(category), 15, "main page controls")
 eq(#inPage(subs["Reagents"]), 7, "reagents page")
 eq(#inPage(subs["Supplies"]), 5, "supplies page for a mage: food and water, and the reminder sound")
 eq(#inPage(subs["Ammo"]), 4, "ammo page")
@@ -408,7 +408,7 @@ for k, v in pairs(DEFAULTS) do cfg10[k] = v end
 cfg10.reagentOff = {}
 local cat10 = ns10.Options.Register(cfg10, DEFAULTS, function() end, "MAGE")
 eq(#rec10.subcategories, 0, "no subcategories")
-eq(#rec10.settings, 40, "same controls")
+eq(#rec10.settings, 41, "same controls")
 for _, st in ipairs(rec10.settings) do eq(st.category, cat10, "all on one page: " .. tostring(st.key)) end
 local h10 = {}
 for _, h in ipairs(rec10.headers) do h10[#h10 + 1] = h.text end
@@ -418,6 +418,9 @@ for _, c in ipairs(rec10.checkboxes) do if c.setting.key == "ammoEnabled" then a
 local rs10
 for _, sl in ipairs(rec10.sliders) do if sl.setting.key == "reagentThreshold" then rs10 = sl end end
 eq(rs10.parent, ammoCb10, "reagent slider still hangs off the ammo switch")
+for _, c in ipairs(rec10.checkboxes) do
+    if c.setting.key == "foodEnabled" then eq(c.parent ~= ammoCb10, true, "the food switch does not hang off the ammo switch") end
+end
 eq(rec10.settings[#rec10.settings - 9].key, "hudLocked", "Lock still leads the window group")
 
 -- Navigation: anchor dropdown and auction checkbox on the main page.
@@ -426,6 +429,9 @@ local anchors = {}
 for _, o in ipairs(ddByKey.instanceAnchor.options) do anchors[#anchors + 1] = o.value end
 eq(table.concat(anchors, ","), "hearth,last", "anchor choices")
 eq(keys.instanceAnchor:GetValue(), "hearth", "anchor defaults to the hearthstone")
+eq(cbByKey.suppliesEnabled.setting.name, "Supplies", "a Supplies checkbox in the Warnings section")
+eq(cbByKey.suppliesEnabled.setting.category, category, "on the main page")
+eq(keys.suppliesEnabled:GetValue(), true, "on by default")
 eq(ddByKey.navProvider.setting.category, category, "waypoint dropdown on the main page")
 local provs = {}
 for _, o in ipairs(ddByKey.navProvider.options) do provs[#provs + 1] = o.value end

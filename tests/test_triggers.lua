@@ -7,7 +7,7 @@ local H = require("harness")
 local eq = H.eq
 -- A clear also names what ended (a[2], a[3]); those are checked where they matter.
 local function act(a) return a and ((a[2] and a[1] ~= "clear") and (a[1] .. ":" .. a[2]) or a[1]) or "nil" end
-local function cfg() return { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true } end
+local function cfg() return { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true, suppliesEnabled = true } end
 
 -- FreeSlots: sums general bags only, skips quivers/special bags.
 local fam = { [0] = { 3, 0 }, [1] = { 4, 0 }, [2] = { 10, 1 }, [3] = { nil, nil } }
@@ -332,9 +332,11 @@ eq(act(sup(t, 1, { "food" })), "go:food", "food before sell")
 t = fresh()
 eq(act(t.Update(10, 5, false, nil, nil, false, { "food" })), "go:repair", "repair before food")
 
--- The master switch gates supplies; combat and instances defer without using the request up.
+-- The ammo switch does not gate supplies; combat and instances defer without using the request up.
 t = fresh({ ammoEnabled = false })
-eq(act(sup(t, 10, { "food" })), "nil", "master switch off: no supply request")
+eq(act(sup(t, 10, { "food" })), "go:food", "ammo switch off: supplies still asked")
+t = fresh({ suppliesEnabled = false })
+eq(act(sup(t, 10, { "food" })), "nil", "supplies switch off: no supply request")
 t = fresh()
 eq(act(sup(t, 10, { "food" }, nil, true)), "nil", "combat: nothing")
 eq(act(sup(t, 10, { "food" }, nil, false, true)), "nil", "instance: nothing")
@@ -363,7 +365,9 @@ eq(due({ "water" }, true), "", "combat: not announced")
 eq(due({ "water" }, false, true), "", "instance: not announced")
 eq(due({ "water" }), "water", "announced once out, because combat did not use it up")
 t = fresh({ ammoEnabled = false })
-eq(due({ "water" }), "", "master switch off")
+eq(due({ "water" }), "water", "ammo switch off: reminders still come")
+t = fresh({ suppliesEnabled = false })
+eq(due({ "water" }), "", "supplies switch off: no reminders")
 t = fresh()
 sup(t, 1, { "pet" })
 due({ "food" })

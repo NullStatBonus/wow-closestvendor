@@ -281,7 +281,7 @@ The addon SHALL provide an on/off setting for the on-screen message shown when i
 - **THEN** nothing changes and the valid choices are printed
 
 ### Requirement: No needless reads
-The addon SHALL ignore events about units other than the player (a party or raid member's pet, gear or casts) and SHALL NOT read the bags for supplies while the master "Ammo and reagents" switch is off or every supply warning and the healthstone reminder is off.
+The addon SHALL ignore events about units other than the player (a party or raid member's pet, gear or casts) and SHALL NOT read the bags for supplies while the Supplies switch is off or every supply warning and the healthstone reminder is off.
 
 #### Scenario: A party member's pet changes
 - **WHEN** the game reports a pet change for `party1`

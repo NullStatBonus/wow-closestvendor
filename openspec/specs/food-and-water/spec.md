@@ -28,7 +28,7 @@ The addon SHALL watch the number of drink items in the bags for Mage, Priest, Pa
 - **THEN** the water count is 6
 
 ### Requirement: Food and water trigger
-When food or water is watched, enabled, and at or below its own threshold, and the master "Ammo and reagents" switch is on, the addon SHALL ask about navigating to the nearest vendor that sells that kind, using the same question, map-or-distance choice, automatic mode and on-screen notice as other triggers. The question SHALL name what to buy and the count. If the count cannot be read, it SHALL NOT count as low.
+When food or water is watched, enabled, and at or below its own threshold, the addon SHALL ask about navigating to the nearest vendor that sells that kind, using the same question, map-or-distance choice, automatic mode and on-screen notice as other triggers. The question SHALL name what to buy and the count. If the count cannot be read, it SHALL NOT count as low.
 
 #### Scenario: Food runs low
 - **WHEN** a warrior's food drops to 5 with the default threshold of 5
@@ -55,7 +55,7 @@ When food or water is watched, enabled, and at or below its own threshold, and t
 - **THEN** the question closes or the pin is removed
 
 ### Requirement: Food and water settings
-Food and water SHALL each have an on/off setting, on by default, and their own count threshold from 1 to 40, default 5, saved per character. The master "Ammo and reagents" switch SHALL turn both off when it is off. The settings page SHALL show food and water controls; a class without water SHALL NOT be shown the water controls.
+Food and water SHALL each have an on/off setting, on by default, and their own count threshold from 1 to 40, default 5, saved per character. The settings page SHALL show food and water controls; a class without water SHALL NOT be shown the water controls.
 
 #### Scenario: Separate thresholds
 - **WHEN** the player sets the food threshold to 10 and the water threshold to 3
@@ -83,3 +83,25 @@ The addon SHALL provide `/cvn food <count>` and `/cvn water <count>` to set the 
 #### Scenario: Water test for a rogue
 - **WHEN** a rogue runs `/cvn test water`
 - **THEN** chat says water is not used by this class and no dialog appears
+
+### Requirement: Supplies do not depend on the ammo switch
+Food, water, pet food and the healthstone reminder SHALL each be controlled only by the Supplies switch and their own on/off setting. The "Ammo and reagents" switch SHALL NOT turn them on or off, and their settings controls SHALL NOT be disabled with it.
+
+#### Scenario: Ammo off, food on
+- **WHEN** the player switches ammo and reagents off and food is on with 3 food items carried
+- **THEN** the food question is still asked
+
+#### Scenario: Food off, ammo on
+- **WHEN** the player switches food off and ammo on
+- **THEN** no food question is asked and ammo questions still are
+
+### Requirement: Supplies switch
+The main settings page SHALL show a "Supplies" checkbox in its Warnings section, and `/cvn supplies on|off` SHALL set it. It SHALL be on by default, saved per character, and SHALL turn food, water, pet food and the healthstone reminder off together when it is off, without changing their own switches. `/cvn` SHALL show its state.
+
+#### Scenario: Supplies off
+- **WHEN** the player switches Supplies off while food is on and low
+- **THEN** no food question, reminder or red supply row appears, and the food switch is still on
+
+#### Scenario: Back on
+- **WHEN** the player switches Supplies on again
+- **THEN** each item uses its own switch and threshold as before

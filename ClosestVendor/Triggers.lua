@@ -72,7 +72,8 @@ function T.Conditions(cfg, free, durPct, ammo)
 end
 
 -- cfg: { bagThreshold, durThreshold, ammoThreshold, bagEnabled, durEnabled, ammoEnabled }
--- (read live, so edits apply at once). ammoEnabled is also the master switch for reagents and supplies.
+-- (read live, so edits apply at once). ammoEnabled is also the master switch for reagents. Food, water, pet food
+-- and the reminders have suppliesEnabled as their master switch, and each its own, checked by Supplies.Evaluate.
 -- Update(free, durPct, inCombat, ammo, reagents, inInstance, supplies): free is the free bag slots, or
 -- nil if unknown; ammo is a count, or nil when ammo is not monitored; reagents is the list of item ids
 -- of the watched reagents that are low (nil or empty: none); supplies is the list of low supply keys
@@ -93,7 +94,7 @@ function T.New(cfg)
         if cfg.ammoEnabled then for _, id in ipairs(reagents or {}) do low[id] = true end end
         local now = T.Conditions(cfg, free, durPct, ammo)
         local lowSupply = {}
-        if cfg.ammoEnabled then for _, k in ipairs(supplies or {}) do lowSupply[k] = true end end
+        if cfg.suppliesEnabled then for _, k in ipairs(supplies or {}) do lowSupply[k] = true end end
         for _, k in ipairs(SUPPLY) do now[k] = lowSupply[k] == true end
         last, lastLow = now, low
         -- A cleared condition may fire again later.
@@ -162,7 +163,7 @@ function T.New(cfg)
     -- never touches a request that is open or active.
     function self.Reminders(list, inCombat, inInstance)
         local present, due = {}, {}
-        if cfg.ammoEnabled then for _, k in ipairs(list or {}) do present[k] = true end end
+        if cfg.suppliesEnabled then for _, k in ipairs(list or {}) do present[k] = true end end
         for k in pairs(reminded) do if not present[k] then reminded[k] = nil end end
         if inCombat or inInstance then return due end
         for _, k in ipairs(list or {}) do

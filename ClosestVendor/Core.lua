@@ -5,7 +5,7 @@ local A = ns.Adapter
 local L = ns.L
 
 local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
-    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true,
+    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, suppliesEnabled = true,
     ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped", bulletGrade = "equipped",
     vendorMode = "ask", vendorPrefer = "map", autoNotice = true, reagentThreshold = 5,
     -- Reagent buying: off until the player turns it on, asks first, stocks up to 20 of each.
@@ -15,7 +15,7 @@ local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tra
     -- Row group modes are in cfg.hudRow (see init).
     hudLocked = false, hudScale = 100, hudAlpha = 80, hudTextAlpha = 100, hudColor = "000000",
     instanceAnchor = "hearth", ahEnabled = false,
-    -- Supplies: each switch is on, each threshold 5 (see Supplies.lua). The master switch is ammoEnabled.
+    -- Supplies: each switch is on, each threshold 5 (see Supplies.lua). suppliesEnabled is their master switch (the ammo switch does not affect them); each also has its own.
     foodEnabled = true, waterEnabled = true, petFoodEnabled = true, healthstoneRemind = true,
     foodThreshold = 5, waterThreshold = 5, petFoodThreshold = 5, remindSound = "whisper", navProvider = "auto" }
 local POLL_SECONDS = 5
@@ -298,8 +298,8 @@ end
 -- One report line: each supply switch with its threshold.
 local function supplyLine()
     local c = CHAR.cfg
-    return ("supplies: food %s (%d), water %s (%d), pet food %s (%d), healthstone reminder %s, reminder sound %s"):format(
-        c.foodEnabled and "on" or "off", c.foodThreshold, c.waterEnabled and "on" or "off", c.waterThreshold,
+    return ("supplies: %s; food %s (%d), water %s (%d), pet food %s (%d), healthstone reminder %s, reminder sound %s"):format(
+        c.suppliesEnabled and "on" or "off", c.foodEnabled and "on" or "off", c.foodThreshold, c.waterEnabled and "on" or "off", c.waterThreshold,
         c.petFoodEnabled and "on" or "off", c.petFoodThreshold, c.healthstoneRemind and "on" or "off",
         tostring(c.remindSound))
 end

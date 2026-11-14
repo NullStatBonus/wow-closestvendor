@@ -12,7 +12,7 @@ loadfile("ClosestVendor/Commands.lua")("ClosestVendor", ns)
 local M = ns.Commands
 
 local function fresh() return { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10,
-    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true,
+    bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, suppliesEnabled = true,
     reagentThreshold = 5, reagentOff = {} } end
 local function has(lines, text) return table.concat(lines, "\n"):find(text, 1, true) ~= nil end
 
@@ -446,6 +446,17 @@ M.Run(c, "water off"); eq(c.waterEnabled, false, "water off")
 M.Run(c, "petfood off"); eq(c.petFoodEnabled, false, "petfood off")
 eq(has(M.Run(c, ""), "Supplies: food on (40), water off (40), pet food off (40), healthstone reminder on"), true, "status line")
 eq(has(M.Run(fresh(), ""), "Supplies: food on (5), water on (5), pet food on (5), healthstone reminder on"), true, "status line defaults")
+do
+    local cs = fresh()
+    eq(has(M.Run(cs, ""), "Supply warnings: on"), true, "supplies switch shown, on by default")
+    eq(has(M.Run(cs, "supplies off"), "Supply warnings: off"), true, "/cvn supplies off")
+    eq(cs.suppliesEnabled, false, "saved")
+    M.Run(cs, "supplies on")
+    eq(cs.suppliesEnabled, true, "/cvn supplies on")
+    local before = cs.suppliesEnabled
+    M.Run(cs, "supplies banana")
+    eq(cs.suppliesEnabled, before, "anything else changes nothing")
+end
 for _, k in ipairs({ "food", "water", "petfood" }) do
     local lines, action = M.Run(fresh(), "test " .. k)
     eq(action[1] .. ":" .. action[2], "test:" .. k, "test " .. k .. " action")

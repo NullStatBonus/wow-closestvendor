@@ -3,6 +3,7 @@
 ## 1.3.1
 
 - Buying ammo and reagents now waits for item data the game has not loaded yet, instead of skipping the purchase.
+- A Supplies checkbox in Warnings (and `/cvn supplies on|off`) turns food, water, pet food and the healthstone reminder on or off together. Turning off "Ammo and reagents" no longer turns them off.
 - Less work in groups: other players' pet changes are ignored, and bags are not read for supplies while every supply warning is off.
 
 ## 1.3.0
