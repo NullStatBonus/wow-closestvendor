@@ -49,7 +49,7 @@ Closest Vendor tells you when it is a good time to repair, restock or make bag s
 **Good to know**
 
 - It ships with about 900 vendors and learns the ones you open.
-- TomTom and WaypointUI are optional. Classic Era needs TomTom to show an arrow.
+- TomTom and WaypointUI are optional. Classic Era needs TomTom to show an arrow. Choose the waypoint method with `/cvn nav` (for example, the game's own waypoint even when TomTom is installed).
 - Settings are saved per character. The vendors, trainers and auctioneers the addon learns are shared by the whole account.
 - Pet food works for hunters with a pet out, in every game language.
 - Open a vendor or trainer once so the addon learns it. This matters most in WoW Forever's new zones.

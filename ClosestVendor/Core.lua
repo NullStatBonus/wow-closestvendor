@@ -17,7 +17,7 @@ local DEFAULTS = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tra
     instanceAnchor = "hearth", ahEnabled = false,
     -- Supplies: each switch is on, each threshold 5 (see Supplies.lua). The master switch is ammoEnabled.
     foodEnabled = true, waterEnabled = true, petFoodEnabled = true, healthstoneRemind = true,
-    foodThreshold = 5, waterThreshold = 5, petFoodThreshold = 5, remindSound = "whisper" }
+    foodThreshold = 5, waterThreshold = 5, petFoodThreshold = 5, remindSound = "whisper", navProvider = "auto" }
 local POLL_SECONDS = 5
 local WINDOW_DELAY = 0.25 -- one redraw of the status window this long after the first change
 
@@ -424,7 +424,7 @@ local function reportText()
         "addon version: " .. tostring(info.addon),
         "game: " .. tostring(info.gameVersion) .. " build " .. tostring(info.build) .. ", interface " .. tostring(info.interface),
         "locale: " .. tostring(info.locale),
-        "navigation: " .. tostring(ns.Nav.Select(A.navApi(say))),
+        "navigation: " .. tostring(ns.Nav.Select(A.navApi(say), c.navProvider)) .. " (preference " .. tostring(c.navProvider) .. ")",
         ("vendors: %d shipped, %d learned, per continent: %s"):format(#(ns.ShippedVendors or {}), learned, table.concat(continents, " ")),
         ("settings: bags %s/%d, durability %s/%d, ammo %s/%d, professions %s/%d"):format(c.bagEnabled and "on" or "off", c.bagThreshold,
             c.durEnabled and "on" or "off", c.durThreshold, c.ammoEnabled and "on" or "off", c.ammoThreshold,
@@ -459,7 +459,7 @@ local function start()
     rebuildBuckets()
     rebuildTrainers()
     rebuildAuctioneers()
-    local nav = { Set = function(v) return ns.Nav.Set(A.navApi(say), v) end,
+    local nav = { Set = function(v) return ns.Nav.Set(A.navApi(say), v, CHAR.cfg.navProvider) end,
                   Clear = function(h) ns.Nav.Clear(A.navApi(say), h) end }
     controller = ns.Controller.New({
         cfg = CHAR.cfg,

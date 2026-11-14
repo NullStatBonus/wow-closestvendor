@@ -186,6 +186,23 @@ g.dur = 10
 g.onEvent("UPDATE_INVENTORY_DURABILITY")
 eq(g.tomtom[1], "Far Repairer", "TomTom waypoint for repair vendor")
 
+-- 4b. A chosen waypoint is used first, though TomTom is loaded; the choice is saved per character.
+do
+    local gn = boot({ tomtom = true })
+    local pinned = {}
+    gn.env.C_Map.CanSetUserWaypointOnMap = function() return true end
+    gn.env.C_Map.SetUserWaypoint = function(p) pinned[#pinned + 1] = p end
+    gn.env.C_SuperTrack = { SetSuperTrackedUserWaypoint = function() end }
+    gn.env.UiMapPoint = { CreateFromCoordinates = function(m, x, y) return { uiMapID = m, position = { x = x, y = y } } end }
+    login(gn)
+    gn.env.SlashCmdList.CLOSESTVENDOR("nav native")
+    eq(gn.env.ClosestVendorCharDB.cfg.navProvider, "native", "/cvn nav saved on the character")
+    gn.dur = 10
+    gn.onEvent("UPDATE_INVENTORY_DURABILITY")
+    eq(#pinned, 1, "the chosen game waypoint was set")
+    eq(gn.tomtom[1], nil, "and TomTom was not used")
+end
+
 -- 5. Unconvertible map is skipped without error; the rest still load.
 g = boot(); login(g)
 g.free = 1
@@ -722,7 +739,7 @@ for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then win = f 
 eq(win ~= nil and win.shown, true, "the report window is shown")
 local report = win.box.text
 eq(report:find("^Closest Vendor report\n") ~= nil, true, "starts with a title")
-for _, part in ipairs({ "addon version: 0.1.0", "game: 1.60.1 build 70790, interface 16001", "locale: enUS", "navigation: chat",
+for _, part in ipairs({ "addon version: 0.1.0", "game: 1.60.1 build 70790, interface 16001", "locale: enUS", "navigation: chat (preference auto)",
                         "vendors: 7 shipped, 0 learned, per continent: 1:6", "settings: bags on/2, durability on/20, ammo on/200", "target choice: ask, prefers map, on-screen notice on",
                         "Debug log: on", "event BAG_UPDATE_DELAYED" }) do
     eq(has(report, part), true, "report contains '" .. part .. "'")

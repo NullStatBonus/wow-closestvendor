@@ -74,6 +74,9 @@ If you choose Yes, the addon shows the vendor with the first of these methods th
 Classic Era has no built-in waypoint API.
 On Classic Era, you need TomTom to get an arrow.
 
+To use another method first, for example the built-in waypoint while TomTom is installed, choose it with `/cvn nav` or on the settings page.
+If your choice is not available, the addon uses the order above.
+
 ### When the closest vendor is on another map
 
 This applies when a vendor on your own map is farther away than the closest vendor.
@@ -207,6 +210,7 @@ Type `/cvn config` to open the main page.
 - The ammo checkbox is the one switch for ammo, reagents, food, water and pet food. The label stays "Ammo and reagents". When it is off, the addon does not watch any of them.
 - **Navigation:** a dropdown for when the closest target is on another map. You choose to ask which one, or to navigate without asking.
 - **Navigation:** a dropdown to prefer the target on your map or the closest target.
+- **Navigation:** a dropdown for the waypoint method: Automatic (the order above), TomTom, WaypointUI or Game waypoint.
 - **Navigation:** a dropdown for the search anchor inside instances.
 - **Navigation:** a checkbox for the auction house.
 
@@ -310,6 +314,7 @@ Type `/cvn config` to open the main page.
 /cvn hud color #101820
 /cvn hud color black
 /cvn hud row bags always
+/cvn nav native
 /cvn anchor hearth
 /cvn anchor last
 /cvn ah on
@@ -346,6 +351,7 @@ Type `/cvn config` to open the main page.
 
 ### Navigation
 
+- `/cvn nav` shows the waypoint method. `/cvn nav <name>` picks auto, tomtom, waypointui or native. Auto is the default and uses the order in "The question and the waypoint". A method you pick is tried first. If it is not available, the addon uses the usual order.
 - `/cvn choice ask` is the default. When the closest target is on another map, it lists both targets and waits for your pick.
 - `/cvn choice auto` sets the waypoint at once, with no question.
 - `/cvn prefer map` is the default. It prefers the closest target on your current map.

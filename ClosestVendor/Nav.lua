@@ -2,7 +2,8 @@
 --   api.isAddOnLoaded(name), api.TomTom, api.WaypointUIAPI, api.C_Map, api.C_SuperTrack,
 --   api.UiMapPoint, api.print(text), api.mapName(uiMapID)
 -- Vendor record: {npcId, name, uiMapID, mx, my, ...} with mx,my in 0-1.
--- First available adapter wins; an adapter that errors falls through to the next.
+-- First available adapter wins; an adapter that errors falls through to the next. A preferred adapter
+-- (the player's choice) is tried first; if it is missing or fails, the usual order applies.
 local _, ns = ...
 
 local L = ns.L
@@ -14,6 +15,7 @@ local FLAG = "ClosestVendor"
 
 local function isFn(t, name) return type(t) == "table" and type(t[name]) == "function" end
 
+local byKind = {}
 local adapters = {
     {
         name = "tomtom",
@@ -94,20 +96,44 @@ local adapters = {
     },
 }
 
-local byKind = {}
 for _, a in ipairs(adapters) do byKind[a.name] = a end
 
+-- The choices for the player: { key, label }. "auto" is the usual order.
+N.PROVIDERS = {
+    { "auto", L["Automatic"] },
+    { "tomtom", L["TomTom"] },
+    { "waypointui", L["WaypointUI"] },
+    { "native", L["Game waypoint"] },
+}
+
+-- The saved key a player means by text (the key or the label, case ignored); nil if none.
+function N.FindProvider(text)
+    local want = tostring(text or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+    for _, p in ipairs(N.PROVIDERS) do
+        if p[1] == want or p[2]:lower() == want then return p[1] end
+    end
+end
+
+-- The adapters in the order to try: the preferred one first, then the rest in the usual order.
+local function ordered(prefer)
+    local first = prefer ~= "auto" and byKind[prefer]
+    if not first or first.name == "chat" then return adapters end
+    local list = { first }
+    for _, a in ipairs(adapters) do if a ~= first then list[#list + 1] = a end end
+    return list
+end
+
 -- Name of the adapter that would be used now.
-function N.Select(api)
-    for _, a in ipairs(adapters) do
+function N.Select(api, prefer)
+    for _, a in ipairs(ordered(prefer)) do
         local ok, avail = pcall(a.available, api)
         if ok and avail then return a.name end
     end
 end
 
 -- Show the vendor with the first adapter that works. Returns a handle for Clear, never errors.
-function N.Set(api, vendor)
-    for _, a in ipairs(adapters) do
+function N.Set(api, vendor, prefer)
+    for _, a in ipairs(ordered(prefer)) do
         local ok, avail = pcall(a.available, api)
         if ok and avail then
             local ok2, h = pcall(a.set, api, vendor)

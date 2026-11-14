@@ -7,6 +7,7 @@ local ns = {}
 H.locale(ns)
 loadfile("ClosestVendor/Reagents.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Supplies.lua")("ClosestVendor", ns)
+loadfile("ClosestVendor/Nav.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Status.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Commands.lua")("ClosestVendor", ns)
 

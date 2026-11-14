@@ -6,6 +6,7 @@ local ns = {}
 H.locale(ns)
 loadfile("ClosestVendor/Reagents.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Supplies.lua")("ClosestVendor", ns)
+loadfile("ClosestVendor/Nav.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Status.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Commands.lua")("ClosestVendor", ns)
 local M = ns.Commands
@@ -471,6 +472,23 @@ do
     eq(cs.remindSound .. "/" .. tostring(act2), "none/nil", "an unknown name changes nothing")
     eq(has(out, "Choose a sound: whisper, ping, invite, ready, none."), true, "and lists the choices")
     eq(has(M.Run(cs, ""), "Reminder sound: None"), true, "/cvn reports it")
+end
+
+-- /cvn nav: show, pick, refuse a name that is not a choice.
+do
+    local cn = fresh()
+    cn.navProvider = "auto"
+    local out = M.Run(cn, "nav")
+    eq(has(out, "Waypoint: Automatic") and has(out, "auto, tomtom, waypointui, native"), true, "/cvn nav shows the choice and the names")
+    out = M.Run(cn, "nav native")
+    eq(cn.navProvider, "native", "a key picks it")
+    eq(has(out, "Waypoint: Game waypoint"), true, "confirmed by label")
+    M.Run(cn, "nav TomTom")
+    eq(cn.navProvider, "tomtom", "the label works too, case ignored")
+    out = M.Run(cn, "nav banana")
+    eq(cn.navProvider, "tomtom", "an unknown name changes nothing")
+    eq(has(out, "Choose a waypoint: auto, tomtom, waypointui, native."), true, "and lists the choices")
+    eq(has(M.Run(cn, ""), "Waypoint: TomTom"), true, "/cvn reports it")
 end
 do -- the new row group by name
     local cg = fresh()
