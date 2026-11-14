@@ -3,7 +3,7 @@
 ## 1.4.0
 
 - Buying ammo and reagents now waits for item data the game has not loaded yet, instead of skipping the purchase.
-- Ammo and Reagents have separate switches. Each has its checkbox and slider on its own page (Ammo, Reagents). `/cvn ammo on|off` affects ammo only, and `/cvn reagents on|off` is new. A saved ammo-off setting carries over to reagents.
+- Ammo and Reagents have separate switches. Each has a checkbox in Warnings and its slider on its own page (Ammo, Reagents). `/cvn ammo on|off` affects ammo only, and `/cvn reagents on|off` is new. A saved ammo-off setting carries over to reagents.
 - Settings pages are in alphabetical order with the status window last, and the Warnings list is Bag space, Durability, Professions, Supplies.
 - A Supplies checkbox in Warnings (and `/cvn supplies on|off`) turns food, water, pet food and the healthstone reminder on or off together. Turning off "Ammo and reagents" no longer turns them off.
 - Less work in groups: other players' pet changes are ignored, and bags are not read for supplies while every supply warning is off.

@@ -120,13 +120,8 @@ end
 -- The reagent slider and one checkbox per reagent of the player's class. The saved setting is a list
 -- of reagents switched off, so a checkbox shows "on" when the item is not in it: a small proxy table
 -- turns that around, and anything not switched off (including reagents added later) is on.
-local function registerReagents(category, cfg, defaults, onChange, class)
-    local on = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_REAGENTS_ENABLED", "reagentsEnabled", cfg,
-        Settings.VarType.Boolean, L["Reagents"], defaults.reagentsEnabled)
-    local masterCheckbox = Settings.CreateCheckbox(category, on,
-        L["Ask about the nearest vendor selling a class reagent when it runs low."])
-    on:SetValueChangedCallback(onChange)
-    local masterSetting = on
+-- masterCheckbox/masterSetting (the Reagents switch on the main page) only grey these out when they share the page.
+local function registerReagents(category, cfg, defaults, onChange, class, masterCheckbox, masterSetting)
     local amount = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_REAGENT_THRESHOLD", "reagentThreshold", cfg,
         Settings.VarType.Number, L["Ask when a reagent is at or below"], defaults.reagentThreshold)
     local limits = ns.Commands.LIMITS.reagent
@@ -206,13 +201,9 @@ local function registerSupplies(category, cfg, defaults, onChange, class, master
     end)
 end
 
--- Ammo: its switch and threshold, then buying. The grade dropdowns need a newer part of the API; without it
+-- Ammo: its threshold (the switch is in Warnings on the main page), then buying. The grade dropdowns need a newer part of the API; without it
 -- use /cvn arrows and /cvn bullets.
-local function registerAmmoBuying(category, cfg, defaults, onChange)
-    local on = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AMMO_ENABLED", "ammoEnabled", cfg,
-        Settings.VarType.Boolean, L["Ammo"], defaults.ammoEnabled)
-    local checkbox = Settings.CreateCheckbox(category, on,
-        L["Ask about the nearest vendor selling your ammo when the equipped ammo drops to the number below or fewer."])
+local function registerAmmoBuying(category, cfg, defaults, onChange, masterCheckbox, masterSetting)
     local amount = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AMMO_THRESHOLD", "ammoThreshold", cfg,
         Settings.VarType.Number, L["Ask when ammo is at or below"], defaults.ammoThreshold)
     local limits = ns.Commands.LIMITS.ammo
@@ -220,8 +211,9 @@ local function registerAmmoBuying(category, cfg, defaults, onChange)
     options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
     local slider = Settings.CreateSlider(category, amount, options,
         L["Ask about the nearest vendor selling your ammo when the equipped ammo drops to this number or fewer."])
-    if slider.SetParentInitializer then slider:SetParentInitializer(checkbox, function() return on:GetValue() end) end
-    on:SetValueChangedCallback(onChange)
+    if masterCheckbox and slider.SetParentInitializer then
+        slider:SetParentInitializer(masterCheckbox, function() return masterSetting:GetValue() end)
+    end
     amount:SetValueChangedCallback(onChange)
     local buy = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AMMOBUY_ENABLED", "ammoBuyEnabled", cfg,
         Settings.VarType.Boolean, L["Buy ammo"], defaults.ammoBuyEnabled)
@@ -384,7 +376,7 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note, swatchPicke
     end
     local category = remember(Settings.RegisterVerticalLayoutCategory(L["Closest Vendor"]))
     header(category, L["Warnings"])
-    local suppliesSwitch, suppliesSetting
+    local ammoSwitch, ammoSetting, reagentsSwitch, reagentsSetting, suppliesSwitch, suppliesSetting
     for _, row in ipairs(ROWS) do
         local tag = row.key:upper()
         local on = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_" .. tag .. "_ENABLED",
@@ -405,13 +397,20 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note, swatchPicke
         on:SetValueChangedCallback(onChange)
         amount:SetValueChangedCallback(onChange)
     end
-    -- Food, water, pet food and the healthstone reminder: one switch here, each also on the Supplies page.
-    local suppliesOn = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_SUPPLIES_ENABLED", "suppliesEnabled", cfg,
-        Settings.VarType.Boolean, L["Supplies"], defaults.suppliesEnabled)
-    suppliesSwitch = Settings.CreateCheckbox(category, suppliesOn,
+    -- Ammo, reagents and supplies: one switch each here; their thresholds and details are on their own pages.
+    local function switchRow(key, tag, label, tip)
+        local setting = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_" .. tag .. "_ENABLED", key, cfg,
+            Settings.VarType.Boolean, label, defaults[key])
+        local checkbox = Settings.CreateCheckbox(category, setting, tip)
+        setting:SetValueChangedCallback(onChange)
+        return checkbox, setting
+    end
+    ammoSwitch, ammoSetting = switchRow("ammoEnabled", "AMMO", L["Ammo"],
+        L["Ask about the nearest vendor selling your ammo when the equipped ammo runs low. Set the amount on the Ammo page."])
+    reagentsSwitch, reagentsSetting = switchRow("reagentsEnabled", "REAGENTS", L["Reagents"],
+        L["Ask about the nearest vendor selling a class reagent when it runs low. Set the amount and each reagent on the Reagents page."])
+    suppliesSwitch, suppliesSetting = switchRow("suppliesEnabled", "SUPPLIES", L["Supplies"],
         L["Ask about the nearest vendor when food, water or pet food runs low, and remind a mage or warlock who can make their own. Set each one on the Supplies page."])
-    suppliesOn:SetValueChangedCallback(onChange)
-    suppliesSetting = suppliesOn
     local notice = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AUTO_NOTICE", "autoNotice", cfg,
         Settings.VarType.Boolean, L["On-screen notice"], defaults.autoNotice)
     Settings.CreateCheckbox(category, notice, L["Show a message on screen when a target is chosen without asking."])
@@ -444,11 +443,11 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note, swatchPicke
     -- The pages are in alphabetical order, with the status window last.
     local ammo = page(category, L["Ammo"])
     if ammo == category then header(category, L["Ammo"]) end
-    registerAmmoBuying(ammo, cfg, defaults, onChange)
+    registerAmmoBuying(ammo, cfg, defaults, onChange, ammo == category and ammoSwitch or nil, ammoSetting)
 
     local reagents = page(category, L["Reagents"])
     if reagents == category then header(category, L["Reagents"]) end
-    registerReagents(reagents, cfg, defaults, onChange, class)
+    registerReagents(reagents, cfg, defaults, onChange, class, reagents == category and reagentsSwitch or nil, reagentsSetting)
 
     local supplies = page(category, L["Supplies"])
     if supplies == category then header(category, L["Supplies"]) end

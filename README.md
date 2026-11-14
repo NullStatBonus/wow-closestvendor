@@ -205,7 +205,7 @@ Type `/cvn config` to open the main page.
 
 ### Closest Vendor (main page)
 
-- **Warnings:** a checkbox and a slider for each warning (bag space, durability, professions).
+- **Warnings:** a checkbox and a slider for bag space, durability and professions. Then one checkbox each for **Ammo**, **Reagents** and **Supplies**. Their sliders and details are on their own pages.
 - **Warnings:** a **Supplies** checkbox, the one switch for food, water, pet food and the healthstone reminder.
 - **Warnings:** a checkbox for the on-screen notice.
 - **Navigation:** a dropdown for when the closest target is on another map. You choose to ask which one, or to navigate without asking.
@@ -218,7 +218,7 @@ The other pages are in alphabetical order, with the status window last.
 
 ### Ammo
 
-- An **Ammo** checkbox and a slider for the ammo threshold.
+- A slider for the ammo threshold. The Ammo checkbox is in Warnings on the main page.
 - A checkbox to buy ammo.
 - A checkbox to ask before buying.
 - A dropdown for arrows.
@@ -226,7 +226,7 @@ The other pages are in alphabetical order, with the status window last.
 
 ### Reagents
 
-- A **Reagents** checkbox, then a slider for the reagent threshold.
+- A slider for the reagent threshold. The Reagents checkbox is in Warnings on the main page.
 - A checkbox for each reagent of your class. All are on.
 - Below them are three controls for reagent buying:
   - **Buy reagents** (off by default).

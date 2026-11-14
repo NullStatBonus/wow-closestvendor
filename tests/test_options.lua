@@ -38,7 +38,7 @@ local category = ns.Options.Register(cfg, DEFAULTS, function() changes = changes
 eq(category, rec.category, "returns the category")
 eq(category.name, "Closest Vendor", "page name")
 eq(rec.registered, category, "category registered under AddOns")
-eq(#rec.settings, 42, "main 13 (two per trigger, supplies, notice, four dropdowns, auction), ammo 6 (switch, threshold, buying, ask, two grades), reagents 8 (switch, threshold, three reagents, three for buying), supplies 5 (a mage: food and water, a switch and a threshold each, and the reminder sound), window 10 (lock, three sliders, six row groups)")
+eq(#rec.settings, 42, "main 15 (two per trigger, ammo, reagents and supplies switches, notice, four dropdowns, auction), ammo 5 (threshold, buying, ask, two grades), reagents 7 (threshold, three reagents, three for buying), supplies 5 (a mage: food and water, a switch and a threshold each, and the reminder sound), window 10 (lock, three sliders, six row groups)")
 eq(#rec.checkboxes, 18, "a checkbox per trigger, the supplies switch, the ammo and reagents switches, per mage reagent, two for reagent buying, two for ammo buying, notice, auction and lock")
 eq(#rec.sliders, 11, "a slider per trigger, the reagent slider, the reagent amount, scale, background and text opacity")
 local cbByKey, slByKey = {}, {}
@@ -57,7 +57,7 @@ do
     for _, st in ipairs(rec.settings) do
         if st.category == category and type(st.key) == "string" and st.key:find("Enabled$") and st.key ~= "ahEnabled" then warn[#warn + 1] = st.key end
     end
-    eq(table.concat(warn, ","), "bagEnabled,durEnabled,tradeEnabled,suppliesEnabled", "Warnings: bags, durability, professions, supplies")
+    eq(table.concat(warn, ","), "bagEnabled,durEnabled,tradeEnabled,ammoEnabled,reagentsEnabled,suppliesEnabled", "Warnings: bags, durability, professions, then ammo, reagents, supplies")
 end
 eq(subs["Reagents"] ~= nil and subs["Supplies"] ~= nil and subs["Ammo"] ~= nil and subs["Status window"] ~= nil, true, "named")
 local function inPage(c)
@@ -65,10 +65,10 @@ local function inPage(c)
     for _, s in ipairs(rec.settings) do if s.category == c then n[#n + 1] = s end end
     return n
 end
-eq(#inPage(category), 13, "main page controls")
-eq(#inPage(subs["Reagents"]), 8, "reagents page")
+eq(#inPage(category), 15, "main page controls")
+eq(#inPage(subs["Reagents"]), 7, "reagents page")
 eq(#inPage(subs["Supplies"]), 5, "supplies page for a mage: food and water, and the reminder sound")
-eq(#inPage(subs["Ammo"]), 6, "ammo page")
+eq(#inPage(subs["Ammo"]), 5, "ammo page")
 eq(#inPage(subs["Status window"]), 10, "status window page")
 eq(inPage(subs["Status window"])[1].key, "hudLocked", "Lock window position is the first control of the window page")
 local hdr = {}
@@ -153,7 +153,13 @@ for _, key in ipairs({ "bag", "dur", "ammo", "trade" }) do
     eq(sl.options.max, ns.Commands.LIMITS[key][2], key .. ": slider max is the command limit")
     eq(sl.options.min .. "-" .. sl.options.max .. "-" .. sl.options.step, table.concat(expect[key], "-"), key .. ": range and step")
     eq(sl.options.where, "right", key .. ": value shown on the right")
-    eq(sl.parent, cb, key .. ": slider hangs off its checkbox")
+    if key == "ammo" then
+        eq(sl.parent, nil, "ammo: on its own page the slider cannot hang off the main page checkbox")
+        eq(sl.setting.category, subs["Ammo"], "ammo: the slider is on the Ammo page")
+        eq(cb.setting.category, category, "ammo: the checkbox is on the main page")
+    else
+        eq(sl.parent, cb, key .. ": slider hangs off its checkbox")
+    end
     eq(type(sl.tip), "string", key .. ": slider has a tooltip")
 end
 local labels = {}
@@ -165,8 +171,8 @@ end
 eq(cbByKey.tradeEnabled.setting.name, "Professions", "profession checkbox label")
 eq(cbByKey.ammoEnabled.setting.name, "Ammo", "the ammo checkbox is the ammo switch only")
 eq(cbByKey.reagentsEnabled.setting.name, "Reagents", "reagents have their own switch")
-eq(cbByKey.ammoEnabled.setting.category ~= category and cbByKey.reagentsEnabled.setting.category ~= category, true, "ammo and reagents switches are on their own pages")
-eq(cbByKey.ammoEnabled.setting.category ~= cbByKey.reagentsEnabled.setting.category, true, "not on the same page")
+eq(cbByKey.ammoEnabled.setting.category == category and cbByKey.reagentsEnabled.setting.category == category, true, "ammo and reagents switches are on the main page")
+eq(slByKey.reagentThreshold.setting.category, subs["Reagents"], "the reagent slider is on the Reagents page")
 eq(slByKey.tradeThreshold.setting.name, "Ask when a skill is this close to its limit", "profession slider label")
 eq(slByKey.durThreshold.options.fmt(20), "20%", "durability shows a percent sign")
 eq(slByKey.bagThreshold.options.fmt, nil, "bag slider has no special format")
@@ -221,7 +227,7 @@ eq(#rec4.sliders, 10, "sliders still created (no class: the food slider is shown
 -- Reagents: the slider, and one checkbox per reagent of the class, all hanging off the reagents switch.
 eq(slByKey.reagentThreshold ~= nil, true, "reagent slider")
 eq(slByKey.reagentThreshold.options.min .. "-" .. slByKey.reagentThreshold.options.max, "1-40", "limits are the command limits")
-eq(slByKey.reagentThreshold.parent, cbByKey.reagentsEnabled, "the reagent slider hangs off the reagents switch")
+eq(slByKey.reagentThreshold.parent, nil, "on its own page the reagent slider cannot hang off the main page switch")
 eq(keys.reagentThreshold:GetValue(), 5, "default reagent threshold")
 ns.Commands.Run(cfg, "reagent 12")
 eq(keys.reagentThreshold:GetValue(), 12, "page reads what the command set")
@@ -256,7 +262,7 @@ cfg.reagentOff[17020] = nil
 for _, c in ipairs(rec.checkboxes) do
     if type(c.setting.key) == "number" then
         eq(type(c.tip), "string", "reagent checkbox has a tooltip")
-        eq(c.parent, cbByKey.reagentsEnabled, "reagent checkbox hangs off the reagents switch")
+        eq(c.parent, nil, "reagent checkbox has no parent on its own page")
         eq(c.setting.category, subs["Reagents"], "reagent checkbox is on the Reagents page")
     end
 end
@@ -282,7 +288,7 @@ eq(#rec6.sliders, 10, "but the sliders are still there (and the food one)")
 -- greyed while buying is off; bound to the keys the commands edit.
 local rkeys = {}
 for _, st in ipairs(inPage(subs["Reagents"])) do rkeys[#rkeys + 1] = tostring(st.key) end
-eq(table.concat(rkeys, ","), "reagentsEnabled,reagentThreshold,17020,17031,17032,reagentBuyEnabled,reagentBuyPrompt,reagentBuyTarget", "Reagents page order: warning, reagents, then buying")
+eq(table.concat(rkeys, ","), "reagentThreshold,17020,17031,17032,reagentBuyEnabled,reagentBuyPrompt,reagentBuyTarget", "Reagents page order: warning, reagents, then buying")
 local rbBox, raBox, rtSl = cbByKey.reagentBuyEnabled, cbByKey.reagentBuyPrompt, slByKey.reagentBuyTarget
 eq(rbBox ~= nil and raBox ~= nil and rtSl ~= nil, true, "buy and ask checkboxes and the amount slider")
 eq(rbBox.setting.name .. "|" .. raBox.setting.name, "Buy reagents|Ask before buying reagents", "labels")
@@ -433,6 +439,9 @@ end
 local rs10
 for _, sl in ipairs(rec10.sliders) do if sl.setting.key == "reagentThreshold" then rs10 = sl end end
 eq(rs10.parent, reagentsCb10, "reagent slider hangs off the reagents switch, not the ammo switch")
+local as10
+for _, sl in ipairs(rec10.sliders) do if sl.setting.key == "ammoThreshold" then as10 = sl end end
+eq(as10.parent, ammoCb10, "on one page the ammo slider hangs off the ammo switch")
 for _, c in ipairs(rec10.checkboxes) do
     if c.setting.key == "foodEnabled" then eq(c.parent ~= ammoCb10, true, "the food switch does not hang off the ammo switch") end
 end

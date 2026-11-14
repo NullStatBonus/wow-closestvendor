@@ -214,7 +214,7 @@ The Reagents settings page SHALL end with a "Buy reagents" checkbox, an "Ask bef
 - **THEN** the amount is unchanged and a message names the range
 
 ### Requirement: Reagents have their own switch
-Reagent questions SHALL have an on/off setting of their own, on by default and saved per character, shown as a "Reagents" checkbox on the Reagents settings page with the reagent threshold and the per-reagent checkboxes below it, and set by `/cvn reagents on|off`. The ammo switch SHALL NOT affect reagents, and the reagents switch SHALL NOT affect ammo. A character saved before this setting existed SHALL start with its ammo switch's value.
+Reagent questions SHALL have an on/off setting of their own, on by default and saved per character, shown as a "Reagents" checkbox in the Warnings section of the main settings page (the reagent threshold and the per-reagent checkboxes are on the Reagents page), and set by `/cvn reagents on|off`. The ammo switch SHALL NOT affect reagents, and the reagents switch SHALL NOT affect ammo. A character saved before this setting existed SHALL start with its ammo switch's value.
 
 #### Scenario: Ammo off, reagents on
 - **WHEN** the player switches ammo off and reagents are on and low

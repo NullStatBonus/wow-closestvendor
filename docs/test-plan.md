@@ -20,10 +20,10 @@ Each check has an action and an expected result. A line that starts with "Note" 
 ## 1. Settings page and commands
 
 - [ ] Open Esc, Options, AddOns, **Closest Vendor**. Expected: the page exists.
-- [ ] On the main settings page, look at Warnings. Expected, in this order: Bag space, Durability and Professions, each with one checkbox and one slider, then a Supplies checkbox.
+- [ ] On the main settings page, look at Warnings. Expected, in this order: Bag space, Durability and Professions, each with one checkbox and one slider, then Ammo, Reagents and Supplies, each with one checkbox only.
 - [ ] Look at the pages under Closest Vendor. Expected, in this order: Ammo, Reagents, Supplies, then Status window last.
-- [ ] On the Ammo page, find the Ammo checkbox and slider. Expected: the Buy ammo, Ask before buying and arrow and bullet dropdowns are below them.
-- [ ] On the Reagents page, find the Reagents checkbox. Expected: the reagent slider is under it, with one checkbox for each reagent of your class.
+- [ ] On the Ammo page, find the ammo slider. Expected: the Buy ammo, Ask before buying and arrow and bullet dropdowns are below it.
+- [ ] On the Reagents page, find the reagent slider. Expected: one checkbox for each reagent of your class is under it.
 - [ ] Move a slider. Expected: `/cvn` shows the new number.
 - [ ] Enter `/cvn ammo 500`. Reopen the settings page. Expected: the ammo slider is at 500.
 - [ ] Clear a checkbox. Expected: its slider is greyed out. That trigger stops asking.
@@ -226,7 +226,7 @@ The spell IDs and item IDs were checked against the Classic Era and WoW Forever 
 - [ ] Enter `/cvn reagent on arcane powder`. Expected: the reagent comes back.
 - [ ] Enter `/cvn reagent` with an unknown reagent name, or a reagent of another class. Expected: a message appears.
 - [ ] Open the settings page. Expected: it lists only the reagents of your class. All are on by default. Each has a checkbox that matches `/cvn reagents`.
-- [ ] Clear "Reagents" on the Reagents page. Expected: the reagent slider and the reagent checkboxes are greyed out. Clear "Ammo" on the Ammo page. Expected: the ammo slider is greyed out and the reagent controls are not.
+- [ ] Clear "Reagents" in Warnings. Expected: reagent questions stop. Clear "Ammo" in Warnings. Expected: ammo questions stop and reagent questions are not affected.
 - [ ] With "Ammo" cleared and "Reagents" on, trigger an ammo question and a reagent question. Expected: only the reagent question appears. Swap them with `/cvn ammo on` and `/cvn reagents off`. Expected: only the ammo question appears.
 - [ ] Use a hunter, a warrior and a warlock. Expected: no reagent checkboxes.
 - [ ] As a hunter, warrior or warlock, enter `/cvn reagents`. Expected: it says there are none.
