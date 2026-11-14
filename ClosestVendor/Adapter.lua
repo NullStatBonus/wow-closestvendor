@@ -352,6 +352,69 @@ local function merchantScan()
     return arrows + bullets, ns.Reagents.Mask(reagents), ns.Supplies.VendorMask(supplies)
 end
 
+-- Vendors from the NorgannonDB addon (optional) on the maps in `mapIds` (a set of UiMap ids), in the
+-- vendor record shape. Returns list, skipped, schema ("1.5"); or nil when the addon is missing; or
+-- nil, "unsupported" when it is installed but too old or unreadable. `skipped` counts vendors listed
+-- under a zone with its own map that have no usable position; sub-zones are not read. Reads
+-- NorgannonDB's records with Peek and keeps nothing.
+local NPC_REPAIR_FLAG = 16384
+local REACTION_FACTION = { A = 1, H = 2 }
+
+local function hasFlag(mask, flag) return type(mask) == "number" and mask % (2 * flag) >= flag end
+
+local function externalRecord(DB, id, area, map)
+    local r = DB:Peek("npcs", id)
+    if type(r) ~= "table" or type(r.name) ~= "string" or type(r.spawns) ~= "table" then return end
+    local spawn = type(r.spawns[area]) == "table" and r.spawns[area][1]
+    local x, y = type(spawn) == "table" and spawn[1], type(spawn) == "table" and spawn[2]
+    if type(x) ~= "number" or type(y) ~= "number" or x < 0 or y < 0 or x > 100 or y > 100 or (x == 0 and y == 0) then return end
+    local arrows, bullets, reagents, supplies = 0, 0, {}, {}
+    for item in pairs(type(r.sells) == "table" and r.sells or {}) do
+        if type(item) == "number" then
+            if ns.Reagents.ById(item) then reagents[item] = true end
+            if ns.Supplies.ItemMask(item) ~= 0 then supplies[item] = true end
+            local c, sc = A.itemClass(item)
+            if c == 6 and sc == 2 then arrows = 1 elseif c == 6 and sc == 3 then bullets = 2 end
+        end
+    end
+    return { id, r.name, map, x / 100, y / 100, REACTION_FACTION[r.reaction] or 0, hasFlag(r.flags, NPC_REPAIR_FLAG),
+        arrows + bullets, ns.Reagents.Mask(reagents), ns.Supplies.VendorMask(supplies) }
+end
+
+local function scanExternal(DB, mapIds)
+    local list, done, tried = {}, {}, {}
+    local vendors = type(DB.categories) == "table" and type(DB.categories.vendor) == "table" and DB.categories.vendor.npcs
+    local byZone = type(DB.index) == "table" and DB.index.zones
+    for area, zone in pairs(DB.zones) do
+        local map = type(zone) == "table" and zone.uiMapId
+        local npcs = map and mapIds[map] and type(byZone[area]) == "table" and byZone[area].npcs
+        for _, id in ipairs(npcs or {}) do
+            if vendors[id] and not done[id] then
+                tried[id] = true
+                local ok, rec = pcall(externalRecord, DB, id, area, map)
+                if ok and rec then
+                    done[id] = true
+                    list[#list + 1] = rec
+                end
+            end
+        end
+    end
+    local skipped = 0
+    for id in pairs(tried) do if not done[id] then skipped = skipped + 1 end end
+    return list, skipped
+end
+
+function A.externalVendors(mapIds)
+    local DB = NorgannonDB
+    if type(DB) ~= "table" then return end
+    if type(DB.RequireSchema) ~= "function" then return nil, "unsupported" end
+    if not call("NorgannonDB.RequireSchema", DB.RequireSchema, DB, 1, 4) then return nil, "unsupported" end
+    local ok, list, skipped = pcall(scanExternal, DB, mapIds)
+    if not ok or not list then return nil, "unsupported" end
+    local v = type(DB.schema) == "table" and DB.schema
+    return list, skipped, v and (tostring(v.major) .. "." .. tostring(v.minor)) or "?"
+end
+
 -- The merchant window that just opened: { id, name, faction, repair, ammo, reagents, supplies }, or nil if
 -- the merchant cannot be identified as a creature.
 function A.merchant()

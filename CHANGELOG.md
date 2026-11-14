@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.0
+
+- If the NorgannonDB addon is installed, its vendors in WoW Forever's new zones are used too.
+
 ## 1.4.0
 
 - Buying ammo and reagents now waits for item data the game has not loaded yet, instead of skipping the purchase.

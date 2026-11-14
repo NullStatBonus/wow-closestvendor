@@ -103,10 +103,22 @@ A.onError = function(name, err)
     if log then log.Add("game call failed: " .. name .. ": " .. err) end
 end
 
--- Shipped + learned vendors, converted to world coordinates once and bucketed by continent.
+-- The optional NorgannonDB addon, read for the maps that are only in WoW Forever (Mount Hyjal,
+-- Riverglades, Shen'dralas, Zephras Isle and the Darkspear Islands). Read after login, and again if
+-- NorgannonDB finishes loading later; never on bag, merchant or movement events.
+local EXTERNAL_MAPS = { [2482] = true, [2548] = true, [2652] = true, [2521] = true, [2665] = true, [2524] = true }
+local external = { list = {}, skipped = 0 }
+local started = false
+
+local function readExternal()
+    local list, skipped, schema = A.externalVendors(EXTERNAL_MAPS)
+    external = { list = list or {}, skipped = list and skipped or 0, schema = schema, unsupported = skipped == "unsupported" }
+end
+
+-- Shipped, NorgannonDB and learned vendors, converted to world coordinates once and bucketed by continent.
 local function rebuildBuckets()
     for k in pairs(buckets) do buckets[k] = nil end
-    local list = ns.Discovery.Merge(ns.ShippedVendors or {}, DB.learned)
+    local list = ns.Discovery.Pool(ns.ShippedVendors or {}, external.list, DB.learned)
     for _, r in ipairs(list) do
         local continent, wx, wy = A.toWorld(r[3], r[4], r[5])
         if continent then
@@ -435,6 +447,8 @@ local function reportText()
         "locale: " .. tostring(info.locale),
         "navigation: " .. tostring(ns.Nav.Select(A.navApi(say), c.navProvider)) .. " (preference " .. tostring(c.navProvider) .. ")",
         ("vendors: %d shipped, %d learned, per continent: %s"):format(#(ns.ShippedVendors or {}), learned, table.concat(continents, " ")),
+        external.schema and ("NorgannonDB: found, schema %s, %d vendors added, %d skipped"):format(external.schema, #external.list, external.skipped)
+            or (external.unsupported and "NorgannonDB: installed, but its data is not a supported schema" or "NorgannonDB: not found"),
         ("settings: bags %s/%d, durability %s/%d, ammo %s/%d, professions %s/%d"):format(c.bagEnabled and "on" or "off", c.bagThreshold,
             c.durEnabled and "on" or "off", c.durThreshold, c.ammoEnabled and "on" or "off", c.ammoThreshold,
             c.tradeEnabled and "on" or "off", c.tradeThreshold),
@@ -465,6 +479,8 @@ end
 
 local function start()
     log.Add("---- login ----")
+    readExternal()
+    started = true
     rebuildBuckets()
     rebuildTrainers()
     rebuildAuctioneers()
@@ -624,7 +640,14 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         log.Add("event " .. event .. (arg1 ~= nil and (" " .. tostring(arg1)) or ""))
     end
     if event == "ADDON_LOADED" then
-        if arg1 == ADDON then init() end
+        if arg1 == ADDON then
+            init()
+        elseif arg1 == "NorgannonDB" and started then
+            readExternal()
+            rebuildBuckets()
+            evaluate()
+            touchWindow()
+        end
     elseif event == "PLAYER_LOGIN" then
         start()
     elseif event == "MERCHANT_SHOW" then

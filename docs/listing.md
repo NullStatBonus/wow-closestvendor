@@ -15,7 +15,7 @@ Copy-ready text and field values for the CurseForge and Wago projects. Create th
 | License | MIT |
 | Source code URL | `https://github.com/NullStatBonus/wow-closestvendor` |
 | Issues URL | `https://github.com/NullStatBonus/wow-closestvendor/issues` |
-| Relations | Optional dependencies: TomTom (`tomtom` on CurseForge) and WaypointUI (`waypointui` on CurseForge). The addon works without either. |
+| Relations | Optional dependencies: TomTom (`tomtom` on CurseForge), WaypointUI (`waypointui` on CurseForge) and NorgannonDB. The addon works without any of them. |
 | Tags | vendor, repair, ammo, reagent, food, water, profession, trainer, navigation, waypoint, quality of life, classic, forever |
 | Release type | Release (use Beta for pre-release tags) |
 | Changelog | Taken from `CHANGELOG.md` by the packager; nothing to type. |
@@ -53,6 +53,7 @@ Closest Vendor tells you when it is a good time to repair, restock or make bag s
 - Settings are saved per character. The vendors, trainers and auctioneers the addon learns are shared by the whole account.
 - Pet food works for hunters with a pet out, in every game language.
 - Open a vendor or trainer once so the addon learns it. This matters most in WoW Forever's new zones.
+- If the NorgannonDB addon is installed, its vendors in WoW Forever's new zones are used too. Nothing is copied from it.
 - Problems? Type `/cvn debug on`, repeat the problem, then type `/cvn log` and post the report.
 
 ---

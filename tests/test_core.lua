@@ -107,6 +107,7 @@ local function boot(opts)
         end,
         StaticPopup_Hide = function() g.popup = nil; g.hidden = (g.hidden or 0) + 1 end,
         ClosestVendorDB = opts.db,
+        NorgannonDB = opts.ng,
         ClosestVendorCharDB = opts.charDb,
     }
     if opts.tomtom then
@@ -1894,6 +1895,65 @@ g.env.SlashCmdList.CLOSESTVENDOR("")
 eq(has(table.concat(g.printed, "\n"), "Supplies: food on (5), water off (5), pet food on (5), healthstone reminder on"), true, "settings line")
 eq(has(table.concat(g.printed, "\n"), "Reminder sound: Whisper ping"), true, "sound line")
 eq(has(swin.box.text, "reminder sound whisper"), true, "sound in the report header")
+
+-- 32. NorgannonDB (optional): its vendors on the Forever-only maps join the pool; nothing changes without it.
+local function fakeNG()
+    local npcs = { [9001] = { name = "Hyjal Seller", flags = 4, reaction = "AH", spawns = { [616] = { { 52, 50 } } }, sells = {} } }
+    return {
+        schema = { major = 1, minor = 5 },
+        zones = { [616] = { uiMapId = 2482 } },
+        index = { zones = { [616] = { npcs = { 9001 } } } },
+        categories = { vendor = { npcs = { [9001] = "AH" } } },
+        RequireSchema = function() return true end,
+        Peek = function(_, _, id) return npcs[id] end,
+    }
+end
+local function reportOf(gg)
+    gg.env.SlashCmdList.CLOSESTVENDOR("log")
+    local w
+    for _, f in ipairs(gg.frames) do if f.name == "ClosestVendorReport" then w = f end end
+    return w and w.box.text or ""
+end
+g = boot(); login(g)
+g.free = 1
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(lastPrinted(g):find("Ally Seller", 1, true) ~= nil, true, "no NorgannonDB: the usual nearest vendor")
+eq(has(reportOf(g), "NorgannonDB: not found"), true, "report says it is not found")
+local oldNG = fakeNG(); oldNG.schema = { major = 1, minor = 3 }; oldNG.RequireSchema = function() return false end
+g = boot({ ng = oldNG }); login(g)
+eq(has(reportOf(g), "NorgannonDB: installed, but its data is not a supported schema"), true, "report says the schema is not supported")
+g = boot({ ng = fakeNG() }); login(g)
+g.pos = { map = 2482, x = 0.5, y = 0.5 } -- the player is in Mount Hyjal
+g.free = 1
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(lastPrinted(g):find("Hyjal Seller", 1, true) ~= nil, true, "NorgannonDB vendor is the nearest: " .. lastPrinted(g))
+eq(has(reportOf(g), "NorgannonDB: found, schema 1.5, 1 vendors added, 0 skipped"), true, "report line")
+-- Not installed at login, loaded later: read once more, no reload needed.
+g = boot(); login(g)
+g.env.NorgannonDB = fakeNG()
+g.pos = { map = 2482, x = 0.5, y = 0.5 }
+g.free = 1
+g.onEvent("ADDON_LOADED", "NorgannonDB") -- no other event needed: it is evaluated again at once
+eq(lastPrinted(g):find("Hyjal Seller", 1, true) ~= nil, true, "a late load adds the vendors")
+-- Another addon loading, or NorgannonDB loading before our login, does not read it.
+local reads = 0
+local ng = fakeNG()
+ng.RequireSchema = function() reads = reads + 1 return true end
+g = boot({ ng = ng })
+g.onEvent("ADDON_LOADED", "ClosestVendor")
+g.onEvent("ADDON_LOADED", "NorgannonDB")
+eq(reads, 0, "before login: not read")
+g.onEvent("PLAYER_LOGIN")
+eq(reads, 1, "read once after login")
+g.onEvent("ADDON_LOADED", "SomeOtherAddon")
+for _ = 1, 3 do g.onEvent("BAG_UPDATE_DELAYED"); g.onEvent("MERCHANT_SHOW"); g.onEvent("ZONE_CHANGED_NEW_AREA") end
+eq(reads, 1, "never on bag, merchant or movement events")
+-- A learned vendor that has moved keeps its own position; one that agrees keeps NorgannonDB's.
+g = boot({ ng = fakeNG(), db = { learned = { [9001] = { 9001, "Hyjal Seller", 2482, 0.90, 0.5, 0, true, 0, 0, 0 } } } }); login(g)
+g.pos = { map = 2482, x = 0.5, y = 0.5 }
+g.free = 1
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(lastPrinted(g):find("(90.0, 50.0)", 1, true) ~= nil, true, "a vendor that moved: the learned position: " .. lastPrinted(g))
 
 H.done()
 

@@ -618,4 +618,86 @@ for _, newStyle in ipairs({ true, false }) do
     eq(errt[1], "ColorPickerFrame: kaboom", "and reported")
 end
 
+-- externalVendors: the optional NorgannonDB addon, read for the maps asked for.
+local function fakeNG(over)
+    local npcs = {
+        [10] = { name = "Arrow Seller", flags = 4 + 16384, reaction = "A", spawns = { [616] = { { 70.85, 50.79 } } }, sells = { [2512] = 1 } },
+        [11] = { name = "Bullet Horde", flags = 4, reaction = "H", spawns = { [616] = { { 10, 20 } } }, sells = { [2516] = 1 } },
+        [12] = { name = "Reagents", flags = 4, reaction = "AH", spawns = { [616] = { { 30, 40 } }, [620] = { { 30, 40 } } }, sells = { [17020] = 1, [200] = 1 } },
+        [13] = { name = "Hostile", flags = 4, spawns = { [616] = { { 5, 5 } } }, sells = {} },
+        [14] = { name = "Elsewhere", flags = 4, reaction = "AH", spawns = { [1429] = { { 50, 50 } } }, sells = {} },
+        [15] = { name = "Subzone Only", flags = 4, reaction = "AH", spawns = { [9999] = { { 50, 50 } } }, sells = {} },
+        [16] = { flags = 4, spawns = { [616] = { { 1, 1 } } } },
+        [17] = { name = "Instance", flags = 4, reaction = "AH", spawns = { [616] = { { -1, -1 } } }, sells = {} },
+        [19] = { name = "Origin", flags = 4, reaction = "AH", spawns = { [616] = { { 0, 0 } } }, sells = {} },
+        [18] = { name = "Not In Vendor List", flags = 0, reaction = "AH", spawns = { [616] = { { 2, 2 } } } },
+    }
+    local ng = {
+        schema = { major = 1, minor = 5 },
+        zones = { [616] = { uiMapId = 2482 }, [1429] = { uiMapId = 1429 }, [9999] = { parent = 616 }, [620] = { uiMapId = 2482 }, [621] = { uiMapId = 2482 } },
+        index = { zones = { [616] = { npcs = { 10, 11, 12, 13, 16, 17, 18, 19 } }, [1429] = { npcs = { 14 } }, [9999] = { npcs = { 15 } }, [620] = { npcs = { 12 } }, [621] = { npcs = { 10, 12 } } } },
+        categories = { vendor = { npcs = { [10] = "A", [11] = "H", [12] = "AH", [13] = true, [14] = "AH", [15] = "AH", [16] = true, [17] = "AH", [19] = true } } },
+        RequireSchema = function(self, major, minor) return major == 1 and minor <= self.schema.minor end,
+        Peek = function(_, kind, id) return kind == "npcs" and npcs[id] or nil end,
+    }
+    for k, v in pairs(over or {}) do ng[k] = v end
+    return ng
+end
+local function extGame(ng)
+    return { NorgannonDB = ng, GetItemInfoInstant = function(id)
+        if id == 2512 then return id, "", "", "", 0, 6, 2 end
+        if id == 2516 then return id, "", "", "", 0, 6, 3 end
+        return id, "", "", "", 0, 0, 0
+    end }
+end
+local five = { [2482] = true, [2548] = true }
+local xl, xskipped, xschema = boot(extGame(fakeNG())).externalVendors(five)
+local xby = {}
+for _, v in ipairs(xl) do xby[v[1]] = v end
+eq(xschema, "1.5", "schema reported")
+eq(#xl, 4, "four vendors on the maps asked for (10, 11, 12, 13)")
+eq(xskipped, 3, "no name (16), no position (17) and (0, 0) (19) skipped; unlisted (18) and other map and sub-zone not counted")
+eq(xby[10][3], 2482, "zone area becomes its UiMap")
+eq(math.abs(xby[10][4] - 0.7085) < 1e-9 and math.abs(xby[10][5] - 0.5079) < 1e-9, true, "percent becomes 0 to 1")
+eq(xby[10][6], 1, "reaction A is Alliance")
+eq(xby[11][6], 2, "reaction H is Horde")
+eq(xby[12][6], 0, "reaction AH is both")
+eq(xby[13][6], 0, "hostile to both: both")
+eq(xby[10][7], true, "repair flag")
+eq(xby[11][7], false, "no repair flag")
+eq(xby[10][8], 1, "arrows")
+eq(xby[11][8], 2, "bullets")
+eq(xby[12][8], 0, "no ammo")
+eq(xby[12][9] > 0, true, "reagent stock gives a reagent mask")
+eq(xby[12][10] > 0, true, "supply stock gives a supply mask")
+eq(xby[10][9], 0, "no reagents")
+eq(xby[14], nil, "a vendor on another map is not read")
+eq(xby[15], nil, "a sub-zone vendor is not read")
+eq(xby[18], nil, "not in the vendor list: not read")
+-- Unavailable or unreadable: nil, never an error.
+eq(boot({}).externalVendors(five), nil, "addon missing: nil")
+A, errs = boot({})
+A.externalVendors(five)
+eq(#errs, 0, "addon missing is not an error")
+eq(boot(extGame(fakeNG({ schema = { major = 1, minor = 3 } }))).externalVendors(five), nil, "schema too old: nil")
+eq(boot(extGame(fakeNG({ RequireSchema = function() return false, "no" end }))).externalVendors(five), nil, "RequireSchema false: nil")
+A, errs = boot(extGame(fakeNG({ RequireSchema = boom })))
+eq(A.externalVendors(five), nil, "RequireSchema throws: nil")
+eq(#errs, 1, "and reported once")
+A, errs = boot(extGame(fakeNG({ Peek = boom })))
+local bl, bs = A.externalVendors(five)
+eq(#bl, 0, "Peek throws: no vendors")
+eq(bs, 7, "every candidate counted as skipped")
+for label, over in pairs({ zones = { zones = false }, vendorCategory = { categories = {} }, index = { index = {} }, noRequire = { RequireSchema = false } }) do
+    A, errs = boot(extGame(fakeNG(over)))
+    local nl, why = A.externalVendors(five)
+    eq(nl, nil, label .. ": nil")
+    eq(why, "unsupported", label .. ": installed but unsupported")
+    eq(#errs, 0, label .. ": no error logged")
+end
+eq(select(2, boot(extGame(fakeNG({ schema = { major = 1, minor = 3 } }))).externalVendors(five)), "unsupported", "old schema: unsupported")
+eq(select(2, boot({}).externalVendors(five)), nil, "missing: no reason")
+local none = boot(extGame(fakeNG())).externalVendors({})
+eq(#none, 0, "no maps asked for: no vendors")
+
 H.done()
