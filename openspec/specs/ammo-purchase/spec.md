@@ -66,7 +66,7 @@ The addon SHALL limit the purchase to what the player can afford and to the quan
 - **THEN** nothing is bought
 
 ### Requirement: Item data not loaded yet
-When buying ammo or reagents at a merchant stops because the game has not loaded an item's data, and nothing was asked or bought, the addon SHALL try again when the game reports that item data arrived, up to three times for that visit. A purchase that was already asked or made SHALL NOT be repeated, and closing the merchant window SHALL end any retry.
+When buying ammo or reagents at a merchant stops because the game has not loaded an item's data, and nothing was asked or bought, the addon SHALL try again when the game reports that one of the missing items arrived (other items loading does not count), up to three times for that visit. Money an earlier purchase at the same visit reserved SHALL NOT be subtracted again on a retry. A purchase that was already asked or made SHALL NOT be repeated, and closing the merchant window SHALL end any retry.
 
 #### Scenario: Data arrives after the merchant opens
 - **WHEN** a merchant opens, a reagent's stack size is unknown, and the data arrives a moment later

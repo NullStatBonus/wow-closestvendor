@@ -79,8 +79,9 @@ end
 
 -- A merchant visit reads item data the game may not have loaded yet. A part (ammo, reagents) that
 -- stopped for that, and asked and bought nothing, is run again when the game says the data arrived
--- (GET_ITEM_INFO_RECEIVED), a few times at most; closing the merchant window drops them.
-local merchantActed, retryParts, retries = false, {}, 0
+-- (GET_ITEM_INFO_RECEIVED for one of the missing items), a few times at most; closing the merchant
+-- window drops them.
+local merchantActed, retryParts, retryItems, retries = false, {}, {}, 0
 local MAX_RETRIES = 3
 
 -- What ns.Ammo needs when a merchant opens: all game reads and the purchase go through the Adapter.
@@ -592,7 +593,11 @@ runMerchantParts = function(names)
         A.resetItemData()
         merchantActed = false
         MERCHANT_PARTS[name]()
-        if A.itemDataMissing() and not merchantActed then retryParts[#retryParts + 1] = name end
+        local missing = A.missingItems()
+        if missing and not merchantActed then
+            retryParts[#retryParts + 1] = name
+            for id in pairs(missing) do retryItems[id] = true end
+        end
     end
 end
 
@@ -600,16 +605,17 @@ ns.frame = CreateFrame("Frame")
 ns.frame:SetScript("OnEvent", function(_, event, arg1)
     -- Fires for every item the game loads, so it is handled before anything is logged.
     if event == "GET_ITEM_INFO_RECEIVED" then
-        if #retryParts > 0 and retries < MAX_RETRIES and DB then
+        if #retryParts > 0 and retryItems[arg1] and retries < MAX_RETRIES and DB then
             retries = retries + 1
             local names = retryParts
-            retryParts = {}
+            retryParts, retryItems = {}, {}
+            ammoSpent = 0 -- the game has answered the earlier purchase by now; money is what it says
             if log then log.Add("item data arrived: trying the merchant purchase again") end
             runMerchantParts(names)
         end
         return
     end
-    if event == "MERCHANT_CLOSED" then retryParts = {} return end
+    if event == "MERCHANT_CLOSED" then retryParts, retryItems = {}, {} return end
     -- Only the player's own gear, casts and pet matter; party and raid members fire these too.
     if (event == "UNIT_INVENTORY_CHANGED" or event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_PET") and arg1 ~= "player" then return end
     if log and (event ~= "ADDON_LOADED" or arg1 == ADDON) then
@@ -623,7 +629,7 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         if DB then learnMerchant() end
         if controller then controller.OnMerchantShow() end
         if DB then
-            retryParts, retries = {}, 0
+            retryParts, retryItems, retries = {}, {}, 0
             runMerchantParts({ "ammo", "reagents" })
         end
     elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then

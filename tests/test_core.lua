@@ -1187,6 +1187,25 @@ do
     ig.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
     eq(reads, 0, "after three tries it stops reading")
 
+    -- Other items loading say nothing about ours: they do not use up the tries.
+    ig = uncachedShop()
+    ig.onEvent("MERCHANT_SHOW")
+    for i = 1, 10 do ig.onEvent("GET_ITEM_INFO_RECEIVED", 9000 + i) end
+    loadItem(ig)
+    ig.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
+    eq(buyAsked(ig), true, "ten unrelated items first: ours still gets its try")
+
+    -- The money an ammo purchase left is only reserved while the game has not answered it; by the
+    -- retry the game's own number is right, so it is not taken off twice.
+    ig = uncachedShop()
+    ig.env.SlashCmdList.CLOSESTVENDOR("reagentbuy auto")
+    ig.ns.Ammo.OnMerchant = function() return 2, 99000 end
+    ig.onEvent("MERCHANT_SHOW")
+    loadItem(ig)
+    ig.bought = {}
+    ig.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
+    eq(table.concat(ig.bought, ","), "1:17", "all 17 bought: the ammo money is not subtracted a second time")
+
     -- A part that already asked is not run again: no second question.
     ig = reagentShop()
     ig.env.SlashCmdList.CLOSESTVENDOR("reagentbuy on")
@@ -1755,6 +1774,10 @@ do
     cfg.foodEnabled = true
     gq.onEvent("BAG_UPDATE_DELAYED")
     eq(n > 0, true, "one switched on: they are")
+    cfg.ammoEnabled = false
+    n = 0
+    gq.onEvent("BAG_UPDATE_DELAYED")
+    eq(n, 0, "the master switch off: the bags are not scanned for supplies either")
 end
 
 g.env.SlashCmdList.CLOSESTVENDOR("petfood off")
