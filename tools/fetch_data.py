@@ -9,7 +9,7 @@ import urllib.request
 
 PFQUEST_COMMIT = "104f35678ca39ab1fb78b655f815cc7016f5e0c8"
 PFQUEST_FILES = ["db/meta.lua", "db/units.lua", "db/enUS/units.lua", "db/items.lua", "LICENSE"]
-WAGO_BUILDS = {"era": "1.15.9.70576", "forever": "1.60.1.70790"}
+WAGO_BUILDS = {"era": "1.15.9.70576", "forever": "1.60.1.70938"}
 WAGO_TABLES = ["UiMapAssignment", "ItemEffect", "SpellName", "ItemSparse", "CreatureFamily"]
 # Forever links items to effects through ItemXItemEffect and to pet diets through Item.ItemPetFoodID (names in ItemPetFood).
 WAGO_EXTRA = {"forever": ["ItemXItemEffect", "Item", "ItemPetFood"]}
