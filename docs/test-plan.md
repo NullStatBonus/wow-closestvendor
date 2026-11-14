@@ -557,6 +557,14 @@ Enter `/cvn debug on`. Use `/cvn` to check the line "Supplies: food on (5), wate
 - [ ] Turn off food, water, pet food and the healthstone reminder. Change your bags. Expected: nothing is asked, and the other warnings still work.
 - [ ] With reagent buying on, open a merchant that sells your reagent right after a fresh login, before the item has been seen. Expected: the purchase question appears, possibly a moment after the window opens, and only once. This is hard to cause on purpose, so it is fine to skip.
 
+## 19. NorgannonDB
+
+- [ ] Without NorgannonDB, enter `/cvn debug on`, then `/cvn log`. Expected: the report has `NorgannonDB: not found`. Vendors work as before.
+- [ ] Install NorgannonDB for WoW Forever and log in. Enter `/cvn log`. Expected: `NorgannonDB: found, schema 1.5` with a number of vendors added.
+- [ ] Stand in Riverglades, then Zephras Isle, with the bags nearly full (`/cvn test sell`). Expected: a vendor in that zone is named, and the pin points to a real vendor.
+- [ ] Open that vendor. Expected: nothing changes if the pin was right. If the vendor stands somewhere else, the next pin uses where you opened it.
+- [ ] Disable NorgannonDB and reload. Expected: `NorgannonDB: not found` and no errors.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

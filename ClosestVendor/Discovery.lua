@@ -80,3 +80,37 @@ function D.Merge(shipped, learned)
     end
     return out
 end
+
+-- A learned position this far (a fraction of the map) from an external one means the vendor moved.
+D.MOVED = 0.03
+
+-- The search pool from the shipped list, an external list (same record shape) and the learned table.
+-- One entry per npc id. Without an external record for an id this is Merge. With one: the external
+-- record replaces the shipped one; a learned record supplies faction, repair, ammo, reagents and
+-- supplies (Merge takes the external supplies when it has none), and its position only when it is on another map
+-- or more than D.MOVED away from the external position. Does not modify its inputs.
+function D.Pool(shipped, external, learned)
+    local ext = {}
+    for i = 1, #external do ext[external[i][1]] = external[i] end
+    local base = {}
+    for i = 1, #shipped do
+        local v = shipped[i]
+        if not ext[v[1]] then base[#base + 1] = v end
+    end
+    for i = 1, #external do base[#base + 1] = external[i] end
+    local rest = {}
+    for id, v in pairs(learned) do
+        local e = ext[id]
+        if not e then
+            rest[id] = v
+        else
+            local placed = type(v[4]) == "number" and type(v[5]) == "number"
+            local moved = v[3] ~= e[3] or (placed and (math.abs(v[4] - e[4]) > D.MOVED or math.abs(v[5] - e[5]) > D.MOVED))
+            local function pick(i, default) if v[i] ~= nil then return v[i] end return default end
+            local r = { id, v[2] or e[2], e[3], e[4], e[5], pick(6, e[6]), pick(7, e[7]), pick(8, e[8] or 0), pick(9, e[9] or 0), v[10] }
+            if moved then r[3], r[4], r[5] = v[3], v[4], v[5] end
+            rest[id] = r
+        end
+    end
+    return D.Merge(base, rest)
+end

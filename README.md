@@ -438,13 +438,25 @@ Trainers work the same way, but the addon ships no trainers.
 The vendors that you open in the new zones of WoW Forever cover those zones.
 The new zones are Mount Hyjal, Riverglades, Zephras Isle, Darkspear Islands and Shen'dralas.
 
+### NorgannonDB (optional)
+
+If the NorgannonDB addon is installed, the addon also reads its vendors in the new zones of WoW Forever.
+
+- It is read when you log in, and again if NorgannonDB finishes loading later.
+- It adds vendors, with their position, faction, repair and what they sell. It adds nothing in other zones.
+- Nothing from NorgannonDB is copied into this addon or saved by it.
+- All vendors are one list, and the closest one wins.
+- For the same vendor, NorgannonDB's data comes before the shipped list. What you see when you open a vendor comes before both.
+- If you open a vendor that is more than 3% of the map away from NorgannonDB's position, your position is used.
+- `/cvn log` says whether NorgannonDB was found and how many vendors it added.
+
 ## Limitations
 
 ### Vendors and trainers
 
 - Vendors that exist only in WoW Forever are unknown until you open them.
 - The shipped list is Vanilla data.
-- The new zones of WoW Forever have no shipped vendors.
+- The new zones of WoW Forever have no shipped vendors. The optional NorgannonDB addon fills them in. The Darkspear Islands have no vendors there.
 - Vendors in zones that WoW Forever reshaped can be slightly wrong.
 - The addon ships no trainers.
 - Until you open a trainer for a profession, the addon cannot send you to one.

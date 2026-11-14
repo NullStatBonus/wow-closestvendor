@@ -137,4 +137,41 @@ local got
 for _, v in ipairs(am) do if v[1] == 8670 then got = v end end
 eq(got[2], "Auctioneer Chilton", "learned auctioneer wins over the shipped one")
 
+-- Pool: shipped + external + learned, one entry per npc id.
+local function pid(list) local m = {} for _, v in ipairs(list) do m[v[1]] = v end return m end
+local ship = { { 1, "Ship1", 2482, 0.10, 0.10, 0, false, 0, 0, 0 }, { 2, "Ship2", 1429, 0.5, 0.5, 0, true, 0, 0, 0 } }
+local ext = { { 1, "Ext1", 2482, 0.20, 0.20, 1, false, 0, 0, 0 }, { 3, "Ext3", 2548, 0.4, 0.4, 0, false, 0, 0, 7 } }
+local none = D.Pool(ship, {}, { [2] = { 2, "L2", 1429, 0.51, 0.5, 0, false, 0, 0, 0 } })
+local mg = D.Merge(ship, { [2] = { 2, "L2", 1429, 0.51, 0.5, 0, false, 0, 0, 0 } })
+eq(#none, #mg, "no external: same size as Merge")
+eq(pid(none)[2][4], pid(mg)[2][4], "no external: learned record kept as Merge keeps it")
+local p1 = D.Pool(ship, ext, {})
+eq(#p1, 3, "one entry per npc id: 1 (external), 2 (shipped), 3 (external)")
+eq(pid(p1)[1][2], "Ext1", "external over shipped")
+eq(pid(p1)[1][4], 0.20, "external position over shipped")
+eq(#ship, 2, "shipped untouched")
+eq(#ext, 2, "external untouched")
+local agree = D.Pool(ship, ext, { [1] = { 1, "L1", 2482, 0.21, 0.19, 2, true, 0, 0, 0 } })
+eq(pid(agree)[1][4], 0.20, "learned within 3% keeps the external position")
+eq(pid(agree)[1][5], 0.20, "same on y")
+eq(pid(agree)[1][6], 2, "learned faction wins")
+eq(pid(agree)[1][7], true, "observed repair flag wins")
+eq(#agree, 3, "learned does not add a second entry")
+local moved = D.Pool(ship, ext, { [1] = { 1, "L1", 2482, 0.30, 0.20, 1, false, 0, 0, 0 } })
+eq(pid(moved)[1][4], 0.30, "vendor moved on x: learned position")
+local movedY = D.Pool(ship, ext, { [1] = { 1, "L1", 2482, 0.20, 0.30, 1, false, 0, 0, 0 } })
+eq(pid(movedY)[1][5], 0.30, "vendor moved on y: learned position")
+local other = D.Pool(ship, ext, { [1] = { 1, "L1", 1429, 0.20, 0.20, 1, false, 0, 0, 0 } })
+eq(pid(other)[1][3], 1429, "learned on another map: learned position")
+local old = D.Pool(ship, ext, { [3] = { 3, "L3", 2548, 0.4, 0.4, 0, false, 0, 0 } })
+eq(pid(old)[3][10], 7, "learned record from before supplies: external supplies")
+eq(pid(D.Pool(ship, ext, { [3] = { 3, "L3", 2548, 0.4, 0.4, 0, false, 0, 0, 1 } }))[3][10], 1, "learned supplies win")
+local both = D.Pool(ship, { { 5, "Ext5", 2482, 0.2, 0.2, 1, true, 3, 5, 9 } }, { [5] = { 5, "L5", 2482 } })
+eq(pid(both)[5][4], 0.2, "learned record without a position keeps the external one")
+eq(pid(both)[5][6], 1, "missing learned faction falls back to the external one")
+eq(pid(both)[5][7], true, "missing learned repair flag falls back")
+eq(pid(both)[5][8], 3, "missing learned ammo falls back to the external one")
+eq(pid(both)[5][9], 5, "missing learned reagents fall back")
+eq(#D.Pool(ship, ext, { [99] = { 99, "Only", 1429, 0.1, 0.1, 0, false, 0, 0, 0 } }), 4, "learned-only vendor added")
+
 H.done()
