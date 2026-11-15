@@ -18,10 +18,16 @@ local function has(lines, text) return table.concat(lines, "\n"):find(text, 1, t
 
 -- Status.
 local c = fresh()
-local out = M.Run(c, "")
+local out = M.Run(c, "status")
 eq(has(out, "2 free slot"), true, "status shows bag threshold")
 eq(has(out, "below 20%"), true, "status shows durability threshold")
-eq(has(M.Run(c, nil), "Bags:"), true, "nil message is status")
+local _, emptyAction=M.Run(c, "")
+eq(emptyAction[1],"open","bare slash opens settings");eq(emptyAction[2],"home","bare slash opens Home")
+local _, nilAction=M.Run(c,nil);eq(nilAction[1],"open","nil message opens settings")
+local info,helpAction=M.Run(c,"help")
+eq(has(info,"Closest Vendor finds"),true,"help explains addon")
+eq(has(info,"/cvn status"),true,"help lists status")
+eq(helpAction[1],"read","help does not evaluate gameplay")
 
 -- Thresholds.
 c = fresh()
@@ -65,7 +71,7 @@ M.Run(c, "ammo 2000"); eq(c.ammoThreshold, 2000, "2000 allowed")
 M.Run(c, "ammo off"); eq(c.ammoEnabled, false, "ammo trigger off")
 eq(c.bagEnabled and c.durEnabled, true, "other triggers untouched")
 M.Run(c, "ammo on"); eq(c.ammoEnabled, true, "ammo trigger on")
-eq(has(M.Run(fresh(), ""), "Ammo: on"), true, "status shows ammo")
+eq(has(M.Run(fresh(), "status"), "Ammo: on"), true, "status shows ammo")
 
 -- Profession threshold and switch.
 c = fresh()
@@ -79,7 +85,7 @@ M.Run(c, "trade off"); eq(c.tradeEnabled, false, "profession trigger off")
 eq(c.bagEnabled and c.durEnabled and c.ammoEnabled, true, "other triggers untouched")
 eq(c.tradeThreshold, 12, "threshold kept")
 M.Run(c, "trade on"); eq(c.tradeEnabled, true, "profession trigger back on")
-eq(has(M.Run(fresh(), ""), "Professions: on"), true, "status shows professions")
+eq(has(M.Run(fresh(), "status"), "Professions: on"), true, "status shows professions")
 eq(has(M.Run(c, "trade off"), "Professions: off"), true, "status shows professions off")
 eq(has(M.Run(fresh(), "nonsense"), "/cvn trade"), true, "help lists the profession command")
 eq(M.LIMITS.trade[1] .. "-" .. M.LIMITS.trade[2], "0-300", "profession limits")
@@ -169,7 +175,7 @@ eq(has(out, "Choose equipped, best or cheapest."), true, "bad grade explained")
 -- Reagent buying: on/off, ask/auto and the amount (0-100), same words as /cvn buy; refused for a
 -- class without vendor reagents.
 c = fresh()
-out = M.Run(c, "", "MAGE")
+out = M.Run(c, "status", "MAGE")
 eq(has(out, "Reagent buying: off, asks first, up to 20 of each"), true, "status shows reagent buying with its defaults")
 M.Run(c, "reagentbuy on", "MAGE"); eq(c.reagentBuyEnabled, true, "reagentbuy on")
 M.Run(c, "reagentbuy auto", "MAGE"); eq(c.reagentBuyPrompt, false, "reagentbuy auto")
@@ -201,7 +207,7 @@ end
 
 -- Target choice: mode and preference, with the valid values named on bad input.
 c = fresh()
-out = M.Run(c, "")
+out = M.Run(c, "status")
 eq(has(out, "asks which one"), true, "status: asks by default")
 eq(has(out, "on your map"), true, "status: map preference by default")
 out = M.Run(c, "choice auto")
@@ -209,7 +215,7 @@ eq(c.vendorMode, "auto", "mode set")
 eq(has(out, "navigates without asking"), true, "status shows the mode")
 M.Run(c, "prefer distance")
 eq(c.vendorPrefer, "distance", "preference set")
-eq(has(M.Run(c, ""), "that is closest"), true, "status shows the preference")
+eq(has(M.Run(c, "status"), "that is closest"), true, "status shows the preference")
 M.Run(c, "  CHOICE   ASK ")
 eq(c.vendorMode, "ask", "case and spacing tolerated")
 out = M.Run(c, "choice maybe")
@@ -223,10 +229,10 @@ eq(has(M.Run(c, "help"), "/cvn prefer"), true, "help lists prefer")
 
 -- On-screen notice switch.
 c = fresh()
-eq(has(M.Run(c, ""), "On-screen notice when choosing without asking: on"), true, "status: notice on when unset")
+eq(has(M.Run(c, "status"), "On-screen notice: on, style Toast"), true, "status: notice on when unset")
 M.Run(c, "notice off")
 eq(c.autoNotice, false, "notice off")
-eq(has(M.Run(c, ""), "without asking: off"), true, "status shows off")
+eq(has(M.Run(c, "status"), "On-screen notice: off"), true, "status shows off")
 M.Run(c, " NOTICE  ON ")
 eq(c.autoNotice, true, "notice back on, case and spacing tolerated")
 out = M.Run(c, "notice maybe")
@@ -237,8 +243,8 @@ eq(has(M.Run(c, "help"), "/cvn notice"), true, "help lists notice")
 
 -- Reagents: threshold, listing, switching one by name, the test command.
 c = fresh()
-eq(has(M.Run(c, ""), "Reagents: on, trigger at 5 or fewer"), true, "status shows the reagent threshold")
-eq(has(M.Run(c, ""), "switched off"), false, "nothing switched off: no line")
+eq(has(M.Run(c, "status"), "Reagents: on, trigger at 5 or fewer"), true, "status shows the reagent threshold")
+eq(has(M.Run(c, "status"), "switched off"), false, "nothing switched off: no line")
 out = M.Run(c, "reagent 12")
 eq(c.reagentThreshold, 12, "reagent threshold set")
 eq(has(out, "trigger at 12"), true, "reply shows it")
@@ -265,7 +271,7 @@ eq(c.reagentOff[17020], true, "switched off by name")
 eq(has(out, "Arcane Powder: off"), true, "confirmed")
 eq(has(M.Run(c, "reagents", "MAGE"), "Arcane Powder: off"), true, "the list shows it off")
 eq(has(M.Run(c, "reagents", "MAGE"), "Rune of Portals: on"), true, "others stay on")
-eq(has(M.Run(c, ""), "Reagents switched off: Arcane Powder"), true, "status lists what is off")
+eq(has(M.Run(c, "status"), "Reagents switched off: Arcane Powder"), true, "status lists what is off")
 M.Run(c, "reagent on  ARCANE   powder", "MAGE")
 eq(c.reagentOff[17020], nil, "switched back on, case and spaces ignored")
 M.Run(c, "reagent off 17032", "MAGE")
@@ -288,7 +294,7 @@ eq(has(out2, "reagent"), true, "test reagent line")
 
 -- Status window: lock, scale, reset.
 c = fresh()
-out = M.Run(c, "")
+out = M.Run(c, "status")
 eq(has(out, "Status window: unlocked, scale 100%"), true, "status shows the window, defaults for an old settings table")
 eq(has(out, "Status window rows changed"), false, "no changed rows: no such line")
 out = M.Run(c, "hud lock")
@@ -315,7 +321,7 @@ eq(has(M.Run(c, "hud dance"), "Choose lock, unlock, reset, scale, opacity, texto
 
 -- Status window: background opacity (0-100), text opacity (20-100) and background colour.
 c = fresh()
-out = M.Run(c, "")
+out = M.Run(c, "status")
 eq(has(out, "background 80% of color #000000, text and icons 100%"), true, "status shows the defaults for an old settings table")
 out = M.Run(c, "hud opacity 0")
 eq(c.hudAlpha, 0, "background opacity 0 allowed: only text and icons")
@@ -358,14 +364,14 @@ do -- no colour given: the caller opens the colour picker; nothing is changed or
     eq(c.hudColor, "000000", "unchanged")
 end
 c.hudColor = "nonsense"
-eq(has(M.Run(c, ""), "of color #000000"), true, "a saved colour that is not one shows as black")
+eq(has(M.Run(c, "status"), "of color #000000"), true, "a saved colour that is not one shows as black")
 
 -- Row modes, one per group.
 c = fresh()
 out = M.Run(c, "hud row reagents always", "MAGE")
 eq(c.hudRow.reagents, "always", "the Reagents group")
 eq(has(out, "Status window row Reagents: always"), true, "confirmed")
-eq(has(M.Run(c, ""), "Status window rows changed: Reagents: always"), true, "/cvn reports it")
+eq(has(M.Run(c, "status"), "Status window rows changed: Reagents: always"), true, "/cvn reports it")
 M.Run(c, "hud row professions never", "MAGE"); eq(c.hudRow.professions, "never", "the Professions group")
 M.Run(c, "hud row bags never", "MAGE")
 eq(c.hudRow.bags, "never", "bags row")
@@ -373,7 +379,7 @@ M.Run(c, "hud row  Bag   Space  always", "MAGE")
 eq(c.hudRow.bags, "always", "long name, case and spaces ignored")
 M.Run(c, "hud row durability never", "MAGE"); eq(c.hudRow.durability, "never", "durability row")
 M.Run(c, "hud row ammo always", "MAGE"); eq(c.hudRow.ammo, "always", "ammo row")
-eq(has(M.Run(c, ""), "Ammo: always, Reagents: always, Bag space: always, Durability: never, Professions: never"), true, "changed groups listed in window order")
+eq(has(M.Run(c, "status"), "Ammo: always, Reagents: always, Bag space: always, Durability: never, Professions: never"), true, "changed groups listed in window order")
 M.Run(c, "hud row bags low", "MAGE")
 eq(c.hudRow.bags, nil, "back to the default: not kept in the table")
 for _, name in ipairs({ "arcane powder", "mining", "conjured water" }) do
@@ -381,7 +387,7 @@ for _, name in ipairs({ "arcane powder", "mining", "conjured water" }) do
 end
 eq(c.hudRow["prof:Mining"] or c.hudRow["reagent:17020"], nil, "no per-row key is written")
 c.hudRow["prof:Mining"] = "always" -- left by an earlier build
-eq(has(M.Run(c, ""), "Mining"), false, "a stale row key is not listed")
+eq(has(M.Run(c, "status"), "Mining"), false, "a stale row key is not listed")
 for _, bad in ipairs({ "hud row", "hud row bags", "hud row bags sometimes", "hud row always" }) do
     eq(has(M.Run(c, bad, "MAGE"), "choose low, always or never"), true, bad .. ": explained")
 end
@@ -392,8 +398,8 @@ eq(bare.hudRow.bags, "always", "an old settings table gets its row table")
 
 -- Anchor and auction house.
 c = fresh()
-eq(has(M.Run(c, ""), "searches from: your hearthstone point"), true, "status shows the anchor (hearth by default)")
-eq(has(M.Run(c, ""), "Auction house routing: off"), true, "status shows auction routing")
+eq(has(M.Run(c, "status"), "searches from: your hearthstone point"), true, "status shows the anchor (hearth by default)")
+eq(has(M.Run(c, "status"), "Auction house routing: off"), true, "status shows auction routing")
 out = M.Run(c, "anchor last")
 eq(c.instanceAnchor, "last", "anchor set")
 eq(has(out, "searches from: your last position outside"), true, "reply shows it")
@@ -412,7 +418,7 @@ for _, word in ipairs({ "/cvn hud lock/unlock/reset", "/cvn hud scale <50-200>",
     eq(has(help, word), true, "help lists " .. word)
 end
 eq(has(help, "|"), false, "no pipe in help")
-eq(has(help, "demo"), false, "the demo command is not in help")
+eq(has(help, "demo"), true, "demo is discoverable")
 -- /cvn demo: an action for the caller, nothing printed, nothing changed.
 c = fresh()
 local function flat(t)
@@ -447,11 +453,11 @@ M.Run(c, "food off"); eq(c.foodEnabled, false, "food off")
 M.Run(c, "food on"); eq(c.foodEnabled, true, "food on")
 M.Run(c, "water off"); eq(c.waterEnabled, false, "water off")
 M.Run(c, "petfood off"); eq(c.petFoodEnabled, false, "petfood off")
-eq(has(M.Run(c, ""), "Supplies: food on (40), water off (40), pet food off (40), healthstone reminder on"), true, "status line")
-eq(has(M.Run(fresh(), ""), "Supplies: food on (5), water on (5), pet food on (5), healthstone reminder on"), true, "status line defaults")
+eq(has(M.Run(c, "status"), "Supplies: food on (40), water off (40), pet food off (40), healthstone reminder on"), true, "status line")
+eq(has(M.Run(fresh(), "status"), "Supplies: food on (5), water on (5), pet food on (5), healthstone reminder on"), true, "status line defaults")
 do
     local cs = fresh()
-    eq(has(M.Run(cs, ""), "Supply warnings: on"), true, "supplies switch shown, on by default")
+    eq(has(M.Run(cs, "status"), "Supply warnings: on"), true, "supplies switch shown, on by default")
     eq(has(M.Run(cs, "supplies off"), "Supply warnings: off"), true, "/cvn supplies off")
     eq(cs.suppliesEnabled, false, "saved")
     M.Run(cs, "supplies on")
@@ -473,11 +479,11 @@ do
     local cs = fresh()
     cs.remindSound = "whisper"
     local out, act2 = M.Run(cs, "sound")
-    eq(has(out, "Reminder sound: Whisper ping") and has(out, "whisper, ping, invite, ready, none"), true, "/cvn sound shows the choice and the names")
+    eq(has(out, "Notification sound: Whisper ping") and has(out, "whisper, ping, invite, ready, none"), true, "/cvn sound shows the choice and the names")
     eq(act2, nil, "showing plays nothing")
     out, act2 = M.Run(cs, "sound ping")
     eq(cs.remindSound .. "/" .. tostring(act2 and act2[1]), "ping/sound", "a key picks it and asks for the preview")
-    eq(has(out, "Reminder sound: Minimap ping"), true, "confirmed by label")
+    eq(has(out, "Notification sound: Minimap ping"), true, "confirmed by label")
     M.Run(cs, "sound Group Invite")
     eq(cs.remindSound, "invite", "the label works too, case ignored")
     out, act2 = M.Run(cs, "sound none")
@@ -485,7 +491,7 @@ do
     out, act2 = M.Run(cs, "sound banana")
     eq(cs.remindSound .. "/" .. tostring(act2), "none/nil", "an unknown name changes nothing")
     eq(has(out, "Choose a sound: whisper, ping, invite, ready, none."), true, "and lists the choices")
-    eq(has(M.Run(cs, ""), "Reminder sound: None"), true, "/cvn reports it")
+    eq(has(M.Run(cs, "status"), "Notification sound: None"), true, "/cvn reports it")
 end
 
 -- /cvn nav: show, pick, refuse a name that is not a choice.
@@ -502,7 +508,7 @@ do
     out = M.Run(cn, "nav banana")
     eq(cn.navProvider, "tomtom", "an unknown name changes nothing")
     eq(has(out, "Choose a waypoint: auto, tomtom, waypointui, native."), true, "and lists the choices")
-    eq(has(M.Run(cn, ""), "Waypoint: TomTom"), true, "/cvn reports it")
+    eq(has(M.Run(cn, "status"), "Waypoint: TomTom"), true, "/cvn reports it")
 end
 do -- the new row group by name
     local cg = fresh()

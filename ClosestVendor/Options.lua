@@ -1,466 +1,312 @@
--- Settings page under Options, AddOns. Uses the native Settings API (Era and Forever).
--- Every control is bound to the saved `cfg` table, the same one the slash commands edit.
+-- One AceConfig tree, backed directly by the existing character configuration.
 local _, ns = ...
-
-local L = ns.L
-
-local O = {}
+local L, P = ns.L, ns.Presentation
+local O = { APP = "ClosestVendor.Presentation.v1" }
 ns.Options = O
-
-local ROWS = {
-    { key = "bag", label = L["Bag space"], slider = L["Ask when free slots are at or below"],
-      tip = L["Ask about the nearest vendor when your free bag slots drop to this number or fewer."], step = 1 },
-    { key = "dur", label = L["Durability"], slider = L["Ask when an item is below (%)"],
-      tip = L["Ask about the nearest repair vendor when any equipped item falls below this durability."], step = 1,
-      format = function(v) return v .. "%" end },
-    { key = "trade", label = L["Professions"], slider = L["Ask when a skill is this close to its limit"],
-      tip = L["Ask about the nearest trainer when a profession is this many points or fewer from its current skill limit."], step = 1 },
-}
-
--- Every settings page is a subcategory of the main one. A client without subcategories gets one page:
--- page() hands back the parent, and a section header separates the groups instead.
--- The layout (it has AddInitializer) is the second value the Register calls return; a client that
--- has category:GetLayout() instead is read through that. layoutOf(category) is nil when neither exists.
-local layouts = setmetatable({}, { __mode = "k" })
-local function remember(category, layout)
-    if category and not layout and type(category) == "table" and category.GetLayout then
-        local ok, l = pcall(category.GetLayout, category)
-        if ok then layout = l end
-    end
-    if category and layout then layouts[category] = layout end
-    return category
+local function library(name)
+    if not LibStub then return end
+    local ok, lib = pcall(function() return LibStub(name, true) end)
+    if ok then return lib end
 end
-local function layoutOf(category) return layouts[category] end
-
-local function page(parent, name)
-    if Settings.RegisterVerticalLayoutSubcategory then
-        local sub = remember(Settings.RegisterVerticalLayoutSubcategory(parent, name))
-        if sub then return sub end
-    end
-    return parent
+function O.Refresh()
+    local reg = library("AceConfigRegistry-3.0")
+    if reg then pcall(reg.NotifyChange, reg, O.APP) end
 end
-
--- A section header, where the client can draw one.
-local function header(category, text)
-    local layout = layoutOf(category)
-    if layout and layout.AddInitializer and CreateSettingsListSectionHeaderInitializer then
-        layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(text))
+function O.Register(cfg, defaults, onChange, class, pickColor, note)
+    if O.tree then return O.APP end
+    local reg, dialog = library("AceConfigRegistry-3.0"), library("AceConfigDialog-3.0")
+    if not (reg and dialog and library("AceGUI-3.0")) then
+        O.failure = "Required AceConfig/AceGUI libraries unavailable"
+        if note then note(O.failure) end
+        return
     end
-end
-
-local hasDropdown = function()
-    return Settings.CreateDropdown and Settings.CreateControlTextContainer and Settings.VarType.String
-end
-
--- A dropdown on a string key; choices is { { value, label }, ... }.
-local function dropdown(category, cfg, defaults, onChange, variable, key, label, choices, tip)
-    local setting = Settings.RegisterAddOnSetting(category, variable, key, cfg, Settings.VarType.String, label, defaults[key])
-    Settings.CreateDropdown(category, setting, function()
-        local c = Settings.CreateControlTextContainer()
-        for _, o in ipairs(choices) do c:Add(o[1], o[2]) end
-        return c:GetData()
-    end, tip)
-    setting:SetValueChangedCallback(onChange)
-    return setting
-end
-
--- The status window row groups of the settings page, in window order: { group key, reason }. One
--- dropdown per group sets every row of it (each profession, each reagent and display-only item).
--- A group with a reason does not apply to the class: it is shown greyed out, never written to hudRow.
-local AMMO_CLASSES = { HUNTER = true, ROGUE = true, WARRIOR = true }
-
-local function windowRows(class)
-    local rows = {}
-    for _, group in ipairs(ns.Status.GROUPS) do
-        local reason
-        -- A class without ammo or reagents still sees the row, greyed out, with the reason as its tooltip.
-        if group == "ammo" and not AMMO_CLASSES[class] then reason = L["Your class does not use ammo."] end
-        if group == "reagents" and #ns.Reagents.ForClass(class) == 0 and #ns.Reagents.DisplayOnly(class) == 0 then
-            reason = L["Your class does not use reagents."]
-        end
-        rows[#rows + 1] = { group, reason }
+    local pages = {}
+    local tree = { type = "group", name = L["Closest Vendor"], childGroups = "tree", args = pages }
+    local function page(key, name, order)
+        local g = { type = "group", name = name, order = order, args = {} }; pages[key] = g
+        return g.args
     end
-    return rows
-end
-
--- Reagent buying, at the end of the Reagents page: buy, ask first, and how many of each to carry.
--- The ask checkbox and the amount slider are greyed while buying is off. For a class without
--- vendor-sold reagents all three are greyed out (the same modify predicate as the window rows) with
--- the reason as their tooltip.
-local function registerReagentBuying(category, cfg, defaults, onChange, class)
-    local reason = #ns.Reagents.ForClass(class) == 0 and L["Your class does not use reagents."] or nil
-    local buy = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_REAGENTBUY_ENABLED", "reagentBuyEnabled", cfg,
-        Settings.VarType.Boolean, L["Buy reagents"], defaults.reagentBuyEnabled)
-    local buyBox = Settings.CreateCheckbox(category, buy,
-        reason or L["When a merchant window opens, buy the class reagents you use until you carry the amount below of each."])
-    local ask = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_REAGENTBUY_PROMPT", "reagentBuyPrompt", cfg,
-        Settings.VarType.Boolean, L["Ask before buying reagents"], defaults.reagentBuyPrompt)
-    local askBox = Settings.CreateCheckbox(category, ask,
-        reason or L["Show the reagents, counts and price and wait for a Yes instead of buying at once."])
-    local amount = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_REAGENTBUY_TARGET", "reagentBuyTarget", cfg,
-        Settings.VarType.Number, L["Reagents to carry of each"], defaults.reagentBuyTarget)
-    local limits = ns.Commands.LIMITS.reagentBuyTarget
-    local options = Settings.CreateSliderOptions(limits[1], limits[2], 1)
-    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
-    local slider = Settings.CreateSlider(category, amount, options,
-        reason or L["Buy until you carry this many of each class reagent, counting what is in your bags. 0 buys none."])
-    for _, init in ipairs({ askBox, slider }) do
-        if init and init.SetParentInitializer then
-            init:SetParentInitializer(buyBox, function() return buy:GetValue() end)
-        end
+    -- Six top-level pages; Restock holds Ammo, Reagents and Supplies, and Appearance has a Sound tab.
+    local function child(parent, key, name, order)
+        local g = { type = "group", name = name, order = order, args = {} }; parent[key] = g
+        return g.args
     end
-    if reason then
-        for _, init in ipairs({ buyBox, askBox, slider }) do
-            if init and init.AddModifyPredicate then init:AddModifyPredicate(function() return false end) end
-        end
+    local home = page("home", L["Home"], 1)
+    local restock = page("restock", L["Restock"], 2)
+    local ammo = child(restock, "ammo", L["Ammo"], 1)
+    local reagents = child(restock, "reagents", L["Reagents"], 2)
+    local supplies = child(restock, "supplies", L["Supplies"], 3)
+    local nav = page("navigation", L["Navigation"], 3)
+    local appearance = page("appearance", L["Appearance"], 4)
+    local soundPage = child(appearance, "sound", L["Sound"], 3)
+    local advanced = page("advanced", L["Advanced"], 5)
+    local about = page("about", L["About"], 6)
+    local order = 0
+    local function add(dest, key, opt)
+        order = order + 1; opt.order = order
+        opt.width = opt.width or ((opt.type == "select" or opt.type == "range" or opt.type == "execute") and 1.5 or "full")
+        dest[key] = opt; return opt
     end
-    for _, setting in ipairs({ buy, ask, amount }) do setting:SetValueChangedCallback(onChange) end
-end
-
--- The reagent slider and one checkbox per reagent of the player's class. The saved setting is a list
--- of reagents switched off, so a checkbox shows "on" when the item is not in it: a small proxy table
--- turns that around, and anything not switched off (including reagents added later) is on.
--- masterCheckbox/masterSetting (the Reagents switch on the main page) only grey these out when they share the page.
-local function registerReagents(category, cfg, defaults, onChange, class, masterCheckbox, masterSetting)
-    local amount = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_REAGENT_THRESHOLD", "reagentThreshold", cfg,
-        Settings.VarType.Number, L["Ask when a reagent is at or below"], defaults.reagentThreshold)
-    local limits = ns.Commands.LIMITS.reagent
-    local options = Settings.CreateSliderOptions(limits[1], limits[2], 1)
-    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
-    local slider = Settings.CreateSlider(category, amount, options,
-        L["Ask about the nearest vendor selling a class reagent when you have this many or fewer."])
-    amount:SetValueChangedCallback(onChange)
-    local function underMaster(initializer)
-        if masterCheckbox and initializer.SetParentInitializer then
-            initializer:SetParentInitializer(masterCheckbox, function() return masterSetting:GetValue() end)
-        end
+    local function control(dest, key, name, kind, limits, values, disabled, desc)
+        local opt = { name = name, type = kind, desc = desc, disabled = disabled,
+            get = function() return cfg[key] end,
+            set = function(_, v) cfg[key] = v; onChange(); O.Refresh() end }
+        if limits then opt.min, opt.max, opt.step = limits[1], limits[2], 1 end
+        if values then opt.values = values end
+        return add(dest, key, opt)
     end
-    underMaster(slider)
+    local function public(dest, key, name, disabled)
+        local e = P.KEYS[key]
+        local opt = { name = name, disabled = disabled, desc = disabled and L["Enable the related warning or On-screen notice to edit this value. Disabled values are retained."] or L["Changes apply to this character immediately."],
+            type = e.kind == "boolean" and "toggle" or e.kind == "enum" and "select" or "range",
+            get = function() return e.get(cfg) end,
+            set = function(_, v) P.Set(cfg, key, v, onChange); O.Refresh() end }
+        if e.values then opt.values = { warning = L["Warning"], toast = L["Toast"] } end
+        if e.limits then local b = ns.Commands.LIMITS[e.limits]; opt.min, opt.max, opt.step = b[1], b[2], 1 end
+        return add(dest, key, opt)
+    end
+    local function action(dest, key, name, fn)
+        return add(dest, key, { type = "execute", name = name, func = fn })
+    end
+    local function run(command) if O.Run then O.Run(command) end end
+    local function toggle(dest, key, name, disabled, desc) return control(dest, key, name, "toggle", nil, nil, disabled, desc) end
+    local function range(dest, key, name, limit, disabled)
+        return control(dest, key, name, "range", ns.Commands.LIMITS[limit], nil, disabled,
+            L["Enable the related warning or buying switch to edit this value. Disabled values are retained."])
+    end
+    local function select(dest, key, name, values) return control(dest, key, name, "select", nil, values) end
+    local function off(key) return function() return cfg[key] == false end end
+    toggle(home, "bagEnabled", L["Warn about bag space"])
+    public(home, "bags.threshold", L["Free bag slots at or below"], off("bagEnabled"))
+    toggle(home, "durEnabled", L["Warn about durability"])
+    range(home, "durThreshold", L["Warn below this durability (%)"], "dur", off("durEnabled"))
+    toggle(home, "tradeEnabled", L["Warn about profession training"])
+    range(home, "tradeThreshold", L["Points below the skill limit"], "trade", off("tradeEnabled"))
+    toggle(home, "ammoEnabled", L["Ammo"])
+    toggle(home, "reagentsEnabled", L["Reagents"])
+    toggle(home, "suppliesEnabled", L["Supplies"])
+    range(ammo, "ammoThreshold", L["Warn at this much ammo or less"], "ammo", off("ammoEnabled"))
+    toggle(ammo, "ammoBuyEnabled", L["Buy ammo"])
+    local noAmmoBuy = function() return not cfg.ammoBuyEnabled end
+    toggle(ammo, "ammoBuyPrompt", L["Ask before buying ammo"], noAmmoBuy, L["Enable Buy ammo to edit this value."])
+    local grades = { equipped = L["same as equipped"], best = L["best usable"], cheapest = L["cheapest"] }
+    select(ammo, "arrowGrade", L["Arrows to buy"], grades).disabled = noAmmoBuy
+    select(ammo, "bulletGrade", L["Bullets to buy"], grades).disabled = noAmmoBuy
+    range(reagents, "reagentThreshold", L["Count of each reagent at or below"], "reagent", off("reagentsEnabled"))
+    local items = ns.Reagents.ForClass(class)
     cfg.reagentOff = cfg.reagentOff or {}
-    local proxy = setmetatable({}, {
-        __index = function(_, id) return not cfg.reagentOff[id] end,
-        __newindex = function(_, id, on) cfg.reagentOff[id] = (not on) or nil end,
-    })
-    for _, item in ipairs(ns.Reagents.ForClass(class)) do
-        local setting = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_REAGENT_" .. item.id, item.id, proxy,
-            Settings.VarType.Boolean, L["Reagent: %s"]:format(item.name), true)
-        underMaster(Settings.CreateCheckbox(category, setting, L["Ask about this reagent when it runs low, and buy it when reagent buying is on."]))
-        setting:SetValueChangedCallback(onChange)
+    for _, item in ipairs(items) do
+        local id = item.id
+        add(reagents, "item" .. id, { type = "toggle", name = L["Reagent: %s"]:format(item.name),
+            disabled = off("reagentsEnabled"), desc = L["Enable Reagents on Home to edit this value."],
+            get = function() return not cfg.reagentOff[id] end,
+            set = function(_, v) cfg.reagentOff[id] = not v or nil; onChange(); O.Refresh() end })
     end
-    registerReagentBuying(category, cfg, defaults, onChange, class)
-end
-
--- Food, water and pet food: a switch and a threshold slider each (the slider greys out with its switch),
--- and the warlock's healthstone reminder. Only what the class uses is listed: water for mana users, pet food
--- for hunters, the healthstone reminder for warlocks.
-local function registerSupplies(category, cfg, defaults, onChange, class, masterCheckbox, masterSetting)
-    local function underMaster(initializer)
-        if masterCheckbox and initializer.SetParentInitializer then
-            initializer:SetParentInitializer(masterCheckbox, function() return masterSetting:GetValue() end)
-        end
+    local noReagent = function() return #items == 0 end
+    toggle(reagents, "reagentBuyEnabled", L["Buy reagents"], noReagent, L["Your class does not use reagents."])
+    local noReagentBuy = function() return #items == 0 or not cfg.reagentBuyEnabled end
+    toggle(reagents, "reagentBuyPrompt", L["Ask before buying reagents"], noReagentBuy, L["Enable Buy reagents to edit this value; a class reagent is required."])
+    range(reagents, "reagentBuyTarget", L["Target count for each reagent"], "reagentBuyTarget", noReagentBuy)
+    local function supply(key, name)
+        toggle(supplies, key .. "Enabled", name, off("suppliesEnabled"), L["Enable Supplies on Home to edit this value."])
+        range(supplies, key .. "Threshold", name, key, function() return cfg.suppliesEnabled == false or cfg[key .. "Enabled"] == false end)
     end
-    local function row(key, tag, label, sliderLabel, tip)
-        local on = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_" .. tag .. "_ENABLED", key .. "Enabled", cfg,
-            Settings.VarType.Boolean, label, defaults[key .. "Enabled"])
-        local checkbox = Settings.CreateCheckbox(category, on, tip)
-        underMaster(checkbox)
-        local amount = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_" .. tag .. "_THRESHOLD", key .. "Threshold", cfg,
-            Settings.VarType.Number, sliderLabel, defaults[key .. "Threshold"])
-        local limits = ns.Commands.LIMITS[key]
-        local options = Settings.CreateSliderOptions(limits[1], limits[2], 1)
-        options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
-        local slider = Settings.CreateSlider(category, amount, options, tip)
-        if slider.SetParentInitializer then slider:SetParentInitializer(checkbox, function() return on:GetValue() end) end
-        on:SetValueChangedCallback(onChange)
-        amount:SetValueChangedCallback(onChange)
+    supply("food", L["Food"])
+    if ns.Supplies.UsesMana(class) then supply("water", L["Water"]) end
+    if class == "HUNTER" then supply("petFood", L["Pet food"]) end
+    if class == "WARLOCK" then toggle(supplies, "healthstoneRemind", L["Healthstone reminder"], off("suppliesEnabled")) end
+    local sounds = {}; for _, s in ipairs(ns.Supplies.SOUNDS) do sounds[s[1]] = s[3] end
+    select(home, "vendorMode", L["Destination on another map"], { ask = L["Ask which one"], auto = L["Navigate without asking"] })
+    select(home, "vendorPrefer", L["Preferred target"], { map = L["On your map"], distance = L["Closest"] })
+    local providers = {}; for _, p in ipairs(ns.Nav.PROVIDERS) do providers[p[1]] = p[2] end
+    select(nav, "navProvider", L["Waypoint"], providers)
+    select(nav, "instanceAnchor", L["Search origin in instances"], { hearth = L["Hearthstone location"], last = L["Last outdoor position"] })
+    toggle(nav, "ahEnabled", L["Route to the auction house"])
+    -- Appearance has three tabs: Notifications (every Toast or Warning), Status window and Sound.
+    pages.appearance.childGroups = "tab"
+    local notices = {}
+    appearance.notices = { type = "group", name = L["Notifications"], order = 1, args = notices }
+    toggle(home, "autoNotice", L["On-screen notice"])
+    public(notices, "appearance.notification-style", L["Style"])
+    local sound = select(soundPage, "remindSound", L["Notification sound"], sounds)
+    sound.set = function(_, v) cfg.remindSound = v; onChange(); run("sound " .. v) end
+    action(notices, "preview", L["Preview"], function() run("preview notice") end)
+    local isWarning = function() return cfg.notificationStyle == "warning" end
+    add(notices, "warningLook", { type = "description", fontSize = "small", hidden = function() return not isWarning() end,
+        name = L["Warning uses the game's large centered text. It has no appearance or position settings."] })
+    local function surface(key, name)
+        local args, hidden
+        if key == "toast" then args, hidden = notices, isWarning
+        else args = {}; add(appearance, key, { type = "group", name = name, args = args }).order = 2 end
+        local function shown(opt) opt.hidden = hidden; return opt end
+        if key == "hud" then public(args, "appearance.hud.locked", L["Lock position"]) end
+        shown(public(args, "appearance." .. key .. ".background-opacity", L["Background opacity"], key == "toast" and off("autoNotice") or nil))
+        shown(public(args, "appearance." .. key .. ".text-opacity", L["Text and icon opacity"], key == "toast" and off("autoNotice") or nil))
+        shown(public(args, "appearance." .. key .. ".scale", L["Scale"], key == "toast" and off("autoNotice") or nil))
+        if key == "hud" then action(args, "preview", L["Preview"], function() run("preview hud") end) end
+        shown(action(args, "move", L["Move"], function() if O.Move then O.Move(key) end end)).desc = key == "hud" and L["Unlock the position before moving. Done saves; Cancel or Escape restores the starting position."] or L["Move the toast placeholder. Done saves; Cancel or Escape restores the starting position."]
+        shown(action(args, "reset", L["Reset position"], function() if O.Reset then O.Reset(key) end end))
+        return args
     end
-    row("food", "FOOD", L["Food"], L["Ask when food is at or below"],
-        L["Ask about the nearest vendor selling food when you carry this many food items or fewer. A mage who can conjure food is reminded instead."])
-    if ns.Supplies.UsesMana(class) then
-        row("water", "WATER", L["Water"], L["Ask when water is at or below"],
-            L["Ask about the nearest vendor selling drink when you carry this many drinks or fewer. A mage who can conjure water is reminded instead."])
-    end
-    if class == "HUNTER" then
-        row("petFood", "PETFOOD", L["Pet food"], L["Ask when pet food is at or below"],
-            L["Ask about the nearest vendor selling food your pet eats when you carry this many of it or fewer. Nothing is asked while no pet is out."])
-    end
-    if class == "WARLOCK" then
-        local remind = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_HEALTHSTONE_REMIND", "healthstoneRemind", cfg,
-            Settings.VarType.Boolean, L["Healthstone reminder"], defaults.healthstoneRemind)
-        underMaster(Settings.CreateCheckbox(category, remind, L["Remind you to create a healthstone when you know the spell and carry none."]))
-        remind:SetValueChangedCallback(onChange)
-    end
-    -- Every class sees it (the command works for all); only a mage or a warlock is reminded. Choosing plays it.
-    local choices = {}
-    for _, sound in ipairs(ns.Supplies.SOUNDS) do choices[#choices + 1] = { sound[1], sound[3] } end
-    local setting = dropdown(category, cfg, defaults, onChange, "CLOSESTVENDOR_REMIND_SOUND", "remindSound",
-        L["Reminder sound"], choices, L["The sound that plays when a mage is reminded to conjure food or water, or a warlock to create a healthstone."])
-    setting:SetValueChangedCallback(function(...)
-        onChange(...)
-        if ns.Adapter then ns.Adapter.playSound(ns.Supplies.SoundId(setting:GetValue())) end
-    end)
-end
-
--- Ammo: its threshold (the switch is in Warnings on the main page), then buying. The grade dropdowns need a newer part of the API; without it
--- use /cvn arrows and /cvn bullets.
-local function registerAmmoBuying(category, cfg, defaults, onChange, masterCheckbox, masterSetting)
-    local amount = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AMMO_THRESHOLD", "ammoThreshold", cfg,
-        Settings.VarType.Number, L["Ask when ammo is at or below"], defaults.ammoThreshold)
-    local limits = ns.Commands.LIMITS.ammo
-    local options = Settings.CreateSliderOptions(limits[1], limits[2], 50)
-    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
-    local slider = Settings.CreateSlider(category, amount, options,
-        L["Ask about the nearest vendor selling your ammo when the equipped ammo drops to this number or fewer."])
-    if masterCheckbox and slider.SetParentInitializer then
-        slider:SetParentInitializer(masterCheckbox, function() return masterSetting:GetValue() end)
-    end
-    amount:SetValueChangedCallback(onChange)
-    local buy = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AMMOBUY_ENABLED", "ammoBuyEnabled", cfg,
-        Settings.VarType.Boolean, L["Buy ammo"], defaults.ammoBuyEnabled)
-    Settings.CreateCheckbox(category, buy, L["Fill your quiver or ammo pouch with ammo when a merchant window opens."])
-    local ask = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AMMOBUY_PROMPT", "ammoBuyPrompt", cfg,
-        Settings.VarType.Boolean, L["Ask before buying ammo"], defaults.ammoBuyPrompt)
-    Settings.CreateCheckbox(category, ask, L["Show the count and price and wait for a Yes instead of buying at once."])
-    buy:SetValueChangedCallback(onChange)
-    ask:SetValueChangedCallback(onChange)
-    if not hasDropdown() then return end
-    local grades = { { "equipped", L["same as equipped"] }, { "best", L["best usable"] }, { "cheapest", L["cheapest"] } }
-    local tip = L["Same as equipped buys what is in your ammo slot. Best usable buys the highest grade you are high enough level for. Cheapest buys the lowest price per piece."]
-    dropdown(category, cfg, defaults, onChange, "CLOSESTVENDOR_ARROW_GRADE", "arrowGrade", L["Arrows to buy"], grades, tip)
-    dropdown(category, cfg, defaults, onChange, "CLOSESTVENDOR_BULLET_GRADE", "bulletGrade", L["Bullets to buy"], grades, tip)
-end
-
--- The background colour swatch: a texture tinted with the colour, as the button's text.
-local function swatch(hex)
-    local r, g, b = ns.Status.Color(hex)
-    if not r then r, g, b = 0, 0, 0 end
-    return string.format("|TInterface\\Buttons\\WHITE8X8:16:48:0:0:8:8:0:8:0:8:%d:%d:%d|t",
-        math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5))
-end
-
-local COLOR_TIP = L["Click the swatch to choose any color for the status window background with the game's color picker. Black is the default and the kindest to an OLED screen; /cvn hud color black puts it back."]
-
--- The game's own colour swatch row (Settings.CreateColorSwatch, in Blizzard_Settings_Shared on Era
--- and Forever): label on the left, a small bordered square on the right that opens ColorPickerFrame.
--- Its setting holds "aarrggbb" (what CreateColorFromHexString reads and GenerateHexColor writes), so
--- a proxy turns cfg.hudColor ("rrggbb") into that and back; anything that is not a colour is ignored.
--- The value is read each time the page is shown, so /cvn hud color shows on the next visit.
--- Returns true when the row was added; false and the error when the game refused it.
-local function nativeSwatch(category, cfg, onChange)
-    local proxy = setmetatable({}, {
-        __index = function()
-            return "ff" .. (ns.Status.Color(cfg.hudColor) and cfg.hudColor:lower() or ns.Status.BLACK)
-        end,
-        __newindex = function(_, _, value)
-            local hex = type(value) == "string" and value:match("^%x%x(%x%x%x%x%x%x)$")
-            if hex then cfg.hudColor = hex:lower() end
-        end,
-    })
-    return pcall(function()
-        local setting = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_HUD_COLOR", "hudColor", proxy,
-            Settings.VarType.String, L["Background color"], "ff" .. ns.Status.BLACK)
-        Settings.CreateColorSwatch(category, setting, COLOR_TIP)
-        setting:SetValueChangedCallback(onChange)
-    end)
-end
-
--- The background colour. Best: the game's swatch row (nativeSwatch), where the client has
--- Settings.CreateColorSwatch and a picker that takes its calls (swatchPicker). Otherwise a settings
--- button whose text is a tinted square, opening the picker through pickColor, where the client has a
--- button maker, a page layout and a picker. Without any of that there is no control (it would do
--- nothing) and /cvn hud color still sets it. Both are read when the page is shown, so a colour set by
--- command appears the next time the page opens.
--- note(text) is told which control was built and exactly which needs are missing for the others.
-local function colorControls(category, cfg, onChange, pickColor, note, swatchPicker)
-    local noSwatch = {}
-    if not pickColor then noSwatch[#noSwatch + 1] = "color picker (ColorPickerFrame)"
-    elseif not swatchPicker then noSwatch[#noSwatch + 1] = "ColorPickerFrame:SetupColorPickerAndShow or :GetPreviousValues" end
-    if not (Settings.CreateColorSwatch and Settings.VarType.String) then noSwatch[#noSwatch + 1] = "Settings.CreateColorSwatch" end
-    if #noSwatch == 0 then
-        local ok, err = nativeSwatch(category, cfg, onChange)
-        if ok then
-            if note then note("background color control built as a swatch") end
-            return
-        end
-        noSwatch = { "Settings.CreateColorSwatch failed: " .. tostring(err) }
-    end
-    local layout = layoutOf(category)
-    local missing = {}
-    if not pickColor then missing[#missing + 1] = "color picker (ColorPickerFrame)" end
-    if not layout then missing[#missing + 1] = "page layout (second value of Settings.RegisterVerticalLayoutCategory, or category:GetLayout())" end
-    if not (layout and layout.AddInitializer) then missing[#missing + 1] = "layout.AddInitializer" end
-    if not CreateSettingsButtonInitializer then missing[#missing + 1] = "CreateSettingsButtonInitializer" end
-    if #missing > 0 then
-        if note then
-            note("background color control not built, missing: " .. table.concat(missing, ", ")
-                .. "; no swatch, missing: " .. table.concat(noSwatch, ", "))
-        end
-        return
-    end
-    local init
-    init = CreateSettingsButtonInitializer(L["Background color"], swatch(cfg.hudColor), function()
-        local r, g, b = ns.Status.Color(cfg.hudColor)
-        if not r then r, g, b = 0, 0, 0 end
-        pickColor(r, g, b, function(nr, ng, nb)
-            cfg.hudColor = ns.Status.Hex(nr, ng, nb)
-            if init and init.data then init.data.buttonText = swatch(cfg.hudColor) end
-            onChange()
+    local hud = surface("hud", L["Status window"])
+    if pickColor then
+        action(hud, "color", L["Background color"], function()
+            local r,g,b = ns.Status.Color(cfg.hudColor)
+            pickColor(r or 0,g or 0,b or 0,function(nr,ng,nb) cfg.hudColor = ns.Status.Hex(nr,ng,nb); onChange(); O.Refresh() end)
         end)
-    end, COLOR_TIP, true)
-    layout:AddInitializer(init)
-    if note then note("background color control built as a button; no swatch, missing: " .. table.concat(noSwatch, ", ")) end
-end
-
--- The status window page: Lock first, then scale, background opacity, text opacity, the background
--- colour and one mode dropdown per row group.
--- swatchPicker: see O.Register.
--- hudRow holds only the modes the player changed; a group not in it shows the default.
--- pickColor(r, g, b, onPick) opens the game's colour picker; nil where there is none.
-local function registerWindow(category, cfg, defaults, onChange, class, pickColor, note, swatchPicker)
-    local lock = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_HUD_LOCKED", "hudLocked", cfg,
-        Settings.VarType.Boolean, L["Lock window position"], defaults.hudLocked)
-    Settings.CreateCheckbox(category, lock, L["Stop the status window from being moved, Shift-drag included."])
-    lock:SetValueChangedCallback(onChange)
-    for _, s in ipairs({
-        { "hudScale", "SCALE", L["Window scale (%)"], 5, L["Size of the status window, in percent of normal."] },
-        { "hudAlpha", "ALPHA", L["Background opacity (%)"], 5, L["How solid the status window background is, in percent. At 0 no background is drawn: only the text and icons show."] },
-        { "hudTextAlpha", "TEXT_ALPHA", L["Text and icon opacity (%)"], 5, L["How solid the status window text and icons are, in percent."] },
+    else add(hud, "color", { type = "description", name = L["Color picker unavailable; use /cvn hud color #rrggbb."] }) end
+    for _, group in ipairs(ns.Status.GROUPS) do
+        local key = group
+        local reason = key == "ammo" and not ({ HUNTER=true, WARRIOR=true, ROGUE=true })[class] and L["Your class does not use ammo."] or
+            key == "reagents" and #items == 0 and #ns.Reagents.DisplayOnly(class) == 0 and L["Your class does not use reagents."] or nil
+        add(hud, "row" .. key, { type = "select", name = L["Show: %s"]:format(ns.Status.KeyName(key)),
+            values = { low = L["Only when low"], always = L["Always"], never = L["Never"] },
+            disabled = reason ~= nil, desc = reason or L["Choose when this row group is visible."],
+            get = function() return ns.Status.Mode(cfg, key) end,
+            set = function(_, v) if not reason and ns.Status.MODES[v] then cfg.hudRow = cfg.hudRow or {}; cfg.hudRow[key] = v; onChange(); O.Refresh() end end })
+    end
+    surface("toast", L["Toast"])
+    add(advanced, "scopeInfo", { type = "description", name = L["Settings are saved for this character. Vendors, trainers and auctioneers you learn are shared by your account."] })
+    add(advanced, "debug", { type = "toggle", name = L["Record debug information"],
+        get = function() return O.DebugEnabled and O.DebugEnabled() or false end,
+        set = function(_, v) run(v and "debug on" or "debug off") end })
+    action(advanced, "log", L["Show debug report"], function() run("log") end)
+    action(advanced, "clear", L["Clear debug report"], function() run("log clear") end)
+    -- KeepThat's local visual vocabulary: full rows, neutral body, muted notes and section gaps.
+    local function grey(value) return "|cffaaaaaa" .. value .. "|r" end
+    local function body(dest, key, value, size)
+        return add(dest, key, { type = "description", fontSize = size or "medium", name = value })
+    end
+    local function section(dest, id, label, first)
+        local start = dest[first].order
+        dest[id .. "Gap"] = { type = "description", fontSize = "small", width = "full", name = " ", order = start - .4 }
+        dest[id] = { type = "header", width = "full", name = label, order = start - .2 }
+    end
+    local function context(dest, key, value, first)
+        dest[key] = { type = "description", fontSize = "small", width = "full", name = grey(value), order = dest[first].order - .1 }
+    end
+    local function intro(dest, value)
+        dest.intro = { type = "description", fontSize = "medium", width = "full", name = "|cffdddddd" .. value .. "|r", order = 0 }
+    end
+    intro(home, L["Get help finding a vendor or trainer before supplies run out or bags fill up. Start by choosing what to watch; buying and route preferences have their own pages."])
+    section(home, "bagsHeading", L["Bag space"], "bagEnabled")
+    section(home, "durHeading", L["Durability"], "durEnabled")
+    section(home, "tradeHeading", L["Professions"], "tradeEnabled")
+    section(home, "featuresHeading", L["Other warnings"], "ammoEnabled")
+    intro(ammo, L["Get a vendor recommendation when equipped ammo runs low. Merchant buying is a separate choice: it can refill your quiver or ammo pouch when you open a merchant."])
+    if not ({ HUNTER=true, WARRIOR=true, ROGUE=true })[class] then
+        ammo.intro.name = "|cffdddddd" .. L["Your class does not use equipped ammo. These settings apply to characters with a bow, crossbow or gun; no ammo warning is generated for this character."] .. "|r"
+    end
+    section(ammo, "warningHeading", L["Low ammo"], "ammoThreshold")
+    section(ammo, "buyingHeading", L["Buying"], "ammoBuyEnabled")
+    section(ammo, "gradesHeading", L["Ammo grades"], "arrowGrade")
+    intro(reagents, L["Watch the reagents used by your class spells. Choose what to watch, then optionally stock up at merchants; the warning threshold and buying target are separate amounts."])
+    section(reagents, "warningHeading", L["Warnings"], "reagentThreshold")
+    section(reagents, "buyingHeading", L["Buying"], "reagentBuyEnabled")
+    intro(supplies, L["Find a vendor when food, drinks or pet food run low. Only supplies your class uses are listed. These warnings do not buy supplies for you."])
+    section(supplies, "foodHeading", L["Food"], "foodEnabled")
+    if supplies.waterEnabled then section(supplies, "waterHeading", L["Water"], "waterEnabled") end
+    if supplies.petFoodEnabled then section(supplies, "petFoodHeading", L["Pet food"], "petFoodEnabled") end
+    if supplies.healthstoneRemind then section(supplies, "healthstoneHeading", L["Healthstone"], "healthstoneRemind") end
+    supplies.foodThreshold.name = L["Ask when food is at or below"]
+    if supplies.waterThreshold then supplies.waterThreshold.name = L["Ask when water is at or below"] end
+    if supplies.petFoodThreshold then supplies.petFoodThreshold.name = L["Ask when pet food is at or below"] end
+    intro(nav, L["Choose how a waypoint is set, where searches start inside instances and whether the auction house counts."])
+    intro(restock, L["Set the counts that warn you, choose items, and decide whether to buy at merchants. Turn each warning on or off on Home."])
+    section(home, "targetHeading", L["Destination choice"], "vendorMode")
+    section(home, "noticeHeading", L["Notifications"], "autoNotice")
+    section(nav, "waypointHeading", L["Waypoint"], "navProvider")
+    section(nav, "instanceHeading", L["Inside instances"], "instanceAnchor")
+    section(nav, "auctionHeading", L["Auction house"], "ahEnabled")
+    context(home, "bagsHelp", L["Suggests a vendor when free bag slots reach this limit. Selling items is still up to you."], "bagEnabled")
+    context(home, "durHelp", L["Suggests a repair vendor when any equipped item falls below this durability."], "durEnabled")
+    context(home, "tradeHelp", L["Suggests a trainer when a known profession is close to its current skill limit and your level allows the next tier."], "tradeEnabled")
+    context(home, "featuresHelp", L["These switches control warnings. Set counts, individual items and merchant buying under Restock."], "ammoEnabled")
+    context(ammo, "warningHelp", L["Enable Ammo on Home to use this warning. The count follows your equipped ammo; it is not a buying target."], "ammoThreshold")
+    context(ammo, "buyingHelp", L["Buys into available quiver or ammo-pouch space when a merchant sells suitable ammo. Leave Ask before buying on to review the count and price; turning it off allows purchases without confirmation."], "ammoBuyEnabled")
+    context(ammo, "gradesHelp", L["Same as equipped matches your current ammo. Best usable chooses the highest grade your level allows; Cheapest chooses the lowest price per piece."], "arrowGrade")
+    context(reagents, "warningHelp", #items > 0 and L["Enable Reagents on Home to use these warnings. Checked items are watched and included when reagent buying is enabled."] or L["Your class has no vendor-sold reagents to watch or buy. Display-only item counts, when available, are controlled under Appearance, Status window."], "reagentThreshold")
+    context(reagents, "buyingHelp", L["Buys checked class reagents up to the amount below, counting what is already in your bags. Zero buys none. Turning off Ask before buying allows purchases without confirmation."], "reagentBuyEnabled")
+    context(supplies, "foodHelp", L["Enable Supplies on Home, then choose which supply warnings to use. Counts at or below the chosen amount need attention."], "foodEnabled")
+    if supplies.waterEnabled then context(supplies, "waterHelp", L["Counts drinks in your bags. Mages who know the conjure spell are reminded to make water instead of visiting a vendor."], "waterEnabled") end
+    if supplies.petFoodEnabled then context(supplies, "petFoodHelp", L["Counts food your current pet can eat. No pet-food warning is shown while your pet is dismissed."], "petFoodEnabled") end
+    if supplies.healthstoneRemind then context(supplies, "healthstoneHelp", L["Reminds you to cast Create Healthstone when you know the spell and carry no healthstone."], "healthstoneRemind") end
+    if class == "MAGE" then supplies.foodHelp.name = grey(L["Enable Supplies on Home to use food warnings. When you know Conjure Food, a low count reminds you to make food instead of visiting a vendor."]) end
+    context(home, "targetHelp", L["When a closer destination is on another map, Ask lets you choose. Navigate without asking uses your preference: On your map or Closest by distance."], "vendorMode")
+    context(nav, "waypointHelp", L["Automatic tries TomTom, then WaypointUI, then the game waypoint. If your selected method is unavailable, the usual fallback order is used."], "navProvider")
+    context(nav, "instanceHelp", L["A status-window row click inside a dungeon or raid searches from your hearthstone location or last outdoor position. Automatic questions are suppressed inside instances."], "instanceAnchor")
+    context(nav, "auctionHelp", L["A row click for tradable ammo or reagents can choose a closer auction house. The row sets a route; it does not place an auction order."], "ahEnabled")
+    intro(appearance, L["Choose how notifications look and sound, and how the status window looks."])
+    intro(notices, L["Every route, reminder and test message is a notification. It shows in the style you choose and plays the sound you choose."])
+    section(notices, "noticeHeading", L["Notifications"], "appearance.notification-style")
+    section(notices, "toastHeading", L["Toast"], "appearance.toast.background-opacity")
+    notices.toastHeading.hidden, notices.toastHeadingGap.hidden = isWarning, isWarning
+    intro(hud, L["Keep useful counts and warnings on screen. Click a routable row to navigate, or choose below when each group of rows should appear."])
+    section(hud, "positionHeading", L["Position"], "appearance.hud.locked")
+    section(hud, "lookHeading", L["Appearance"], "appearance.hud.background-opacity")
+    section(hud, "actionHeading", L["Preview and position"], "preview")
+    section(hud, "rowsHeading", L["Row visibility"], "row" .. ns.Status.GROUPS[1])
+    section(advanced, "scopeHeading", L["Settings scope"], "scopeInfo")
+    section(advanced, "debugHeading", L["Debug"], "debug")
+    context(home, "noticeHelp", L["Turn On-screen notice off to keep only the chat line. Choose the style and sound under Appearance."], "autoNotice")
+    context(notices, "styleHelp", L["Turn notifications on or off on Home. Set the sound on the Sound tab. Preview does not change your settings."], "appearance.notification-style")
+    intro(soundPage, L["Choose the sound that plays with every notification. Choosing a sound plays it; None is silent."])
+    context(soundPage, "soundHelp", L["Routes, class reminders and test messages all use this sound. No sound plays while On-screen notice is off. Questions play no notification sound."], "remindSound")
+    context(notices, "toastHelp", L["Move shows a placeholder. Select Done to save. Select Cancel or press Escape to discard changes. Reset position changes only the position."], "appearance.toast.background-opacity")
+    notices.toastHelp.hidden = isWarning
+    context(hud, "positionHelp", L["Lock position blocks Move, title dragging and Shift-dragging. Unlock to move; Done saves, while Cancel or Escape restores the starting position."], "appearance.hud.locked")
+    context(hud, "lookHelp", L["Background and text dim independently. Background opacity zero removes the fill; black is the default color. Scale changes the window size."], "appearance.hud.background-opacity")
+    context(hud, "actionHelp", L["Preview shows sample rows. Move shows a placeholder even when no live rows are visible. Reset position keeps your colors, opacity, scale and row choices."], "preview")
+    context(hud, "rowsHelp", L["Only when low shows rows needing attention; Always also shows normal counts; Never hides the group. Rows unavailable to your class are disabled with an explanation."], "row" .. ns.Status.GROUPS[1])
+    intro(advanced, L["Use this page to understand where settings are saved or collect information when something goes wrong. You do not need debug recording for normal play."])
+    context(advanced, "debugHelp", L["Turn recording on, repeat the problem, then open the report to copy it. Clearing asks for confirmation and removes diagnostic entries only; settings and learned places are kept."], "debug")
+    body(about, "title", L["Closest Vendor"], "large")
+    body(about, "version", function() return grey(L["Version %s"]:format(tostring(O.Version and O.Version() or "?"))) end, "small")
+    body(about, "gap0", " ", "small")
+    body(about, "purpose", L["Finds nearby vendors, trainers and supplies when you need them."])
+    body(about, "gap1", " ", "small")
+    add(about, "commandsHeading", { type = "header", name = L["Commands"] })
+    for _, command in ipairs({
+        { "settings", "/cvn", L["Open these settings."] },
+        { "help", "/cvn help", L["Show addon information and commands."] },
+        { "status", "/cvn status", L["Show current settings and feature availability."] },
+        { "demo", "/cvn demo", L["Run a tour of real routes, questions and notifications. Your waypoint comes back at the end."] },
+        { "sound", "/cvn sound <name>", L["Choose and play the notification sound."] },
+        { "debug", "/cvn debug on", L["Record diagnostics while you repeat a problem."] },
+        { "log", "/cvn log", L["Copy the debug report to share it."] },
     }) do
-        local setting = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_HUD_" .. s[2], s[1], cfg,
-            Settings.VarType.Number, s[3], defaults[s[1]])
-        local limits = ns.Commands.LIMITS[s[1]]
-        local options = Settings.CreateSliderOptions(limits[1], limits[2], s[4])
-        options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
-        Settings.CreateSlider(category, setting, options, s[5])
-        setting:SetValueChangedCallback(onChange)
+        body(about, "cmd_" .. command[1], L["|cffdddddd%s|r  %s"]:format(command[2], grey(command[3])))
     end
-    colorControls(category, cfg, onChange, pickColor, note, swatchPicker)
-    if not hasDropdown() then return end
-    if type(cfg.hudRow) ~= "table" then cfg.hudRow = {} end
-    local modes = { { "low", L["Only when low"] }, { "always", L["Always"] }, { "never", L["Never"] } }
-    local tip = L["Only when low shows the row while it needs attention. Always keeps it in the window. Never hides it."]
-    local default = ns.Status.DEFAULT_MODE
-    for _, row in ipairs(windowRows(class)) do
-        local key, reason = row[1], row[2]
-        local proxy = setmetatable({}, {
-            __index = function() return not reason and cfg.hudRow[key] or default end,
-            __newindex = function(_, _, mode) if not reason then cfg.hudRow[key] = mode end end,
-        })
-        local setting = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_HUDROW_" .. key:upper():gsub("[^%w]", "_"),
-            "mode", proxy, Settings.VarType.String, L["Show: %s"]:format(ns.Status.KeyName(key)), default)
-        local init = Settings.CreateDropdown(category, setting, function()
-            local c = Settings.CreateControlTextContainer()
-            for _, o in ipairs(modes) do c:Add(o[1], o[2]) end
-            return c:GetData()
-        end, reason or tip)
-        -- The game's own way to grey a row out: a modify predicate (Blizzard_SettingControls.lua,
-        -- SettingsElementHierarchyMixin:AddModifyPredicate, as Accessibility.lua uses it). Without it the
-        -- row stays usable but writes nothing.
-        if reason and init and init.AddModifyPredicate then init:AddModifyPredicate(function() return false end) end
-        setting:SetValueChangedCallback(onChange)
-    end
-end
-
--- cfg: saved settings table. defaults: default value per cfg key. onChange: called after any change.
--- class: the player's class token, for the reagent and row lists (no list without it).
--- pickColor: opens the game's colour picker (Adapter.pickColor), or nil when the client has none.
--- note(text): told which background colour control was built (swatch or button) and what was missing.
--- swatchPicker: true when the game's picker takes the calls of the game's own settings swatch
--- (Adapter.hasSwatchPicker); the swatch row is only built then.
--- Returns the main category, or nothing if the client has no usable settings API.
-function O.Register(cfg, defaults, onChange, class, pickColor, note, swatchPicker)
-    if not (Settings and Settings.RegisterVerticalLayoutCategory and Settings.RegisterAddOnSetting
-            and Settings.CreateCheckbox and Settings.CreateSlider and Settings.CreateSliderOptions) then
-        if note then note("background color control not built, missing: the Settings API (no settings page)") end
-        return
-    end
-    local category = remember(Settings.RegisterVerticalLayoutCategory(L["Closest Vendor"]))
-    header(category, L["Warnings"])
-    local ammoSwitch, ammoSetting, reagentsSwitch, reagentsSetting, suppliesSwitch, suppliesSetting
-    for _, row in ipairs(ROWS) do
-        local tag = row.key:upper()
-        local on = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_" .. tag .. "_ENABLED",
-            row.key .. "Enabled", cfg, Settings.VarType.Boolean, row.label, defaults[row.key .. "Enabled"])
-        local checkbox = Settings.CreateCheckbox(category, on, row.tip)
-
-        local amount = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_" .. tag .. "_THRESHOLD",
-            row.key .. "Threshold", cfg, Settings.VarType.Number, row.slider, defaults[row.key .. "Threshold"])
-        local limits = ns.Commands.LIMITS[row.key]
-        local options = Settings.CreateSliderOptions(limits[1], limits[2], row.step)
-        options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, row.format)
-        local slider = Settings.CreateSlider(category, amount, options, row.tip)
-        -- The slider is greyed out while its trigger is off.
-        if slider.SetParentInitializer then
-            slider:SetParentInitializer(checkbox, function() return on:GetValue() end)
+    about.commandsHelp = { type = "description", fontSize = "small", width = "full", name = grey(L["Type these commands in chat. Start with settings for changes, help for usage, or the demo to see the addon in action."]), order = about.commandsHeading.order + .1 }
+    body(about, "gap2", " ", "small")
+    body(about, "common", L["Use /cvn settings [page], /cvn help [topic], /cvn get <key>, /cvn set <key> <value>, /cvn preview [kind] and /cvn log clear."])
+    body(about, "tests", grey(L["Legacy /cvn test commands are live integration tests and may set a real waypoint."]), "small")
+    local function ink(args)
+        for _, opt in pairs(args) do
+            if opt.type == "description" then
+                opt.fontSize = opt.fontSize or "medium"
+                if type(opt.name) == "string" and opt.name ~= " " and not opt.name:find("^|c") then opt.name = "|cffdddddd" .. opt.name .. "|r" end
+            end
+            if opt.args then ink(opt.args) end
         end
-
-        on:SetValueChangedCallback(onChange)
-        amount:SetValueChangedCallback(onChange)
     end
-    -- Ammo, reagents and supplies: one switch each here; their thresholds and details are on their own pages.
-    local function switchRow(key, tag, label, tip)
-        local setting = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_" .. tag .. "_ENABLED", key, cfg,
-            Settings.VarType.Boolean, label, defaults[key])
-        local checkbox = Settings.CreateCheckbox(category, setting, tip)
-        setting:SetValueChangedCallback(onChange)
-        return checkbox, setting
-    end
-    ammoSwitch, ammoSetting = switchRow("ammoEnabled", "AMMO", L["Ammo"],
-        L["Ask about the nearest vendor selling your ammo when the equipped ammo runs low. Set the amount on the Ammo page."])
-    reagentsSwitch, reagentsSetting = switchRow("reagentsEnabled", "REAGENTS", L["Reagents"],
-        L["Ask about the nearest vendor selling a class reagent when it runs low. Set the amount and each reagent on the Reagents page."])
-    suppliesSwitch, suppliesSetting = switchRow("suppliesEnabled", "SUPPLIES", L["Supplies"],
-        L["Ask about the nearest vendor when food, water or pet food runs low, and remind a mage or warlock who can make their own. Set each one on the Supplies page."])
-    local notice = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AUTO_NOTICE", "autoNotice", cfg,
-        Settings.VarType.Boolean, L["On-screen notice"], defaults.autoNotice)
-    Settings.CreateCheckbox(category, notice, L["Show a message on screen when a target is chosen without asking."])
-    notice:SetValueChangedCallback(onChange)
-
-    -- Navigation: which target to take, where to search from inside an instance, auctioneers.
-    header(category, L["Navigation"])
-    if hasDropdown() then
-        dropdown(category, cfg, defaults, onChange, "CLOSESTVENDOR_VENDOR_MODE", "vendorMode",
-            L["When the closest target is on another map"],
-            { { "ask", L["Ask which one"] }, { "auto", L["Navigate without asking"] } },
-            L["Ask shows both targets and lets you pick. Navigate without asking sets the waypoint at once using the preference below."])
-        dropdown(category, cfg, defaults, onChange, "CLOSESTVENDOR_VENDOR_PREFER", "vendorPrefer", L["Preferred target"],
-            { { "map", L["On your map"] }, { "distance", L["Closest"] } },
-            L["On your map prefers the nearest target in the zone you are in. Closest prefers the nearest by distance, whatever the map."])
-        local providers = {}
-        for _, p in ipairs(ns.Nav.PROVIDERS) do providers[#providers + 1] = { p[1], p[2] } end
-        dropdown(category, cfg, defaults, onChange, "CLOSESTVENDOR_NAV_PROVIDER", "navProvider", L["Waypoint"], providers,
-            L["Automatic uses TomTom if you have it, then WaypointUI, then the game's own waypoint. Choose one to use it first; if it is not available the usual order applies."])
-        dropdown(category, cfg, defaults, onChange, "CLOSESTVENDOR_INSTANCE_ANCHOR", "instanceAnchor",
-            L["Search from, inside an instance"],
-            { { "hearth", L["Hearthstone location"] }, { "last", L["Last outdoor position"] } },
-            L["Clicking a status window row inside a dungeon or raid looks for the closest vendor to this place."])
-    end
-    local ah = Settings.RegisterAddOnSetting(category, "CLOSESTVENDOR_AH_ENABLED", "ahEnabled", cfg,
-        Settings.VarType.Boolean, L["Route to the auction house"], defaults.ahEnabled)
-    Settings.CreateCheckbox(category, ah, L["When a status window row item can be traded, navigate to the auction house if it is closer than a vendor."])
-    ah:SetValueChangedCallback(onChange)
-
-    -- The pages are in alphabetical order, with the status window last.
-    local ammo = page(category, L["Ammo"])
-    if ammo == category then header(category, L["Ammo"]) end
-    registerAmmoBuying(ammo, cfg, defaults, onChange, ammo == category and ammoSwitch or nil, ammoSetting)
-
-    local reagents = page(category, L["Reagents"])
-    if reagents == category then header(category, L["Reagents"]) end
-    registerReagents(reagents, cfg, defaults, onChange, class, reagents == category and reagentsSwitch or nil, reagentsSetting)
-
-    local supplies = page(category, L["Supplies"])
-    if supplies == category then header(category, L["Supplies"]) end
-    registerSupplies(supplies, cfg, defaults, onChange, class, supplies == category and suppliesSwitch or nil, suppliesSetting)
-
-    local window = page(category, L["Status window"])
-    if window == category then header(category, L["Status window"]) end
-    registerWindow(window, cfg, defaults, onChange, class, pickColor, note, swatchPicker)
-
-    Settings.RegisterAddOnCategory(category)
-    return category
+    ink(pages)
+    local ok, err = pcall(reg.RegisterOptionsTable, reg, O.APP, tree)
+    if not ok then O.failure = tostring(err); if note then note(O.failure) end; return end
+    O.tree = tree
+    -- Match KeepThat's initial size; Ace retains manual resizing between opens.
+    if dialog.SetDefaultSize then pcall(dialog.SetDefaultSize, dialog, O.APP, 600, 460) end
+    -- Optional native registration must never prevent the standalone tree from opening.
+    local registered, why = pcall(dialog.AddToBlizOptions, dialog, O.APP, L["Closest Vendor"])
+    if note then note(registered and "AceConfig registered; standalone settings available" or "AceConfig standalone only: " .. tostring(why)) end
+    return O.APP
 end
-
-function O.Open(category)
-    Settings.OpenToCategory(category:GetID())
+-- Where a page name lives in the tree.
+O.PATHS = { ammo = { "restock", "ammo" }, reagents = { "restock", "reagents" }, supplies = { "restock", "supplies" },
+    sound = { "appearance", "sound" } }
+function O.Open(_, page)
+    local dialog = library("AceConfigDialog-3.0")
+    if not (O.tree and dialog) then return false, O.failure end
+    local ok = pcall(function() dialog:Open(O.APP); dialog:SelectGroup(O.APP, unpack(O.PATHS[page or "home"] or { page or "home" })) end)
+    return ok
 end

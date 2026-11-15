@@ -26,7 +26,8 @@
 --   env.known                       set of profession names the addon has seen (live table)
 --   env.trainerBuckets              { [continentId] = { trainer records, see Search.NearestTrainer } }
 --   env.say(text)                   optional: print a line to chat
---   env.notify(text)                optional: show text on screen, silently (used by "auto" pins)
+--   env.notify(text)                optional: show text on screen as a Toast or Warning (the player's style)
+--   env.playSound(key)              optional: play the notification sound saved as key ("none" plays nothing)
 --   env.zoneName(mapId)             optional: the name of a map, or nil
 --   env.log(text)                   optional: record a decision in the debug log
 --   env.auctionBuckets              optional: { [continentId] = { auctioneer records, same shape as vendors } }
@@ -34,7 +35,6 @@
 --   env.anchor(which)               optional: { continent, x, y, map } (world x,y) for "hearth" (the
 --                                      hearthstone point) or "last" (the last position outside an
 --                                      instance), or nil when that one is not known
---   env.after(seconds, fn)          optional: run fn later; false when there are no timers (only the demo uses it)
 local _, ns = ...
 
 local L = ns.L
@@ -101,8 +101,9 @@ function C.PromptText(kind, vendor, zone, count, trade, two, otherZone)
     return L["Your bags are almost full.\n\nNavigate to the closest vendor, %s?"]:format(who)
 end
 
--- How long a demo (/cvn demo) lasts, in seconds.
-C.DEMO_SECONDS = 10
+
+-- Seconds /cvn demo shows each of its steps.
+C.DEMO_STEP = 5
 
 function C.New(env)
     local triggers = ns.Triggers.New(env.cfg)
@@ -123,13 +124,11 @@ function C.New(env)
     local professions = ns.Professions.New()
     local questionOpen = env.questionOpen or function() return false end
     local say = env.say or function() end
-    -- The demo: its token (a newer demo makes an older timer do nothing), the waypoint it set and
-    -- the question it asked.
-    local demoToken, demoHandle, demoPrompt = 0, nil, nil
-
+    local pinVendor -- the record the current waypoint is for, so a demo can put it back
+    local demoing = false -- a /cvn demo is running: its notifications show even with On-screen notice off
     local function clearNav()
         if handle then env.nav.Clear(handle) end
-        handle, pinTrade, pinKind, pinId = nil, nil, nil, nil
+        handle, pinTrade, pinKind, pinId, pinVendor = nil, nil, nil, nil, nil
     end
 
     -- Vendor triggers end a vendor waypoint, never a trainer's. With kind (and the item id for a
@@ -189,8 +188,17 @@ function C.New(env)
             pinTrade = trade
             pinKind = (kind == "arrow" or kind == "bullet") and "ammo" or kind
             pinId = id
+            pinVendor = v
         end
         log(("accepted: %s via %s"):format(v[2], handle and handle.kind or "nothing available"))
+    end
+
+    -- Every on-screen notification: shown in the player's style with the notification sound. Nothing
+    -- is shown or played while On-screen notice is off. quiet skips the sound (later notices of a batch).
+    local function notice(text, quiet)
+        if (env.cfg.autoNotice == false and not demoing) or not env.notify then return end
+        env.notify(text)
+        if not quiet and env.playSound then env.playSound(env.cfg.remindSound) end
     end
 
     -- Pin without asking and say why, in chat and on screen: the nearest target v, or onMap (the nearest
@@ -220,7 +228,7 @@ function C.New(env)
             text = L["Navigating to %s."]:format(describe(pick))
         end
         say(text)
-        if env.notify and cfg.autoNotice ~= false then env.notify(text) end
+        notice(text)
     end
 
     -- Ask about the nearest target v (and, when v is on another map, the nearest on the player's
@@ -314,16 +322,11 @@ function C.New(env)
         return L["You have no healthstone. Cast Create Healthstone to make one."]
     end
 
-    -- The reminder sound the player chose (nothing for "none"). The game call is the environment's.
-    local function chime()
-        if env.playSound then env.playSound(env.cfg.remindSound) end
-    end
-
-    local function remind(key, count)
+    local function remind(key, count, quiet)
         local text = reminderText(key, count)
         log("reminder: " .. key .. " (" .. tostring(count) .. ")")
         say(text)
-        if env.notify and env.cfg.autoNotice ~= false then env.notify(text) end
+        notice(text, quiet)
     end
 
     -- A supply request: key is "food", "water" or "pet" (the pet's diets are in lowSupply[key].bits).
@@ -432,8 +435,7 @@ function C.New(env)
             place(self.pending, self.pendingId)
         end
         local due = triggers.Reminders(remindKeys, combat, inside ~= nil)
-        for _, key in ipairs(due) do remind(key, remindCount[key]) end
-        if #due > 0 then chime() end -- one sound for the batch
+        for i, key in ipairs(due) do remind(key, remindCount[key], i > 1) end -- one sound for the batch
     end
 
     function self.OnMerchantShow()
@@ -508,9 +510,8 @@ function C.New(env)
             local text = L["This is a test reminder. Only mages and warlocks get real ones."]
             log("reminder: test")
             say(text)
-            if env.notify and env.cfg.autoNotice ~= false then env.notify(text) end
+            notice(text)
         end
-        chime()
     end
 
     -- For /cvn test: ask the usual question for kind, ignoring triggers and combat.
@@ -555,8 +556,7 @@ function C.New(env)
     -- kind is "sell", "repair", "ammo", "reagent" (id: the item id), "supply" (id: food, water or pet) or "trainer" (id: the profession
     -- name). An open question is closed, and a condition that is low counts as handled, as if the
     -- player had answered Yes. Returns true when a target was pinned; otherwise chat says why not
-    -- (nothing is said for a row that cannot be routed to). demo: the pin is only for show, so a
-    -- low condition is not marked as handled.
+    -- (nothing is said for a row that cannot be routed to).
     local function direct(kind, id, demo)
         log(("direct pin: %s%s"):format(tostring(kind), id and (" " .. tostring(id)) or ""))
         local find, name, trade, supplyBits = kind, nil, nil, nil -- find: what to search for
@@ -630,7 +630,7 @@ function C.New(env)
                 if name then text = L["Navigating to %s to buy %s at the auction house."]:format(where, name)
                 else text = L["Navigating to %s to buy ammo at the auction house."]:format(where) end
                 say(text)
-                if env.notify and env.cfg.autoNotice ~= false then env.notify(text) end
+                notice(text)
                 if not demo and triggers.Take(kind, id) then self.pending, self.pendingId = nil, nil end
                 return true
             end
@@ -653,93 +653,102 @@ function C.New(env)
 
     function self.Go(kind, id) return direct(kind, id) end
 
-    -- Take back what the running demo did: the waypoint it set (unless something else replaced it)
-    -- and the question it asked (unless a newer question or a cancel came after it).
-    local function endDemo()
-        if demoHandle and demoHandle == handle then
-            log("demo: waypoint cleared")
-            clearNav()
-        end
+    -- /cvn demo: a tour of real outcomes through the usual code. Each step searches the real vendor
+    -- data, sets a real waypoint or asks a real question, and shows the real notification in the
+    -- player's style with the notification sound. Every C.DEMO_STEP seconds the previous step is taken
+    -- back and the next one runs. At the end the waypoint the player had before the demo is restored.
+    -- Settings are only read, and no warning is marked as handled. done() runs when the tour is over.
+    local demoToken, demoHandle, demoPrompt, demoBefore = 0, nil, nil, nil
+    local function undoStep()
+        if demoHandle and demoHandle == handle then clearNav() end
         if demoPrompt and demoPrompt == promptId then cancelPrompt() end
         demoHandle, demoPrompt = nil, nil
     end
-
-    -- For /cvn demo: one random warning through the usual code, taken back after DEMO_SECONDS.
-    -- roll(n) gives a whole number from 1 to n. The warning is the notice of a pin made without
-    -- asking, the question, or a direct pin, for a random kind of vendor near the player; settings
-    -- are read as usual and never changed. A demo that is still running is ended first, and its
-    -- timer then does nothing. done() (optional) is called when this demo's time is up, after its
-    -- waypoint and question are gone. Returns false, doing nothing, when there are no timers.
-    -- A reminder is also a demo outcome. Food, water and pet food use made-up counts (and a made-up diet
-    -- when no pet is out); a direct pin only for kinds that need no weapon or pet.
-    local DEMO_KINDS = { "sell", "repair", "arrow", "bullet" }
-    local DEMO_SUPPLY = { "food", "water", "pet" }
-    local DEMO_DIRECT = { "sell", "repair", "food", "water" }
-    function self.Demo(roll, done)
-        if not env.after then return false end
-        endDemo()
-        demoToken = demoToken + 1
-        local mine = demoToken
-        local armed = env.after(C.DEMO_SECONDS, function()
-            if mine ~= demoToken then return end -- a newer demo is running: it has its own timer
-            log("demo: over")
-            endDemo()
-            if done then done() end
-        end)
-        if not armed then return false end
-        local way = roll(3)
-        if way == 3 then
-            local kind = DEMO_DIRECT[roll(#DEMO_DIRECT)]
-            log("demo: direct pin, " .. kind)
-            local ok
-            if kind == "food" or kind == "water" then ok = direct("supply", kind, true) else ok = direct(kind, nil, true) end
-            if ok then demoHandle = handle end
-            return true
+    local function endDemo()
+        undoStep()
+        demoing = false
+        local before = demoBefore
+        demoBefore = nil
+        if before then lastKind, lastTrade = before.lastKind, before.lastTrade end
+        if before and before.v and not handle then
+            pin(before.v, before.trade, before.kind, before.id)
+            log("demo: previous waypoint restored")
         end
-        local pick = roll(#DEMO_KINDS + #DEMO_SUPPLY + 1)
-        if pick == #DEMO_KINDS + #DEMO_SUPPLY + 1 then
-            log("demo: reminder")
-            testRemind()
-            return true
-        end
-        if pick > #DEMO_KINDS then -- food, water or pet food: made-up count, the pet's diet or a made-up one
-            local key = DEMO_SUPPLY[pick - #DEMO_KINDS]
+    end
+    -- Pin without asking (way "auto") or ask (way "ask") for kind; key is the supply key for "supply".
+    local function demoRoute(way, kind, key)
+        local name, bits
+        if kind == "supply" then
             local s = env.supplies and env.supplies()
-            if key == "water" and s and s.class and not ns.Supplies.UsesMana(s.class) then key = "food" end
             local diets = s and s.diets
-            if key == "pet" and not diets then diets = { [ns.Supplies.DIETS[roll(#ns.Supplies.DIETS)]] = true } end
-            local count = roll(6) - 1
-            local name = supplyName(key, diets)
-            log(("demo: %s, %s (%d left)"):format(way == 1 and "pin without asking" or "question", key, count))
-            local v, why, onMap, x, y = findVendor("supply", nil, nil, ns.Supplies.Want(key, diets))
-            if why == "nopos" then
-                say(L["No map position here (dungeons and some areas have none). Try again outside."])
-            elseif why == "novendor" then
-                say(noVendorText("supply", name))
-            elseif way == 1 then
-                autoPin("supply", v, onMap, x, y, nil, name, key)
-                demoHandle = handle
-            else
-                demoPrompt = promptId + 1
-                ask("supply", v, onMap, x, y, count, nil, name, key, function() demoHandle, demoPrompt = handle, nil end)
-            end
-            return true
+            if key == "pet" and not diets then diets = { [ns.Supplies.DIETS[1]] = true } end
+            name, bits = supplyName(key, diets), ns.Supplies.Want(key, diets)
         end
-        local kind = DEMO_KINDS[pick]
-        log(("demo: %s, %s"):format(way == 1 and "pin without asking" or "question", kind))
-        local v, why, onMap, x, y = findVendor(kind)
-        if why == "nopos" then
-            say(L["No map position here (dungeons and some areas have none). Try again outside."])
-        elseif why == "novendor" then
-            say(noVendorText(kind))
-        elseif way == 1 then
-            autoPin(kind, v, onMap, x, y)
+        log(("demo: %s, %s"):format(way == "auto" and "pin without asking" or "question", key or kind))
+        local v, why, onMap, x, y = findVendor(kind, nil, nil, bits)
+        if why == "nopos" then say(L["No map position here (dungeons and some areas have none). Try again outside."]) return end
+        if why == "novendor" then say(noVendorText(kind, name)) return end
+        if way == "auto" then
+            autoPin(kind, v, onMap, x, y, nil, name, key)
             demoHandle = handle
         else
             demoPrompt = promptId + 1 -- the id ask gives this question
-            ask(kind, v, onMap, x, y, nil, nil, nil, nil, function() demoHandle, demoPrompt = handle, nil end)
+            ask(kind, v, onMap, x, y, kind == "supply" and 2 or nil, nil, name, key, function() demoHandle, demoPrompt = handle, nil end)
         end
-        return true
+    end
+    -- The tour for this character's class: notifications, questions, every vendor type, a row click
+    -- and a reminder.
+    local function demoSteps()
+        local s = env.supplies and env.supplies()
+        local class = s and s.class
+        local steps = {
+            function() demoRoute("auto", "sell") end,
+            function() demoRoute("ask", "repair") end,
+            function() demoRoute("auto", "supply", "food") end,
+        }
+        if class == "HUNTER" then steps[#steps + 1] = function() demoRoute("ask", "supply", "pet") end
+        elseif class and ns.Supplies.UsesMana(class) then steps[#steps + 1] = function() demoRoute("ask", "supply", "water") end end
+        steps[#steps + 1] = function() demoRoute("auto", "arrow") end
+        steps[#steps + 1] = function()
+            -- A row click: the class's first watched reagent (a closer auction house may win), else repair.
+            local r = (env.reagents and env.reagents() or {})[1]
+            log("demo: row click, " .. (r and "reagent" or "repair"))
+            local ok
+            if r then ok = direct("reagent", r.item.id, true) else ok = direct("repair", nil, true) end
+            if ok then demoHandle = handle end
+        end
+        steps[#steps + 1] = function() log("demo: reminder"); testRemind() end
+        return steps
+    end
+    -- Stop a running demo now: its waypoint and question go and the previous waypoint comes back.
+    function self.StopDemo()
+        if not demoing then return end
+        demoToken = demoToken + 1 -- its next step timer does nothing
+        log("demo: stopped")
+        endDemo()
+    end
+    function self.Demo(done)
+        if not env.after then return false end
+        if demoing then endDemo() end -- a running demo is taken back first, its own waypoint put back
+        demoBefore = { v = pinVendor, trade = pinTrade, kind = pinKind, id = pinId, lastKind = lastKind, lastTrade = lastTrade }
+        demoToken = demoToken + 1
+        local mine = demoToken
+        local steps = demoSteps()
+        local function run(i)
+            if mine ~= demoToken then return end -- a newer demo is running
+            undoStep()
+            if i > #steps then
+                log("demo: over")
+                endDemo()
+                if done then done() end
+                return
+            end
+            steps[i]()
+            if not env.after(C.DEMO_STEP, function() run(i + 1) end) then endDemo(); return false end
+            return true
+        end
+        demoing = true
+        return run(1)
     end
 
     -- What the current waypoint is for: "sell", "repair", "ammo", "reagent" (plus the item id) or

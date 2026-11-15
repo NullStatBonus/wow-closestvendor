@@ -38,6 +38,20 @@ class Checks(unittest.TestCase):
         with open(self.path(rel), "w") as f:
             f.write(text.replace(old, new, 1))
 
+    def test_embedded_library_license_required(self):
+        os.remove(self.path("ClosestVendor/Libs/LICENSE.txt"))
+        code, out = self.run_script("check-toc.sh", VANILLA)
+        self.assertNotEqual(code, 0)
+        self.assertIn("Libs/LICENSE.txt", out)
+
+    def test_embedded_library_load_order_required(self):
+        self.edit(VANILLA, "Libs/LibStub/LibStub.lua\n", "")
+        with open(self.path(VANILLA), "a") as f:
+            f.write("\nLibs/LibStub/LibStub.lua\n")
+        code, out = self.run_script("check-toc.sh", VANILLA)
+        self.assertNotEqual(code, 0)
+        self.assertIn("ORDER", out)
+
     def test_good_copy_passes_every_check(self):
         for toc in (VANILLA, CAMELOT):
             self.assertEqual(self.run_script("check-toc.sh", toc)[0], 0, toc)

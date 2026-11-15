@@ -27,13 +27,13 @@ local POPUP = "CLOSESTVENDOR_CONFIRM"
 local POPUP_REAGENTS = "CLOSESTVENDOR_CONFIRM_REAGENTS"
 -- The question text is passed whole as the first argument, so "%" in vendor names is safe.
 if StaticPopupDialogs then
-    for _, which in ipairs({ POPUP, POPUP_REAGENTS }) do
+    for _, which in ipairs({ POPUP, POPUP_REAGENTS, "CLOSESTVENDOR_SAMPLE", "CLOSESTVENDOR_CLEAR_LOG" }) do
         StaticPopupDialogs[which] = {
             text = "%s",
             button1 = YES or "Yes",
             button2 = NO or "No",
             OnAccept = function(_, accept) if accept then accept() end end,
-            timeout = 0,
+            timeout = which == "CLOSESTVENDOR_SAMPLE" and 10 or 0,
             whileDead = false,
             hideOnEscape = true,
             preferredIndex = 3,
@@ -70,7 +70,8 @@ end
 local DB, CHAR, controller, timerArmed, panel, log, runMerchantParts
 local colorNote = "not registered" -- what Options said about the background colour control
 local buckets, trainerBuckets, auctionBuckets = {}, {}, {}
-local tracker, windowDirty, skillCache, playerClass
+local tracker, toast, sampleToast, windowDirty, skillCache, playerClass
+local sampleToken, sampleKind = 0, nil
 
 -- Print to chat. "|" starts an escape code in chat, so it is doubled in the text.
 local function say(text)
@@ -116,9 +117,16 @@ local function readExternal()
 end
 
 -- Shipped, NorgannonDB and learned vendors, converted to world coordinates once and bucketed by continent.
+local vendorIds = {} -- every npc id in the search pool, before the trade filter
 local function rebuildBuckets()
     for k in pairs(buckets) do buckets[k] = nil end
-    local list = ns.Discovery.Pool(ns.ShippedVendors or {}, external.list, DB.learned)
+    local known = {}
+    for _, v in ipairs(ns.ShippedVendors or {}) do known[v[1]] = true end
+    for _, v in ipairs(external.list) do known[v[1]] = true end
+    local pool = ns.Discovery.Pool(ns.ShippedVendors or {}, external.list, DB.learned)
+    vendorIds = {}
+    for _, r in ipairs(pool) do vendorIds[r[1]] = true end
+    local list = ns.Discovery.Tradable(pool, known, CHAR.standing)
     for _, r in ipairs(list) do
         local continent, wx, wy = A.toWorld(r[3], r[4], r[5])
         if continent then
@@ -205,12 +213,25 @@ local function evaluate()
 end
 
 -- Remember the merchant that just opened (position is the player's, within interaction range).
+-- A vendor this character can see (target, mouseover, nameplate): remember whether it will trade
+-- with this character, and search again when that changed.
+local function learnStanding(unit)
+    local id = A.npc(unit)
+    if not id or not vendorIds[id] then return end
+    local can = A.canTrade(unit)
+    if can == nil or CHAR.standing[id] == can then return end
+    CHAR.standing[id] = can
+    log.Add(("standing: npc %d %s"):format(id, can and "will trade" or "will not trade (Unfriendly or Hostile)"))
+    rebuildBuckets()
+end
 local function learnMerchant()
     local m = A.merchant()
     if not m then return end
+    local changed = CHAR.standing[m.id] ~= true
+    CHAR.standing[m.id] = true -- its window opened: it trades with this character
     local map, x, y = A.mapPosition()
     if not map then return end
-    if ns.Discovery.Record(DB.learned, { m.id, m.name, map, x, y, m.faction, m.repair, m.ammo, m.reagents, m.supplies }) then
+    if ns.Discovery.Record(DB.learned, { m.id, m.name, map, x, y, m.faction, m.repair, m.ammo, m.reagents, m.supplies }) or changed then
         rebuildBuckets()
     end
 end
@@ -241,6 +262,7 @@ local function learnAuctioneer()
 end
 
 local function init()
+    local existingUser = type(ClosestVendorDB) == "table" or type(ClosestVendorCharDB) == "table"
     ClosestVendorDB = ClosestVendorDB or {}
     DB = ClosestVendorDB -- shared by the account: the vendors, trainers and auctioneers learned
     -- Everything the player sets, and what is true of this character only, is saved per character. A
@@ -276,11 +298,14 @@ local function init()
     for key, mode in pairs(CHAR.cfg.hudRow) do
         if ns.Status.Group(key) ~= key or not ns.Status.MODES[mode] then CHAR.cfg.hudRow[key] = nil end
     end
+    if ns.Presentation then ns.Presentation.Migrate(CHAR.cfg, existingUser) end
+    CHAR.toast = type(CHAR.toast) == "table" and CHAR.toast or {}
     CHAR.hud = CHAR.hud or {} -- where the status window was dragged to; empty means its default place
     DB.learned = DB.learned or {}
     DB.auctioneers = DB.auctioneers or {}
     DB.trainers = DB.trainers or {}
     CHAR.professions = CHAR.professions or {}
+    CHAR.standing = CHAR.standing or {} -- [npcId] = true (trades) / false (Unfriendly or Hostile), as seen by this character
     CHAR.log = CHAR.log or {}
     log = ns.Log.New(CHAR.log, A.now)
 end
@@ -312,7 +337,7 @@ end
 -- One report line: each supply switch with its threshold.
 local function supplyLine()
     local c = CHAR.cfg
-    return ("supplies: %s; food %s (%d), water %s (%d), pet food %s (%d), healthstone reminder %s, reminder sound %s"):format(
+    return ("supplies: %s; food %s (%d), water %s (%d), pet food %s (%d), healthstone reminder %s, notification sound %s"):format(
         c.suppliesEnabled and "on" or "off", c.foodEnabled and "on" or "off", c.foodThreshold, c.waterEnabled and "on" or "off", c.waterThreshold,
         c.petFoodEnabled and "on" or "off", c.petFoodThreshold, c.healthstoneRemind and "on" or "off",
         tostring(c.remindSound))
@@ -365,6 +390,28 @@ local function refreshWindow()
     end
 end
 
+-- The newest thing the player asked for replaces whatever is on screen. clearNotices hides every
+-- notification, live or sample, Toast or Warning. endShows also stops a running demo (its previous
+-- waypoint comes back) or preview, cancels Move and brings back the real status window rows.
+local function clearNotices()
+    if toast then pcall(toast.Hide) end
+    if sampleToast then pcall(sampleToast.Hide) end
+    if A.hideNotice then A.hideNotice() end
+    if A.hideSamples then A.hideSamples() end
+end
+local function endShows()
+    sampleToken = sampleToken + 1 -- a running preview's timer now does nothing
+    if controller and controller.StopDemo then controller.StopDemo() end
+    if tracker and tracker.Move then tracker.Move.Cancel() end
+    if toast then toast.Move.Cancel() end
+    clearNotices()
+    if sampleKind then
+        sampleKind = nil
+        if tracker then pcall(tracker.Demo, nil) end
+        refreshWindow()
+    end
+end
+
 -- Something the window shows may have changed: one redraw shortly, however many events arrive.
 local function touchWindow()
     if not tracker or windowDirty then return end
@@ -377,14 +424,18 @@ end
 
 -- A window setting changed (scale, opacity, text opacity, colour, lock, a row mode): apply it and redraw at once.
 local function applyWindow()
+    if toast then pcall(toast.Apply) end
+    if sampleToast then pcall(sampleToast.Apply) end
     if not tracker then return end
     pcall(tracker.Apply)
     refreshWindow()
 end
 
 -- Open the settings page (the main one); false when it cannot be opened.
-local function openSettings()
-    return (panel and pcall(ns.Options.Open, panel)) and true or false
+local function openSettings(page)
+    if not panel then return false end
+    local ok, result = pcall(ns.Options.Open, panel, page)
+    return ok and result ~= false
 end
 
 local function buildWindow()
@@ -392,13 +443,15 @@ local function buildWindow()
         cfg = CHAR.cfg,
         pos = CHAR.hud,
         shiftDown = A.shiftDown,
+        escape = A.escape,
         go = function(row)
             log.Add("row click: " .. row.key .. " (" .. row.text .. ")")
+            endShows() -- a click replaces any demo, preview or notification on screen
             if controller and not controller.Go(row.kind, row.id) then log.Add("row click: nothing pinned") end
             touchWindow()
         end,
         openSettings = function()
-            if not openSettings() then say(L["The settings page is not available here; type /cvn help for the commands."]) end
+            if not openSettings() then say(L["The settings page is not available here: %s. Use /cvn help."]:format(ns.Options.failure or colorNote)) end
         end,
     })
     if ok then tracker = t else log.Add("status window not available: " .. tostring(t)) end
@@ -447,6 +500,11 @@ local function reportText()
         "locale: " .. tostring(info.locale),
         "navigation: " .. tostring(ns.Nav.Select(A.navApi(say), c.navProvider)) .. " (preference " .. tostring(c.navProvider) .. ")",
         ("vendors: %d shipped, %d learned, per continent: %s"):format(#(ns.ShippedVendors or {}), learned, table.concat(continents, " ")),
+        (function()
+            local yes, no = 0, 0
+            for _, v in pairs(CHAR.standing or {}) do if v then yes = yes + 1 else no = no + 1 end end
+            return ("standing (this character): %d vendors trade, %d will not (Unfriendly or Hostile)"):format(yes, no)
+        end)(),
         external.schema and ("NorgannonDB: found, schema %s, %d vendors added, %d skipped"):format(external.schema, #external.list, external.skipped)
             or (external.unsupported and "NorgannonDB: installed, but its data is not a supported schema" or "NorgannonDB: not found"),
         ("settings: bags %s/%d, durability %s/%d, ammo %s/%d, professions %s/%d"):format(c.bagEnabled and "on" or "off", c.bagThreshold,
@@ -466,6 +524,9 @@ local function reportText()
         ("instance anchor: %s, auction house routing: %s, auctioneers: %d shipped, %d learned"):format(tostring(c.instanceAnchor),
             c.ahEnabled and "on" or "off", #(ns.ShippedAuctioneers or {}), auctioneers),
     }
+    header[#header + 1] = "presentation scope: This character; style " .. tostring(c.notificationStyle) .. "; sample " .. tostring(sampleKind or "off")
+    header[#header + 1] = ("toast: background %s%%, text/icons %s%%, scale %s%%, position %s/%s/%s/%s"):format(tostring(c.toastAlpha),tostring(c.toastTextAlpha),tostring(c.toastScale),tostring(CHAR.toast.point),tostring(CHAR.toast.relPoint),tostring(CHAR.toast.x),tostring(CHAR.toast.y))
+    header[#header + 1] = "Move: hud " .. tostring(tracker and tracker.Move and tracker.Move.active or false) .. ", toast " .. tostring(toast and toast.Move.active or false)
     return ns.Log.Report(header, log.Entries(), log.Enabled()), header
 end
 
@@ -516,7 +577,14 @@ local function start()
         trainerBuckets = trainerBuckets,
         auctionBuckets = auctionBuckets,
         say = say,
-        notify = A.screenMessage,
+        notify = function(text)
+            clearNotices() -- one notification at a time: the newest replaces any other, live or sample
+            if CHAR.cfg.notificationStyle == "toast" then
+                if toast then pcall(toast.Show, text, 5) end
+            else
+                A.screenMessage(text)
+            end
+        end,
         playSound = function(key) A.playSound(ns.Supplies.SoundId(key)) end,
         zoneName = A.mapName,
         instanceType = A.instanceType,
@@ -531,6 +599,28 @@ local function start()
     panel = ok and category or nil
     -- So is the status window: a client whose frames differ only loses the window.
     buildWindow()
+    if A.createToast then
+        toast = A.createToast({ cfg = CHAR.cfg, pos = CHAR.toast, name = "ClosestVendorToast", escape = A.escape })
+        sampleToast = A.createToast({ cfg = CHAR.cfg, pos = CHAR.toast, name = "ClosestVendorSampleToast" })
+    end
+    ns.Options.Run = function(cmd) SlashCmdList["CLOSESTVENDOR"](cmd) end
+    ns.Options.DebugEnabled = log.Enabled
+    ns.Options.Version = function() return A.clientInfo().addon end
+    ns.Options.Move = function(kind)
+        sampleToken = sampleToken + 1; sampleKind = nil
+        if A.hideSamples then A.hideSamples() end
+        if sampleToast then pcall(sampleToast.Hide) end
+        if tracker then pcall(tracker.Demo, nil) end
+        local target = kind == "toast" and toast or tracker
+        if tracker and tracker.Move then tracker.Move.Cancel() end
+        if toast then toast.Move.Cancel() end
+        if not (target and target.Move and target.Move.Begin()) then say(kind == "hud" and L["Unlock the position before moving; the surface must be available."] or L["The toast surface is not available on this client."]) end
+    end
+    ns.Options.Reset = function(kind)
+        local target = kind == "toast" and toast or tracker
+        if target and target.Move then target.Move.Cancel() end
+        if target then pcall(target.Reset) end
+    end
     touchWindow()
 end
 
@@ -540,9 +630,10 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
     if not DB then return end
     local lines, action = ns.Commands.Run(CHAR.cfg, msg, A.classToken())
     for _, line in ipairs(lines) do say(line) end
+    if action and action[1] == "read" then return end
     if action and action[1] == "open" then
-        if openSettings() then return end
-        say(L["The settings page is not available here; use the commands above."])
+        if openSettings(action[2]) then return end
+        say(L["The settings page is not available here: %s. Use /cvn help."]:format(ns.Options.failure or colorNote))
         return
     end
     if action and action[1] == "debug" then
@@ -551,7 +642,9 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
         return
     end
     if action and action[1] == "log" then
-        if action[2] == "clear" then log.Clear() else showReport() end
+        if action[2] == "clear" then
+            A.showPopup("CLOSESTVENDOR_CLEAR_LOG", L["Clear recorded diagnostic entries? Learned places, settings and gameplay data are kept."], function() log.Clear() end)
+        else showReport() end
         return
     end
     if action and action[1] == "sound" then
@@ -576,23 +669,60 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
         return
     end
     if action and action[1] == "demo" then
-        -- A made-up window and one made-up warning for a few seconds; CHAR.cfg is only read.
+        -- A tour of real routes, questions and notifications (Controller.Demo), with made-up status
+        -- window rows while it runs. The waypoint the player had before comes back at the end.
         if not controller then return end
-        local roll = ns.Status.Roller(A.now())
-        local snap, fake = ns.Status.Demo(roll, CHAR.cfg)
-        local started = controller.Demo(roll, function()
+        endShows() -- a new demo replaces the old one, any preview and any notification
+        local snap, fake = ns.Status.Demo(ns.Status.Roller(A.now()), CHAR.cfg)
+        local started = controller.Demo(function()
+            sampleKind = nil
             if tracker then pcall(tracker.Demo, nil) end
             refreshWindow()
         end)
-        if started and tracker then
-            pcall(tracker.Demo, ns.Status.Visible(ns.Status.Rows(snap, fake), fake))
+        if not started then say(L["The demo needs a working timer API."]) return end
+        sampleKind = "demo"
+        say(L["Demo: real routes, questions and notifications, one every five seconds. Your previous waypoint comes back at the end."])
+        if tracker then pcall(tracker.Demo, ns.Status.Visible(ns.Status.Rows(snap, fake), fake)) end
+        return
+    end
+    if action and action[1] == "preview" then
+        local kind = action[2]
+        local token = sampleToken + 1
+        local function finish()
+            if token ~= sampleToken then return end
+            sampleKind = nil
+            if tracker then pcall(tracker.Demo, nil) end
+            if sampleToast then pcall(sampleToast.Hide) end
+            if A.hideSamples then A.hideSamples() end
+            refreshWindow()
+        end
+        if not A.after(10, finish) then say(L["Visual previews need a working timer API."]); return end
+        endShows() -- a new preview replaces any demo, preview or notification
+        sampleToken = token
+        sampleKind = kind
+        if kind == "hud" then
+            local snap, fake = ns.Status.Demo(ns.Status.Roller(A.now()), CHAR.cfg)
+            if tracker then pcall(tracker.Demo, ns.Status.Visible(ns.Status.Rows(snap, fake), fake)) end
+        end
+        if kind == "notice" then
+            -- The sample renderer of the chosen style and the notification sound, even while notices are off.
+            local text = L["Preview — Supply vendor (Elwynn Forest), 120 yards. Low food. Alternative: Repair vendor (Westfall), 240 yards."]
+            if CHAR.cfg.notificationStyle == "warning" then
+                if A.sampleWarning then A.sampleWarning(text, 10) end
+            elseif sampleToast then pcall(sampleToast.Show, text, 10) end
+            A.playSound(ns.Supplies.SoundId(CHAR.cfg.remindSound))
+        end
+        if kind == "prompt" then
+            A.showPopup("CLOSESTVENDOR_SAMPLE", L["Preview — Navigate to the sample vendor? These buttons perform no gameplay action."], function() end)
         end
         return
     end
     if action and action[1] == "hud" and action[2] == "reset" then
+        if tracker and tracker.Move then tracker.Move.Cancel() end
         for k in pairs(CHAR.hud) do CHAR.hud[k] = nil end
         log.Add("status window position reset")
     end
+    if ns.Options.Refresh then ns.Options.Refresh() end
     evaluate() -- a changed threshold may apply right away
     applyWindow() -- and so may a window setting or a row mode
 end
@@ -634,6 +764,11 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         return
     end
     if event == "MERCHANT_CLOSED" then retryParts, retryItems = {}, {} return end
+    if event == "PLAYER_TARGET_CHANGED" or event == "UPDATE_MOUSEOVER_UNIT" or event == "NAME_PLATE_UNIT_ADDED" then
+        local unit = event == "PLAYER_TARGET_CHANGED" and "target" or event == "UPDATE_MOUSEOVER_UNIT" and "mouseover" or arg1
+        if DB and type(unit) == "string" then learnStanding(unit) end
+        return
+    end
     -- Only the player's own gear, casts and pet matter; party and raid members fire these too.
     if (event == "UNIT_INVENTORY_CHANGED" or event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_PET") and arg1 ~= "player" then return end
     if log and (event ~= "ADDON_LOADED" or arg1 == ADDON) then
@@ -689,4 +824,8 @@ end
 pcall(ns.frame.RegisterEvent, ns.frame, "AUCTION_HOUSE_SHOW")
 pcall(ns.frame.RegisterEvent, ns.frame, "GET_ITEM_INFO_RECEIVED")
 pcall(ns.frame.RegisterEvent, ns.frame, "MERCHANT_CLOSED")
+-- Seeing an NPC tells whether it will trade with this character (reputation).
+for _, e in ipairs({ "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT", "NAME_PLATE_UNIT_ADDED" }) do
+    pcall(ns.frame.RegisterEvent, ns.frame, e)
+end
 pcall(ns.frame.RegisterEvent, ns.frame, "UNIT_PET") -- the active pet, so its diet follows pet changes

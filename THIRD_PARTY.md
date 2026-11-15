@@ -27,3 +27,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Ace3 settings libraries
+
+Closest Vendor embeds LibStub, CallbackHandler-1.0, AceGUI-3.0 and AceConfigRegistry/Dialog-3.0 from [WoWUIDev/Ace3](https://github.com/WoWUIDev/Ace3/tree/ac3d122). The pinned source, module versions and scope are recorded in `ClosestVendor/Libs/PROVENANCE.md`; the complete Ace3 redistribution notice is shipped as `ClosestVendor/Libs/LICENSE.txt`. LibStub carries its public domain declaration in its source. No AceDB or shared sibling-addon framework is required.

@@ -204,7 +204,7 @@ end
 -- frame fades too soon and is shared with real errors). A newer message replaces the one showing and
 -- restarts the time. Nothing happens, and one failure is reported, where the client has no frames.
 local NOTICE_SECONDS = 5
-local notice
+local notice, sampleNotice
 
 local function buildNotice()
     local f = CreateFrame("Frame", nil, UIParent)
@@ -212,8 +212,10 @@ local function buildNotice()
     f:SetPoint("TOP", 0, -200)
     f:SetFrameStrata("HIGH")
     f:EnableMouse(false)
-    f.text = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    f.text = ns.Presentation and ns.Presentation.Font(f, "GameFontHighlight") or f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.text:SetPoint("CENTER")
+    f.text:SetWidth(760)
+    f.text:SetTextColor(.867, .867, .867)
     -- A hidden frame gets no OnUpdate, so this costs nothing while no message shows.
     f:SetScript("OnUpdate", function(self, elapsed)
         self.left = (self.left or 0) - elapsed
@@ -228,9 +230,45 @@ function A.screenMessage(text)
     if not notice then return end
     call("screenMessage show", function()
         notice.text:SetText((text:gsub("|", "||")))
+        notice:SetHeight(math.max(40, (notice.text:GetStringHeight() or 24) + 16))
         notice.left = NOTICE_SECONDS
         notice:Show()
     end)
+end
+
+
+-- Samples use the same warning renderer, with a separate lifetime and no live state.
+function A.hideNotice()
+    if notice then call("notice hide", notice.Hide, notice) end
+end
+function A.sampleWarning(text, seconds)
+    if not sampleNotice then sampleNotice = call("sample warning", buildNotice) end
+    if not sampleNotice then return end
+    call("sample warning show", function()
+        sampleNotice.text:SetText((text:gsub("|", "||")))
+        sampleNotice:SetHeight(math.max(40, (sampleNotice.text:GetStringHeight() or 24) + 16))
+        sampleNotice.left = seconds or 10; sampleNotice:Show()
+    end)
+end
+function A.hideSamples()
+    if sampleNotice then call("sample warning hide", sampleNotice.Hide, sampleNotice) end
+    A.hidePopup("CLOSESTVENDOR_SAMPLE")
+end
+function A.escape(frame, cancel)
+    local name = call("move frame name", frame.GetName, frame)
+    if not name or type(UISpecialFrames) ~= "table" then return end
+    call("move hide handler", frame.SetScript, frame, "OnHide", cancel)
+    return function(active)
+        call("move Escape registration", function()
+            for i = #UISpecialFrames, 1, -1 do
+                if UISpecialFrames[i] == name then table.remove(UISpecialFrames, i) end
+            end
+            if active then UISpecialFrames[#UISpecialFrames + 1] = name end
+        end)
+    end
+end
+function A.createToast(env)
+    return call("toast frame", ns.Toast and ns.Toast.New, env)
 end
 
 function A.mapName(id)
@@ -315,10 +353,12 @@ function A.factionId(unit)
     return 0
 end
 
--- NPC id and name of the creature the player is talking to, or nil if it is not a creature.
-function A.npc()
-    local guid = call("UnitGUID", UnitGUID, "npc")
-    local name = call("UnitName", UnitName, "npc")
+-- NPC id and name of the creature the player is talking to (or of unit, such as "target"), or nil
+-- if it is not a creature.
+function A.npc(unit)
+    unit = unit or "npc"
+    local guid = call("UnitGUID", UnitGUID, unit)
+    local name = call("UnitName", UnitName, unit)
     local kind, id = (type(guid) == "string" and guid or ""):match("^(%a+)%-%d+%-%d+%-%d+%-%d+%-(%d+)")
     id = tonumber(id)
     if kind ~= "Creature" or not id or not name then return end
@@ -413,6 +453,14 @@ function A.externalVendors(mapIds)
     if not ok or not list then return nil, "unsupported" end
     local v = type(DB.schema) == "table" and DB.schema
     return list, skipped, v and (tostring(v.major) .. "." .. tostring(v.minor)) or "?"
+end
+
+-- Whether the player can trade with unit: true at Neutral or better, false at Unfriendly or Hostile,
+-- nil when the game does not say.
+function A.canTrade(unit)
+    local reaction = call("UnitReaction", UnitReaction, unit, "player")
+    if type(reaction) ~= "number" then return nil end
+    return reaction >= 4
 end
 
 -- The merchant window that just opened: { id, name, faction, repair, ammo, reagents, supplies }, or nil if

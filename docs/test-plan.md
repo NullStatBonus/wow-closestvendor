@@ -20,7 +20,7 @@ Each check has an action and an expected result. A line that starts with "Note" 
 ## 1. Settings page and commands
 
 - [ ] Open Esc, Options, AddOns, **Closest Vendor**. Expected: the page exists.
-- [ ] On the main settings page, look at Warnings. Expected, in this order: Bag space, Durability and Professions, each with one checkbox and one slider, then Ammo, Reagents and Supplies, each with one checkbox only.
+- [ ] On the Home page, look at Warnings. Expected, in this order: Bag space, Durability and Professions, each with one checkbox and one slider, then Ammo, Reagents and Supplies, each with one checkbox only.
 - [ ] Look at the pages under Closest Vendor. Expected, in this order: Ammo, Reagents, Supplies, then Status window last.
 - [ ] On the Ammo page, find the ammo slider. Expected: the Buy ammo, Ask before buying and arrow and bullet dropdowns are below it.
 - [ ] On the Reagents page, find the reagent slider. Expected: one checkbox for each reagent of your class is under it.
@@ -111,7 +111,7 @@ Each check has an action and an expected result. A line that starts with "Note" 
 - [ ] Open the log window. Expected: the text is selected.
 - [ ] Press Ctrl+C. Expected: the window copies all the text.
 - [ ] Press Esc. Expected: the window closes.
-- [ ] Enter `/cvn log clear`. Expected: the log is empty.
+- [ ] Enter `/cvn log clear`, then confirm. Expected: diagnostic entries are empty; cancel keeps them.
 - [ ] Enter `/cvn debug off`. Expected: the log stops recording.
 
 ## 8. Safety
@@ -175,7 +175,7 @@ Use `/cvn test sell` (and `/cvn test repair`) so you can repeat the checks. Ente
 - [ ] With `/cvn choice auto` and `prefer distance`: expected: the addon sets the waypoint at once, at the closer vendor.
 - [ ] With `/cvn choice auto`: expected: one chat line names the target.
 - [ ] With `/cvn choice auto`: expected: the same text shows on screen. It names the target with its zone and its distance in yards. When there were two candidates, it also names the other choice.
-- [ ] Check the sound. Expected: there is no sound beyond the map waypoint's own sound. (A reminder is different: it plays the reminder sound.)
+- [ ] Check the sound. Expected: the on-screen notification plays the notification sound once.
 - [ ] Count the seconds the on-screen text stays. Expected: about five seconds. It sits high and centered. Then it disappears.
 - [ ] Set a second waypoint while the text shows. Expected: the new text replaces the old text. The time restarts.
 - [ ] Cause a game error, for example try an action that fails. Expected: the error text still looks the same and lasts as long as usual.
@@ -250,27 +250,11 @@ The addon decides these from game calls that the fake-API tests cannot reach. Co
 
 ### 13.1 Settings layout
 
-- [ ] Open Esc, Options, AddOns, **Closest Vendor**. Expected: the main page shows (Warnings, Navigation).
-- [ ] Look under the main page. Expected: three subcategories show: Reagents, Ammo, Status window.
-- [ ] Check every control from section 1. Expected: each control is still there, on the page it moved to, with its saved value.
-- [ ] Note whether `Settings.RegisterVerticalLayoutSubcategory` exists on WoW Forever. Note the same for Classic Era. If it does not exist, expect everything on one page under section headers.
-- [ ] Look at the main page. Expected: section headers (Warnings, Navigation, ...) appear on it.
-- [ ] The headers and the swatch use the layout that the Register calls return. If either is missing, expected: the log line names the page layout.
-- [ ] Open the Status window page. Expected: Lock window position is first.
-- [ ] Look at the Status window page. Expected: after Lock window position come the scale, the background opacity (0-100) and the text and icon opacity (20-100).
-- [ ] Look at the Status window page. Expected: the background color swatch shows, only where the game has a color picker.
-- [ ] Look at the Status window page. Expected: exactly five Only when low / Always / Never dropdowns show, in this order: Ammo, Reagents, Bag space, Durability, Professions.
-- [ ] Look at the dropdowns. Expected: there is no dropdown for each profession or for each reagent.
-- [ ] As a Hunter, Rogue or Warrior, look at the Ammo row. Expected: the row works.
-- [ ] As any other class, look at the Ammo row. Expected: it is greyed out and unselectable.
-- [ ] As any other class, hover over the Ammo row. Expected: the text "Your class does not use ammo." shows.
-- [ ] As a class with no reagents or display-only items (Hunter, Warrior), look at the Reagents row. Expected: it is greyed out.
-- [ ] As a Hunter or Warrior, hover over the Reagents row. Expected: the text "Your class does not use reagents." shows.
-- [ ] As a Mage, look at the Reagents row. Expected: it works.
-- [ ] As a Warlock (Soul Shards), look at the Reagents row. Expected: it works.
-- [ ] As a Rogue (Blinding Powder), look at the Reagents row. Expected: it works.
-- [ ] Use a greyed row. Enter `/cvn hud row`. Expected: a greyed row never changes the output.
-- [ ] Note whether the row really greys on Classic Era. Note the same for WoW Forever.
+- [ ] Open settings through slash commands, cog and Options > AddOns. Check the ordered Ace tree and standalone fallback in section 20.
+- [ ] Home retains all warning master switches and bag/durability/profession thresholds; feature pages retain their prior gameplay controls.
+- [ ] Appearance has a Status window section, Lock position first, independent scale/background/text controls, color picker action, and six group visibility selectors (Ammo, Reagents, Supplies, Bags, Durability, Professions).
+- [ ] A class without applicable ammo or reagents sees those groups disabled with an explanation; class-specific item controls do not act for an inapplicable class.
+- [ ] All saved values survive reorganization; disabled controls retain their values.
 
 ### 13.2 The window
 
@@ -312,7 +296,7 @@ The addon decides these from game calls that the fake-API tests cannot reach. Co
 - [ ] Enter `/cvn hud scale 49` and `/cvn hud scale 201`. Expected: the addon refuses both.
 - [ ] Open the settings page. Expected: the scale slider matches.
 - [ ] Move the window far to a corner. Change the UI scale in Video settings. Expected: the window stays on screen. Or `/cvn hud reset` recovers it.
-- [ ] Click the cog button. Expected: the Closest Vendor main page opens.
+- [ ] Click the cog button. Expected: the Closest Vendor Home page opens.
 - [ ] Check the cog texture. Expected: it shows. It is not blank. It is not a missing-texture square. If it fails, the fallback is an asterisk.
 - [ ] Check the window background. Expected: it draws without `BackdropTemplate` errors.
 - [ ] Click a low row. Try ammo, a reagent, Bag space, Durability, and a profession within its threshold. Expected: the addon sets a waypoint at the closest vendor at once, with no question.
@@ -339,39 +323,11 @@ The addon decides these from game calls that the fake-API tests cannot reach. Co
 - [ ] Check the background. Expected: it keeps its own opacity.
 - [ ] Enter `/cvn hud textopacity 19` and `/cvn hud textopacity 101`. Expected: the addon refuses both.
 - [ ] Move the text opacity slider to its lowest value. Expected: it stops at 20.
-- [ ] Swatch look (Classic Era and WoW Forever): open the Status window page. Expected: a Background color row shows. The label is on the left. A small square swatch with a border is on the right.
-- [ ] Check the swatch position. Expected: it lines up with the controls of the sliders and the dropdowns. It is not a wide red button.
-- [ ] Hover over the swatch. Expected: the tooltip shows. The border turns gold.
-- [ ] Click the swatch. Expected: the picker opens.
-- [ ] Click the label. Expected: the picker opens.
-- [ ] Enter `/cvn log`. Expected: it says "background color control built as a swatch".
-- [ ] Fallback look: if the log says "built as a button; no swatch, missing: ..." instead, expect a wide push button with a colored tile in it.
-- [ ] In the fallback case, copy that log line into the bug report.
-- [ ] Color swatch: check a fresh install. Expected: the swatch shows the saved color, black.
-- [ ] Enter `/cvn hud color #101820`. Reopen the page. Expected: the swatch shows that color.
-- [ ] Enter `/cvn hud color red`. Expected: a message appears.
-- [ ] Enter `/cvn hud color black`. Expected: the color goes back to black.
-- [ ] Enter `/cvn hud color reset`. Expected: the color goes back to black.
-- [ ] Color picker on WoW Forever: click the swatch. Expected: the game color picker opens at the current color.
-- [ ] Look at the picker. Expected: any color is allowed. There is no opacity slider in it.
-- [ ] Move the wheel. Expected: the window background changes live.
-- [ ] Click OK. Expected: the window keeps the color. The swatch row shows it at once. In the fallback case, the button shows it when the page is next shown.
-- [ ] Click Cancel. Expected: the color goes back to the starting color.
-- [ ] Note whether `ColorPickerFrame:SetupColorPickerAndShow` exists on WoW Forever. Note the same for Classic Era.
-- [ ] Use a client with no picker (or no settings button). Expected: there is no swatch. There is no dead control.
-- [ ] On that client, enter `/cvn hud color #rrggbb`. Expected: it still works. Nothing errors.
-- [ ] Finding the picker: open Options, AddOns, Closest Vendor, Status window. Expected: the swatch is the Background color row (or, as fallback, the button). It is below the text opacity slider.
-- [ ] Enter `/cvn hud color` with no color. Expected: the same game color picker opens at the current color. This holds with or without the swatch.
-- [ ] Use the picker from `/cvn hud color`. Expected: the window follows the wheel. Cancel restores the color.
-- [ ] Use a client with no picker. Enter `/cvn hud color`. Expected: chat says so. It suggests `/cvn hud color #rrggbb`.
-- [ ] Note what each client does.
-- [ ] Report line: enter `/cvn log`. Expected: it has a line "color picker: available or missing, settings button: available or missing, background color control built as a swatch".
-- [ ] Alternative report line: "... built as a button; no swatch, missing: ..." names `Settings.CreateColorSwatch`, the picker calls or the error.
-- [ ] Alternative report line: "... not built, missing: ..." names each missing piece. The pieces are the color picker, the page layout, `layout.AddInitializer`, `CreateSettingsButtonInitializer` or the Settings API.
-- [ ] Enter `/cvn debug on` before `/reload`. Expected: the same sentence is in the log.
-- [ ] If the swatch is missing on Classic Era or WoW Forever, copy this line into the bug report.
+- [ ] Appearance > Status window > Background color opens the guarded game picker at the saved color. Change the wheel: the background updates live. Confirm keeps it; Cancel restores the original value. Repeat from `/cvn hud color`.
+- [ ] Without a picker, the page explains the absence and `/cvn hud color #101820` still works. Invalid colors are rejected; black/reset restores black. No dead picker control appears.
+- [ ] The report names AceConfig availability or registration failure and whether the game picker is available. Include this line in client compatibility bug reports.
 - [ ] OLED check: set the background to 0 and the text opacity to 40. Leave the window up for a minute over a dark area. Expected: nothing static is bright. There is no border and no fixed fill.
-- [ ] In the OLED check, look at a low line. Expected: only red text marks it.
+- [ ] In the OLED check, look at a low line. Expected: red row text with a red warning symbol and a visible Low label. Lines that are not low use neutral text.
 - [ ] Set a non-black color at opacity 0. Expected: the screen behind the window is untouched.
 - [ ] Enter `/reload`. Expected: the values survive.
 - [ ] Enter `/cvn log`. Expected: it shows "opacity N%, color #rrggbb, text opacity N%".
@@ -499,14 +455,14 @@ Enter `/cvn debug on`. Use `/cvn` to check the line "Supplies: food on (5), wate
 - [ ] Enter `/cvn sound none`. Expected: nothing plays. A reminder still shows in chat, with no sound.
 - [ ] Enter `/cvn sound banana`. Expected: chat lists the choices and nothing changes.
 - [ ] Enter `/cvn test remind` as a mage or a warlock. Expected: the reminder shows and the sound plays.
-- [ ] Let a vendor question appear for food (a warrior, or a mage without the spell). Expected: no reminder sound. The map pin makes its own sound when you say Yes.
+- [ ] Let a vendor question appear for food (a warrior, or a mage without the spell). Expected: no notification sound; a question is not a notification. The map pin makes its own sound when you say Yes.
 
 ### 14.4 Settings and commands
 
 - [ ] Open the settings page. Expected: a **Supplies** page sits after Reagents. It shows only the rows your class can use. A warlock also sees **Healthstone reminder**.
-- [ ] Open the Supplies page as any class. Expected: a **Reminder sound** dropdown with Whisper ping, Minimap ping, Group invite, Ready check and None. Choose one. Expected: it plays at once.
+- [ ] Open the Supplies page as any class. Expected: no sound control. Open Appearance, Sound tab. Expected: a **Notification sound** dropdown with Whisper ping, Minimap ping, Group invite, Ready check and None. Choose one. Expected: it plays at once.
 - [ ] Turn off the ammo switch (`/cvn ammo off`). Expected: food, water, pet food and reminders still work, and the Supplies page controls are not greyed out. Ammo and reagent questions stop.
-- [ ] Look in the Warnings section of the main page. Expected: a **Supplies** checkbox. Enter `/cvn supplies off`. Expected: no food, water or pet food question, reminder or red row, and the checkbox is cleared. `/cvn` shows "Supply warnings: off". Enter `/cvn supplies on`. Expected: they work again with the thresholds you had.
+- [ ] Look in the Warnings section of the main page. Expected: a **Supplies** checkbox. Enter `/cvn supplies off`. Expected: no food, water or pet food question, reminder or low row, and the checkbox is cleared. `/cvn` shows "Supply warnings: off". Enter `/cvn supplies on`. Expected: they work again with the thresholds you had.
 - [ ] Turn it on again. Turn off food only (`/cvn food off`). Expected: no food question. Water and pet food still work.
 - [ ] Repeat for `/cvn water off` and `/cvn petfood off`.
 - [ ] Enter `/cvn food 10`. Carry 10 food items. Expected: the addon asks. Carry 11. Expected: it does not ask.
@@ -565,7 +521,52 @@ Enter `/cvn debug on`. Use `/cvn` to check the line "Supplies: food on (5), wate
 - [ ] Open that vendor. Expected: nothing changes if the pin was right. If the vendor stands somewhere else, the next pin uses where you opened it.
 - [ ] Disable NorgannonDB and reload. Expected: `NorgannonDB: not found` and no errors.
 
+## 20. Cohesive presentation acceptance (both supported clients)
+
+- [ ] Enter `/cvn` with no arguments: Home opens. Enter `/cvn help`: addon purpose, scope and commands appear in chat without gameplay actions. Enter `/cvn status`: current values appear.
+
+Run on Classic Era and WoW Forever with only Closest Vendor installed, at matching UI scale. Keep screenshots named by client, surface, scale and opacity; record client build and addon version from `/cvn log`.
+
+- [ ] On a fresh install, confirm Toast is selected by default. Upgrade an existing account or character without a saved style: Warning remains selected. Reload with saved Warning and Toast choices and confirm each is retained. Notice off remains off.
+- [ ] Upgrade existing SavedVariables with custom thresholds, buying choices, row modes, colors, alpha and HUD position. Confirm all are retained; compare a second character and account-wide learned vendors. No profile conversion or copying occurs.
+- [ ] Open `/cvn settings`, `/cvn config`, `/cvn options`, the cog and game Options repeatedly. Confirm one tree, Home first, pages Home/Ammo/Reagents/Supplies/Navigation/Appearance/Advanced/About, This character scope, feature controls and no duplicate categories.
+- [ ] Verify standalone settings without native Settings registration; test missing Ace libraries and a failed registration in a disposable copy. Gameplay/commands continue and settings unavailability is explained. Check no errors on both clients with the shipped libraries.
+- [ ] Change values through UI and `/cvn set`; verify open controls and live visuals agree. Try missing, fractional, unknown, out-of-range and trailing values; no settings change. Verify legacy mixed-case reagent names still resolve.
+- [ ] Disable feature/buying switches; dependent controls keep their values and explain the prerequisite. Check a warrior's disabled reagent/ammo visibility groups and a mage/hunter/warlock's applicable controls. Verify food, water, pet food, buying targets, grades, sounds and navigation providers.
+- [ ] Open Background color, change then cancel; original color returns. Repeat while settings are reopened. Without a picker, verify explanatory text and `/cvn hud color` fallback.
+- [ ] Select Warning and Toast in turn; generate automatic and row-click notices with one and two candidates. Exactly one style shows target, zone, yards, reason and alternative, silently for five seconds. Newer notices replace and restart. Turn notice off: chat remains; changing style does not enable notices. Verify persistence independently on two characters.
+- [ ] Check the HUD, warning, toast, tooltip and confirmation together at matched scale. Hover native/third-party tooltips: their content and chrome remain intact. Use very long localized vendor/zone/item/action text; no essential text or full button label clips. Check uncached icons and item-quality material titles remain readable.
+- [ ] Set a real waypoint (`/cvn test sell`), turn On-screen notice off, then run `/cvn demo`. Expected: one step every five seconds: a route set without asking with a notification, a navigation question, food, then water (mana class) or pet food (hunter), arrows, a row click for your first watched reagent (or repair without reagents; with Route to the auction house on and a closer auctioneer, it routes there), and a reminder or test notification. Each notification uses your style and sound. Answer Yes to the question: a real waypoint is set, and the next step removes it. At the end, the waypoint from before the demo is back, the status window shows your real rows, and no setting changed. Run it twice quickly: only the newer tour continues, and its first notification replaces the old one. During the tour, click a status window row: the tour stops, the previous waypoint comes back, then the clicked row routes with its own notification. Run `/cvn preview notice`, then click a row: the sample is replaced by the live notification.
+- [ ] Preview hud, warning, toast, prompt and applicable reminder separately. Toast preview while Warning is selected must not save Toast. Unknown kinds list choices; non-mage/warlock reminder explains unavailability. Legacy test commands still perform live integration behavior.
+- [ ] Click Move with settings open: the placeholder and Done/Cancel must appear above settings even without an active toast. Move each surface, drag beyond screen bounds, then Done: position is clamped and survives reload. Repeat with Cancel and Escape: original position returns without saved changes. Lock before moving and while moving; neither title nor Shift-drag bypasses lock. Normal HUD title/Shift-drag and row navigation still work outside Move. Escape outside Move must not dismiss the persistent HUD.
+- [ ] Reset each position; verify only position changes, preserving color, opacity, scale, thresholds, modes and enabled states. Starting another Move/preview must not leave stale placeholders or let an old sample timer hide Move controls.
+- [ ] Inspect background opacity 0/80/100 and supported addon scales 100/150 for both HUD and toast. At 0 no fill/border/accent remains. Text/icon dimming is independent, including newly added rows and missing-icon fallbacks. Check warning cue and Low label in greyscale.
+- [ ] Repeat opening settings, preview and Move in combat and inside instances, with missing timers/map data/TomTom/WaypointUI and missing preferred fonts/control APIs. No gameplay errors; unavailable actions explain why. Confirmation/purchase guards and reminder meanings remain intact.
+- [ ] `/cvn log` remains copyable and includes effective style, notice enabled state, HUD/toast appearance, toast position, character scope and sample/Move state separately from real decisions. `/cvn log clear`: cancel keeps diagnostics; confirm clears only diagnostics.
+- [ ] Capture Home, Appearance, HUD low rows, tooltip, selected warning/toast, sample prompt and both Move placeholders; include long text and 0/80/100 opacity plus 100/150 scale comparisons. Reconcile every row in the change's coverage.md with these captures.
+
+## 21. Reputation standing
+
+- [ ] On a character that has opened a clan quartermaster's window (Gorhak in Magram Village or Molkar in Gelkis Village), confirm it is learned. On another character that has never seen it, trigger a sell warning nearby. Expected: the quartermaster is not offered.
+- [ ] On a character Unfriendly with that clan, target or mouse over the quartermaster. Expected: the debug log says it will not trade, and no later route goes to it. `/cvn log` shows the standing count.
+- [ ] Raise reputation to Neutral, target the quartermaster again. Expected: it can be offered again.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.
 - Warlock shards and rogue poisons.
+
+
+Toast movement/sound follow-up: verify the Appearance Notifications tab shows Toast Move and no lock, including characters with old toastLocked data. The status window still blocks title/Shift-drag and Move when locked. Set Style to Warning: the Toast controls are hidden and a note explains why. Change Sound and confirm `/cvn sound` reports it; with None, every notification is silent.
+
+
+Settings layout review: inspect all six pages, the three Restock pages and the Appearance tabs at normal and 150% UI scale in standalone and game Options. Controls occupy full rows, section headings have breathing room, and long dropdown labels/values remain readable. Appearance has Notifications and Status window tabs; all actions and row controls remain reachable by scrolling. The window title is Closest Vendor, with no This character or Shared Settings suffix; scope details are in Advanced. Compare About alongside KeepThat at matching scale: large addon name, small grey version, one-sentence purpose and separate command rows with grey explanations. Check window resizing and long translations.
+
+
+Settings context walkthrough: without reading README or hovering controls, explain what each page does and how its settings affect play. On Home distinguish warnings from buying; on Ammo/Reagents distinguish warning thresholds from stock targets and identify when money can be spent without confirmation. On Supplies identify applicable class behavior and shared sound usage. On Navigation explain Ask/Auto, fallback providers, instance origin and auction routing. On every Appearance tab distinguish live surfaces, safe samples and positioning; on Advanced follow the record/reproduce/copy workflow and confirm clear scope. About retains KT's readable hierarchy and explains command purposes. Context should appear before its decision, wrap completely and avoid duplicating the character scope on every page.
+
+
+Report/dropdown consistency: compare `/cvn log` beside `/kt log` at matching scale. Confirm standard frame chrome, title, copy hint, scrollable text, selection, read-only behavior, close/Escape and repeated opens with current data. Without working AceGUI, confirm the existing report/chat fallback. Inspect short dropdowns (styles, row modes, sounds, ammo grades) versus longer navigation labels at normal/150% scale and a resized window: controls should fit useful content without spanning the whole page or clipping essential choices. Section context and readable row spacing remain intact.
+
+
+Window-size screenshot follow-up: after reload, open CV and KT side by side at the same UI scale. Their settings should both start at 600×460; compact sliders, dropdowns and buttons should fit the content pane without stretching. Each page's introduction must precede its first section (not sit below the controls). Resize CV, close/reopen and confirm the user size is retained during the session. Check scrolling at 600×460 on every page and Appearance tab for complete text and reachable actions.

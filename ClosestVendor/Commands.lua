@@ -3,7 +3,7 @@
 -- {"test", kind} with kind "sell", "repair", "arrow", "bullet", "reagent", "food", "water", "petfood" or "remind"; {"open"} for the settings page;
 -- {"debug", on}; {"log"} to show the report; {"log", "clear"}; {"hud", "pick"} for /cvn hud color with no colour (open the colour picker); {"hud", "reset"} to put the status
 -- window back at its default position (lock, scale, opacity, text opacity, colour and row modes are
--- plain settings); {"demo"} for /cvn demo, which is not in the help on purpose.
+-- plain settings); {"demo"} for the tour of real routes, questions and notifications.
 -- Run(cfg, msg, class): class is the player's class token ("MAGE"), needed by the reagent commands.
 local _, ns = ...
 
@@ -14,11 +14,15 @@ ns.Commands = M
 
 -- Allowed whole-number range of each threshold: used by the commands and the settings panel.
 M.LIMITS = { bag = { 0, 200 }, dur = { 1, 100 }, ammo = { 0, 2000 }, trade = { 0, 300 }, reagent = { 1, 40 }, food = { 1, 40 }, water = { 1, 40 }, petFood = { 1, 40 },
-    hudScale = { 50, 200 }, hudAlpha = { 0, 100 }, hudTextAlpha = { 20, 100 }, reagentBuyTarget = { 0, 100 } }
+    toastScale = { 50, 200 }, toastAlpha = { 0, 100 }, toastTextAlpha = { 0, 100 }, hudScale = { 50, 200 }, hudAlpha = { 0, 100 }, hudTextAlpha = { 20, 100 }, reagentBuyTarget = { 0, 100 } }
 
 -- Chat treats "|" as an escape character, so no printed line may contain one.
 local HELP = {
     L["/cvn  show settings"],
+    L["/cvn settings [page], /cvn status, /cvn help appearance/diagnostics  settings and help"],
+    L["/cvn get <key>, /cvn set <key> <value>  read or change a public setting"],
+    L["/cvn demo  tour of real routes, questions and notifications; /cvn preview notice/hud/prompt  one safe sample"],
+
     L["/cvn config  open the settings page"],
     L["/cvn bags <slots>, /cvn dur <percent>, /cvn ammo <count>, /cvn reagent <count>, /cvn trade <points>  set a threshold"],
     L["/cvn bags on/off  switch a question on or off (same for dur, ammo, trade)"],
@@ -26,7 +30,7 @@ local HELP = {
     L["/cvn food <count>, /cvn water <count>, /cvn petfood <count>  set when to ask about food, water or pet food"],
     L["/cvn food on/off  switch it on or off (same for water, petfood)"],
     L["/cvn supplies on/off  switch all food, water, pet food and healthstone warnings on or off"],
-    L["/cvn sound <name>  choose the reminder sound (whisper, ping, invite, ready or none) and play it"],
+    L["/cvn sound <name>  choose the notification sound (whisper, ping, invite, ready or none) and play it"],
     L["/cvn nav <name>  choose the waypoint: auto, tomtom, waypointui or native"],
     L["/cvn buy on/off  buy ammo at merchants; /cvn buy ask/auto  ask first or buy at once"],
     L["/cvn arrows, /cvn bullets  equipped, best or cheapest: which ammo to buy"],
@@ -82,7 +86,7 @@ local function navName(key)
     return ns.Nav.PROVIDERS[1][2]
 end
 
--- The name of a saved reminder sound key, for chat.
+-- The name of a saved notification sound key, for chat.
 local function soundName(key)
     for _, s in ipairs(ns.Supplies.SOUNDS) do if s[1] == key then return s[3] end end
     return ns.Supplies.SOUNDS[1][3]
@@ -98,7 +102,7 @@ local function status(cfg)
         L["Professions: %s, trigger at %d point(s) or fewer from the skill limit"]:format(cfg.tradeEnabled and L["on"] or L["off"], cfg.tradeThreshold),
         L["Target choice: %s, prefers the target %s"]:format(cfg.vendorMode == "auto" and L["navigates without asking"] or L["asks which one"],
             cfg.vendorPrefer == "distance" and L["that is closest"] or L["on your map"]),
-        L["On-screen notice when choosing without asking: %s"]:format(cfg.autoNotice ~= false and L["on"] or L["off"]),
+        L["On-screen notice: %s, style %s"]:format(cfg.autoNotice ~= false and L["on"] or L["off"], cfg.notificationStyle == "warning" and L["Warning"] or L["Toast"]),
         L["Waypoint: %s"]:format(navName(cfg.navProvider)),
     }
     table.insert(lines, 4, L["Reagents: %s, trigger at %d or fewer"]:format(cfg.reagentsEnabled ~= false and L["on"] or L["off"], cfg.reagentThreshold))
@@ -109,7 +113,7 @@ local function status(cfg)
         cfg.foodEnabled ~= false and L["on"] or L["off"], cfg.foodThreshold or 5, cfg.waterEnabled ~= false and L["on"] or L["off"],
         cfg.waterThreshold or 5, cfg.petFoodEnabled ~= false and L["on"] or L["off"], cfg.petFoodThreshold or 5,
         cfg.healthstoneRemind ~= false and L["on"] or L["off"]))
-    table.insert(lines, #off > 0 and 8 or 7, L["Reminder sound: %s"]:format(soundName(cfg.remindSound)))
+    table.insert(lines, #off > 0 and 8 or 7, L["Notification sound: %s"]:format(soundName(cfg.remindSound)))
     table.insert(lines, #off > 0 and 9 or 8, L["Reagent buying: %s, %s, up to %d of each"]:format(
         cfg.reagentBuyEnabled and L["on"] or L["off"], cfg.reagentBuyPrompt ~= false and L["asks first"] or L["buys at once"],
         cfg.reagentBuyTarget or 20))
@@ -248,12 +252,12 @@ end
 -- /cvn sound [name]: show the choices, or pick one (it plays as a preview; "none" is silent).
 local function soundCommand(cfg, name)
     if name == "" then
-        return { L["Reminder sound: %s"]:format(soundName(cfg.remindSound)), L["Choose a sound: %s."]:format(soundChoices()) }
+        return { L["Notification sound: %s"]:format(soundName(cfg.remindSound)), L["Choose a sound: %s."]:format(soundChoices()) }
     end
     local key = ns.Supplies.FindSound(name)
     if not key then return { L["Choose a sound: %s."]:format(soundChoices()) } end
     cfg.remindSound = key
-    return { L["Reminder sound: %s"]:format(soundName(key)) }, { "sound" }
+    return { L["Notification sound: %s"]:format(soundName(key)) }, { "sound" }
 end
 
 local function navChoices()
@@ -289,9 +293,69 @@ local function setting(cfg, key, arg, lo, hi, what)
 end
 
 function M.Run(cfg, msg, class)
-    local cmd, rest = (msg or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
-    local arg = rest:match("^%S*")
-    if cmd == "" then return status(cfg) end
+    local cmd, rest = (msg or ""):match("^%s*(%S*)%s*(.-)%s*$")
+    cmd = cmd:lower()
+    if cmd ~= "reagent" then rest = rest:lower() end
+    if cmd == "" then return { L["Opening the settings page..."] }, { "open", "home" } end
+    if cmd == "help" and rest == "" then
+        local out = {
+            L["Closest Vendor finds vendors, trainers and supplies when you need them."],
+            L["Settings belong to this character; learned places are shared account-wide. Use /cvn to open settings, /cvn status for current values, and /cvn demo for a tour of real routes."],
+        }
+        for _, line in ipairs(HELP) do out[#out + 1] = line end
+        return out, { "read" }
+    end
+    local P = ns.Presentation
+    if not P and cmd == "status" and rest == "" then return status(cfg), { "read" } end
+    if P and (cmd == "get" or cmd == "set") then
+        local key, value = rest:match("^(%S+)%s*(.-)$")
+        local e = key and P.KEYS[key]
+        if not e then return { L["Use /cvn help appearance for supported setting keys."] }, { "read" } end
+        if cmd == "get" and value == "" then return { L["%s = %s (This character)"]:format(key, P.Value(cfg, key)) }, { "read" } end
+        if cmd == "set" and P.Set(cfg, key, value) then
+            return { L["%s = %s"]:format(key, P.Value(cfg, key)) }, { "refresh" }
+        end
+        if cmd == "get" then return { L["Use /cvn get %s with no additional arguments."]:format(key) }, { "read" } end
+        return { L["Use /cvn set %s %s."]:format(key, P.Choices(e)) }, { "read" }
+    end
+    if P and (cmd == "settings" or cmd == "config" or cmd == "options") then
+        local page = rest == "" and "home" or rest
+        if page == "status-window" then page = "appearance" end
+        if not P.PAGES[page] then return { L["Pages: home, restock, ammo, reagents, supplies, navigation, appearance, sound, advanced, about."] }, { "read" } end
+        return { L["Opening the settings page..."] }, { "open", page }
+    end
+    if P and cmd == "preview" then
+        if not P.KINDS[rest] then return { L["Preview kinds: notice, hud, prompt."] }, { "read" } end
+        return {}, { "preview", rest }
+    end
+    if P and cmd == "status" and rest == "" then
+        local out = status(cfg)
+        out[#out + 1] = L["Scope: This character."]
+        out[#out + 1] = L["Class: %s; ammo available: %s; class reagents: %d; water available: %s; pet food available: %s; class reminders available: %s."]:format(
+            tostring(class or "?"), ({HUNTER=true,ROGUE=true,WARRIOR=true})[class] and L["yes"] or L["no"],
+            #ns.Reagents.ForClass(class), ns.Supplies.UsesMana(class) and L["yes"] or L["no"],
+            class == "HUNTER" and L["yes"] or L["no"], (class == "MAGE" or class == "WARLOCK") and L["yes"] or L["no"])
+
+        for key in pairs(P.KEYS) do out[#out + 1] = L["%s = %s"]:format(key, P.Value(cfg, key)) end
+        return out, { "read" }
+    end
+    if P and cmd == "help" and rest ~= "" then
+        if rest == "appearance" then
+            local out = { L["Use /cvn get <key> or /cvn set <key> <value>; /cvn preview notice/hud/prompt; /cvn demo."] }
+            local keys = {}; for key in pairs(P.KEYS) do keys[#keys + 1] = key end; table.sort(keys)
+            for _, key in ipairs(keys) do out[#out + 1] = L["%s: %s (This character)"]:format(key, P.Choices(P.KEYS[key])) end
+            return out, { "read" }
+        end
+        if rest == "diagnostics" then return { L["/cvn debug on/off; /cvn log; /cvn log clear (confirmation required)."] }, { "read" } end
+        if not ({ bags=true, ammo=true, reagents=true, supplies=true, navigation=true, hud=true })[rest] then
+            return { L["Help topics: appearance, diagnostics, bags, ammo, reagents, supplies, navigation, hud."] }, { "read" }
+        end
+        local out = {}
+        local word = rest == "navigation" and "nav" or rest == "reagents" and "reagent" or rest
+        for _, line in ipairs(HELP) do if line:find(word, 1, true) then out[#out + 1] = line end end
+        return out, { "read" }
+    end
+    local arg = rest:match("^%S*"):lower()
     if cmd == "sound" then return soundCommand(cfg, rest) end
     if cmd == "nav" then return navCommand(cfg, rest) end
     if cmd == "reagents" and (arg == "on" or arg == "off") then
@@ -314,7 +378,7 @@ function M.Run(cfg, msg, class)
         return { on and L["Debug log on. Repeat the problem, then use /cvn log."] or L["Debug log off."] }, { "debug", on }
     end
     if cmd == "log" and arg == "" then return { L["Showing the report..."] }, { "log" } end
-    if cmd == "log" and arg == "clear" then return { L["Debug log cleared."] }, { "log", "clear" } end
+    if cmd == "log" and rest == "clear" then return {}, { "log", "clear" } end
     if cmd == "config" or cmd == "options" then
         return { L["Opening the settings page..."] }, { "open" }
     end

@@ -14,4 +14,17 @@ for file in $(cd "$dir" && find . -name '*.lua' | sed 's|^\./||' | sort); do
   [ "$file" = "Locales/Example.lua" ] && continue
   printf '%s\n' "$listed" | grep -qx "$file" || { echo "UNLISTED $file (not in $(basename "$toc"))"; status=1; }
 done
+# Embedded dependencies and notices must travel in the standalone package.
+if printf '%s\n' "$listed" | grep -q '^Libs/'; then
+  for notice in Libs/LICENSE.txt Libs/PROVENANCE.md; do
+    [ -f "$dir/$notice" ] || { echo "MISSING  $notice"; status=1; }
+  done
+  previous=0
+  for dependency in Libs/LibStub/LibStub.lua Libs/CallbackHandler-1.0/CallbackHandler-1.0.lua Libs/AceGUI-3.0/AceGUI-3.0.lua Libs/AceConfig-3.0/AceConfigRegistry-3.0/AceConfigRegistry-3.0.lua Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua Options.lua; do
+    line=$(printf '%s\n' "$listed" | awk -v path="$dependency" '$0 == path { print NR; exit }')
+    if [ -z "$line" ] || [ "$line" -le "$previous" ]; then
+      echo "ORDER    $dependency (missing or before its dependencies)"; status=1
+    else previous=$line; fi
+  done
+fi
 exit $status

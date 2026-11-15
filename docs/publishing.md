@@ -40,7 +40,7 @@ After you push the tag, the workflow does these steps:
 
 - The addon is in `ClosestVendor/` in the repository. `.pkgmeta` moves it to the top of the zip. `.pkgmeta` ignores everything else (tests, tools, docs, openspec, README).
 - `.pkgmeta` does not ignore `LICENSE`, `THIRD_PARTY.md` and `CHANGELOG.md`. They are in the package.
-- The packager fetches no libraries. The addon has none.
+- The packager fetches no libraries. AceConfigRegistry/Dialog, AceGUI, CallbackHandler and LibStub are vendored in `ClosestVendor/Libs`; preserve their load order, LICENSE.txt and PROVENANCE.md in the standalone package.
 - The packager treats `ClosestVendor_Camelot.toc` as the WoW Forever TOC. "Camelot" is the packager name for the Forever client. It treats `ClosestVendor_Vanilla.toc` as the Classic Era TOC. The sibling addon `wow-dontdothat` does the same.
 - Every site uses `CHANGELOG.md` as the changelog (`manual-changelog` in `.pkgmeta`).
 

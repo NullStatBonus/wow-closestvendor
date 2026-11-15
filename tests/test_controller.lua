@@ -744,6 +744,7 @@ w = mapped({ cfg = { vendorMode = "auto" }, zones = { [100] = "Elwynn", [200] = 
 w.c.Evaluate()
 eq(w.says[1], "Navigating to Home Seller (Elwynn, 50 yards) to sell items and free bag space. The other choice was Other Seller (Westfall, 10 yards).", "notice has zones and distances for both")
 eq(#w.notes, 1, "one on-screen message")
+eq(#w.sounds, 1, "a route notification plays the notification sound")
 w = mapped({ cfg = { vendorMode = "auto", vendorPrefer = "distance" }, zones = { [100] = "Elwynn", [200] = "Westfall" } })
 w.c.Evaluate()
 eq(w.says[1], "Navigating to Other Seller (Westfall, 10 yards) to sell items and free bag space. The other choice was Home Seller (Elwynn, 50 yards).", "distance preference names the pinned one first")
@@ -754,6 +755,7 @@ w = mapped({ cfg = { vendorMode = "auto", autoNotice = false } })
 w.c.Evaluate()
 eq(#w.notes, 0, "notice off: no on-screen message")
 eq(#w.says, 1, "notice off: the chat line still prints")
+eq(#w.sounds, 0, "notice off: no sound")
 eq(w.setCount, 1, "notice off: still pinned")
 w = mapped({ cfg = { vendorMode = "auto" }, noNotify = true })
 w.c.Evaluate()
@@ -1204,108 +1206,6 @@ w = auction({ pos = { 1, 20, 0 }, auction = { [1] = {} } })
 w.c.Go("reagent", 17020)
 eq(w.last[2], "Powder Seller", "no auctioneer known: the vendor")
 
--- Demo -------------------------------------------------------------------------------------------------------
--- rolls: a fixed list of rolls in place of the random ones. First the warning (1 pin without asking,
--- 2 question, 3 direct pin), then the kind (1 sell, 2 repair, 3 arrows, 4 bullets).
-local function rolls(...)
-    local list, i = { ... }, 0
-    return function(n) i = i + 1; assert(list[i] and list[i] <= n, "roll out of range"); return list[i] end
-end
-local function flat(t)
-    local out = {}
-    for k, v in pairs(t) do out[#out + 1] = tostring(k) .. "=" .. tostring(v) end
-    table.sort(out)
-    return table.concat(out, ",")
-end
--- Pin without asking, in ask mode: the usual notice, and the pin goes after 10 seconds.
-w = world({ autoAccept = false })
-local saved = flat(w.liveCfg)
-local dones = 0
-eq(w.c.Demo(rolls(1, 2), function() dones = dones + 1 end), true, "demo started")
-eq(#w.prompts, 0, "pin without asking: no question")
-eq(w.last[2], "Far Repairer", "the rolled kind (repair) is pinned through the usual search")
-eq(w.says[1], "Navigating to Far Repairer (90 yards) to repair your gear.", "the usual chat line")
-eq(w.notes[1], w.says[1], "and the usual on-screen notice")
-eq(#w.timers .. "/" .. w.timers[1].s, "1/10", "one timer, 10 seconds")
-eq(w.clearCount .. "/" .. dones, "0/0", "nothing is taken back before the timer")
-w.timers[1].fn()
-eq(w.clearCount, 1, "time up: the demo's pin is cleared")
-eq(w.c.PinKind(), nil, "no waypoint left")
-eq(dones, 1, "and the caller is told")
-eq(flat(w.liveCfg), saved, "pin without asking: settings exactly as before")
--- Question: shown through the usual dialog, closed after 10 seconds, a late Yes does nothing.
-w = world({ autoAccept = false, cfg = { vendorMode = "auto" } })
-saved = flat(w.liveCfg)
-w.c.Demo(rolls(2, 3))
-eq(#w.prompts .. "/" .. w.prompts[1].kind .. "/" .. w.prompts[1].vendor[2], "1/arrow/Arrow Man", "question asked even in auto mode")
-eq(w.setCount, 0, "nothing pinned until it is answered")
-local cancels = w.cancelCount
-w.timers[1].fn()
-eq(w.cancelCount, cancels + 1, "time up: the demo's question is closed")
-w.prompts[1].accept()
-eq(w.setCount, 0, "a Yes after the demo does nothing")
-eq(flat(w.liveCfg), saved, "question: settings exactly as before")
--- Question answered Yes: that pin is the demo's and goes with it.
-w = world({ autoAccept = false })
-w.c.Demo(rolls(2, 1))
-w.prompts[1].accept()
-eq(w.setCount .. "/" .. w.clearCount, "1/0", "answered: pinned")
-w.timers[1].fn()
-eq(w.clearCount, 1, "time up: the pin from the demo's question is cleared")
--- Direct pin: the row-click path. Bags that really are low are still asked about afterwards.
-w = world({ autoAccept = false, free = 1, combat = true })
-saved = flat(w.liveCfg)
-w.c.Evaluate() -- in combat: the low bags are seen but not asked about yet
-w.c.Demo(rolls(3, 1))
-eq(w.last[2], "Near Seller", "direct pin, in combat like any row click")
-eq(#w.prompts, 0, "no question")
-w.timers[1].fn()
-eq(w.clearCount, 1, "time up: cleared")
-w.combat = false
-w.c.Evaluate()
-eq(#w.prompts, 1, "the demo did not use up the real warning")
-eq(flat(w.liveCfg), saved, "direct pin: settings exactly as before")
--- A second demo ends the first and restarts the 10 seconds: the first timer no longer does anything.
-w = world({ autoAccept = false })
-dones = 0
-w.c.Demo(rolls(1, 1), function() dones = dones + 1 end)
-w.c.Demo(rolls(2, 2), function() dones = dones + 10 end)
-eq(w.clearCount, 1, "the first demo's pin is cleared when the second starts")
-eq(#w.prompts .. "/" .. tostring(w.open), "1/true", "the second demo's question is open")
-cancels = w.cancelCount
-w.timers[1].fn()
-eq(w.cancelCount .. "/" .. tostring(w.open) .. "/" .. dones, cancels .. "/true/0", "the first timer does not cut the second demo short")
-w.timers[2].fn()
-eq(tostring(w.open) .. "/" .. dones, "false/10", "the second timer ends it")
--- A waypoint set by something else during the demo is not the demo's to clear; nor is a newer question.
-w = world({ autoAccept = false })
-w.c.Demo(rolls(1, 1))
-w.c.Go("repair")
-local clears = w.clearCount
-w.timers[1].fn()
-eq(w.clearCount .. "/" .. tostring(w.c.PinKind()), clears .. "/repair", "a real pin made during the demo stays")
-w = world({ autoAccept = false })
-w.c.Demo(rolls(2, 1))
-w.c.Test("repair")
-cancels = w.cancelCount
-w.timers[1].fn()
-eq(w.cancelCount .. "/" .. tostring(w.open), cancels .. "/true", "a newer question stays open")
--- Nowhere to go: chat says so, the demo still runs its time.
-w = world({ pos = false })
-eq(w.c.Demo(rolls(1, 1)), true, "no position: still a demo")
-eq(w.says[1], "No map position here (dungeons and some areas have none). Try again outside.", "chat says why there is no warning")
-w = world({ pos = { 7, 0, 0 } })
-w.c.Demo(rolls(2, 2))
-eq(w.says[1], "No known repair vendor on this continent for your faction.", "no vendor: chat says so")
-w.timers[1].fn()
-eq(w.clearCount .. "/" .. w.setCount, "0/0", "nothing to take back")
--- No timers: no demo at all, since nothing could take it back.
-w = world({ noTimers = true })
-eq(w.c.Demo(rolls(1, 1)), false, "timers refuse: no demo")
-eq(w.setCount, 0, "nothing pinned")
-w = world({ noAfter = true })
-eq(w.c.Demo(rolls(1, 1)), false, "no timer function: no demo")
-
 -- Supplies: food, water and pet food, and the notice-only reminders -------------------------------------------
 -- { npcId, name, uiMapID, mx, my, faction, repair, ammo, wx, wy, reagents, supplies }
 local SV = {
@@ -1446,6 +1346,7 @@ eq(#w.says, 1, "chat line without an on-screen notice function")
 w = supply("MAGE", { food = 2, water = 30, healthstone = 0 }, nil, { [587] = true }, { cfg = { autoNotice = false } })
 w.c.Evaluate()
 eq(#w.notes, 0, "on-screen notice switched off")
+eq(#w.sounds, 0, "on-screen notice switched off: a reminder makes no sound")
 
 -- The reminder sound: the saved key goes to the game side once per batch; a vendor question makes none.
 w = supply("MAGE", { food = 2, water = 30, healthstone = 0 }, nil, { [587] = true })
@@ -1534,37 +1435,5 @@ eq(w.says[1], "This is a test reminder. Only mages and warlocks get real ones.",
 eq(world({ buckets = { [1] = { SV[3] } }, supplies = { class = "WARRIOR", totals = { food = 1 }, knows = function() return false end } }).c.Test("food"),
     "No known vendor selling food on this continent for your faction.", "test food with no seller")
 eq(world().c.Test("food"), "Your bags cannot be read right now.", "no supply source")
-
--- /cvn demo with supplies: a made-up count and diet, a reminder, and a direct pin; nothing real is changed.
-w = supply("WARRIOR", { food = 30, water = 0, healthstone = 0 }, nil, nil, { autoAccept = false })
-w.c.Demo(rolls(2, 5, 3))
-eq(w.prompts[1].kind .. "/" .. tostring(w.prompts[1].trade) .. "/" .. w.prompts[1].count .. "/" .. w.prompts[1].vendor[2], "supply/food/2/Baker", "demo question about food, made-up count")
-w.timers[#w.timers].fn()
-eq(w.cancelCount >= 1, true, "and taken back after the demo")
-w = supply("WARRIOR", { food = 30, water = 0, healthstone = 0 }, nil, nil, { autoAccept = false })
-w.c.Demo(rolls(2, 6, 1))
-eq(w.prompts[1].trade, "food", "water for a class without mana is shown as food")
-w = supply("PRIEST", { food = 30, water = 30, healthstone = 0 }, nil, nil, { autoAccept = false })
-w.c.Demo(rolls(2, 6, 1))
-eq(w.prompts[1].trade .. "/" .. w.prompts[1].vendor[2], "water/Well", "water for a priest")
-w = supply("HUNTER", { food = 30, water = 30, healthstone = 0 }, nil, nil, { autoAccept = false })
-w.c.Demo(rolls(2, 7, 1, 4))
-eq(w.prompts[1].trade .. "/" .. w.prompts[1].vendor[2], "pet food (Meat)/Butcher", "no pet out: a made-up diet")
-w = supply("HUNTER", { food = 30, water = 30, pet = 20, healthstone = 0 }, { Bread = true }, nil, { autoAccept = false })
-w.c.Demo(rolls(2, 7, 2))
-eq(w.prompts[1].trade .. "/" .. w.prompts[1].vendor[2], "pet food (Bread)/Baker", "a pet out: its own diet, no diet roll")
-w = supply("WARRIOR", { food = 30, water = 0, healthstone = 0 })
-w.c.Demo(rolls(1, 5, 1))
-eq(w.setCount .. "/" .. w.last[2], "1/Baker", "pin without asking for a supply")
-w = supply("MAGE", { food = 30, water = 30, healthstone = 0 })
-w.c.Demo(rolls(1, 8))
-eq(#w.says .. "/" .. #w.sounds .. "/" .. #w.prompts .. "/" .. w.setCount, "1/1/0/0", "a demo reminder: a line and the sound, no question, no pin")
-eq(w.says[1], "You are low on food (30 left). Cast Conjure Food to make more.", "the mage reminder text")
-w = supply("WARRIOR", { food = 30, water = 0, healthstone = 0 })
-w.c.Demo(rolls(3, 3))
-eq(w.setCount .. "/" .. w.last[2] .. "/" .. #w.prompts, "1/Baker/0", "direct pin for food")
-w = supply("WARRIOR", { food = 30, water = 0, healthstone = 0 }, nil, nil, { buckets = { [1] = { SV[1] } } })
-w.c.Demo(rolls(2, 5, 1))
-eq(w.says[#w.says], "No known vendor selling food on this continent for your faction.", "no seller: says so, no question")
 
 H.done()

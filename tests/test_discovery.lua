@@ -174,4 +174,21 @@ eq(pid(both)[5][8], 3, "missing learned ammo falls back to the external one")
 eq(pid(both)[5][9], 5, "missing learned reagents fall back")
 eq(#D.Pool(ship, ext, { [99] = { 99, "Only", 1429, 0.1, 0.1, 0, false, 0, 0, 0 } }), 4, "learned-only vendor added")
 
+
+-- Tradable: what this character has seen decides; a learned neutral vendor needs to have been seen friendly.
+do
+    local pool = {
+        { 1, "Shipped Goblin", 1429, 0.1, 0.1, 0 },
+        { 2, "Learned Quartermaster", 1443, 0.2, 0.2, 0 },
+        { 3, "Learned Alliance", 1429, 0.3, 0.3, 1 },
+        { 4, "Shipped Unfriendly", 1429, 0.4, 0.4, 0 },
+    }
+    local known = { [1] = true, [4] = true }
+    local function ids(list) local t = {}; for _, v in ipairs(list) do t[#t + 1] = v[1] end; return table.concat(t, ",") end
+    eq(ids(D.Tradable(pool, known, {})), "1,3,4", "unseen learned neutral vendor is left out")
+    eq(ids(D.Tradable(pool, known, { [2] = true })), "1,2,3,4", "seen as Neutral or better: used")
+    eq(ids(D.Tradable(pool, known, { [4] = false, [3] = false })), "1", "seen as Unfriendly or Hostile: left out")
+    eq(#pool, 4, "the pool is not changed")
+end
+
 H.done()

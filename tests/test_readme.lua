@@ -9,6 +9,7 @@ loadfile("ClosestVendor/Reagents.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Supplies.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Nav.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Status.lua")("ClosestVendor", ns)
+loadfile("ClosestVendor/Presentation.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Commands.lua")("ClosestVendor", ns)
 
 local f = assert(io.open("README.md", "r"))
@@ -24,7 +25,7 @@ for line in block:gmatch("[^\n]+") do
     assert(msg, "unexpected line in command block: " .. line)
     local cfg = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10, bagEnabled = true, durEnabled = true, ammoEnabled = true, tradeEnabled = true, suppliesEnabled = true, reagentsEnabled = true, reagentThreshold = 5, foodThreshold = 5, waterThreshold = 5, petFoodThreshold = 5, foodEnabled = true, waterEnabled = true, petFoodEnabled = true, reagentOff = {} }
     local out = ns.Commands.Run(cfg, msg, "MAGE")
-    assert(not out[1]:find("show settings", 1, true), "README command is not accepted: " .. line)
+    assert(not (out[1] or ""):find("show settings", 1, true), "README command is not accepted: " .. line)
     n = n + 1
 end
 assert(n >= 5, "too few documented commands: " .. n)
