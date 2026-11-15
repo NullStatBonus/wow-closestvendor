@@ -7,7 +7,7 @@ It reacts when your gear needs repair, your bags are nearly full, or your ammo, 
 ## Quick start
 
 1. Copy the `ClosestVendor` folder into your AddOns folder (see [Install](#install)).
-2. Type `/cvn` in chat to see your current settings.
+2. Type `/cvn` in chat to open settings; `/cvn help` displays addon info and commands.
 3. Type `/cvn config` to open the settings page.
 
 ## What it does
@@ -36,9 +36,8 @@ When a warning fires, the addon shows the closest vendor that fits.
 - **Reminders:** some classes can make their own supplies.
   - A mage who knows Conjure Food or Conjure Water gets a reminder in chat. The addon does not send that mage to a vendor. A mage who does not know the spell goes to a vendor like other classes.
   - A warlock who knows Create Healthstone and has no healthstone gets a reminder to make one.
-  - The reminder shows once, until the cause is gone. It also shows on screen if the on-screen notice is on.
+  - The reminder shows once, until the cause is gone. It is a notification: it shows as a Toast or Warning, with the notification sound, if the on-screen notice is on.
   - The reminder waits while you are in combat or in an instance.
-  - A reminder plays a sound. The default is the whisper ping. You can pick another sound or none (see Supplies settings).
 - **Professions:** a profession is within the threshold (default **10**) points of its current skill limit. The addon shows the closest trainer for that profession that you opened before. It asks on every skill-up and every craft.
 
 If more than one warning is active, the addon asks one question at a time.
@@ -86,7 +85,7 @@ The question has three buttons: the vendor on your map, the closest vendor, and 
 - Your preference decides the first button. The default is the vendor on your map.
 - To skip the question, type `/cvn choice auto`. The addon then sets the waypoint at once with the same preference.
 - In auto mode, the addon prints one chat line. The line names the target with its zone and distance. It also names the other choice, if there was one.
-- In auto mode, the addon also shows the same text on screen for about five seconds. This text is silent, because the map pin already makes a sound. A reminder sets no pin, so it plays its own sound.
+- In auto mode, the addon also shows the same text as a notification (see Appearance).
 - To turn off the on-screen text, type `/cvn notice off`.
 - The same rules apply to trainers.
 
@@ -106,7 +105,7 @@ It lists what the addon tracks, one row for each item.
 - The rows come in six groups: Ammo, Reagents, Supplies, Bag space, Durability and Professions.
 - Each group is set to **Only when low** (the default), **Always** or **Never**.
 - One setting covers the whole group. Every profession row follows Professions. Every reagent row follows Reagents. The food, water and pet food rows follow Supplies.
-- Set it on the Status window settings page.
+- Set it on the Appearance > Status window section.
 - Or type `/cvn hud row <group> low/always/never`.
 
 ### Click a row
@@ -122,7 +121,7 @@ It lists what the addon tracks, one row for each item.
 
 - Drag the title to move the window.
 - Or hold Shift and drag anywhere on the window.
-- **Lock window position** stops all dragging, Shift-drag included. It is the first control on the Status window page. Or type `/cvn hud lock`.
+- **Lock position** stops all dragging, Shift-drag included. It is the first control on the Appearance > Status window section. Or type `/cvn hud lock`.
 - The addon saves the position.
 - Type `/cvn hud reset` to put the window back at its default position.
 - The cog button on the window opens the Closest Vendor settings page.
@@ -139,14 +138,14 @@ It lists what the addon tracks, one row for each item.
 - Window scale is 50 to 200 percent. Or type `/cvn hud scale`.
 - Background opacity is 0-100 percent. The default is 80. Or type `/cvn hud opacity`.
 - Text and icon opacity is 20-100 percent. The default is 100. Or type `/cvn hud textopacity`.
-- All three are on the Status window page.
+- All three are on the Appearance > Status window section.
 - At background opacity 0, the addon draws no background. You see only the text and icons.
 
 ### Background color
 
 - The default color is pure black.
-- If the game has its color picker, the Status window page shows a swatch of the current color. Click the swatch to pick any color.
-- Type `/cvn hud color` with no color to open the color picker directly. This works wherever the game has a picker, even if the swatch is not on the page.
+- If the game has its color picker, the Appearance > Status window section offers Background color, which opens the guarded game color picker. Cancelling restores the original color.
+- Type `/cvn hud color` with no color to open the color picker directly. This works wherever the game has a picker, even if settings cannot open.
 - Type `/cvn hud color #rrggbb` to set a color. This works everywhere. It is the only way where there is no picker.
 - Type `/cvn hud color black` (or `reset`) to go back to black.
 
@@ -154,7 +153,7 @@ It lists what the addon tracks, one row for each item.
 
 - The window has no border.
 - The window has no bright fixed fills.
-- Only the text color marks a low row.
+- Low rows use red text, a red warning symbol and a visible Low label.
 - You can dim the text and icons.
 - Nothing static needs to stay bright on screen.
 
@@ -196,25 +195,53 @@ The addon has one TOC file for each game:
 
 ## Settings page
 
-To open it, go to Options, AddOns, **Closest Vendor**.
-This is the main page. It has four subcategories.
-On a client without subcategories, everything is on the one page under section headings.
+Type `/cvn settings` (also `/cvn config` or `/cvn options`) or click the HUD cog to open Home. Settings use the bundled AceConfig tree; no other addon is needed. An Options > AddOns entry is also registered where supported. The standalone tree remains available without native Settings registration.
 
-The settings page changes the same settings as the commands below.
-Type `/cvn config` to open the main page.
+Pages appear in this order: **Home, Restock (Ammo, Reagents, Supplies), Navigation, Appearance (Notifications, Status window, Sound), Advanced, About**. The window title is **Closest Vendor**; Advanced explains where settings are saved. The settings window starts at 600×460, matching KeepThat, and can be resized. Pages use readable rows, section headings and spacing, with compact dropdowns, sliders and buttons. Each page and Appearance tab explains its purpose; section notes explain the decisions and their consequences before the controls, including warning counts versus buying targets and purchases without confirmation. Commands and controls edit the same saved settings immediately. Existing settings and learned places retain their scopes.
 
-### Closest Vendor (main page)
+### Home
 
-- **Warnings:** a checkbox and a slider for bag space, durability and professions. Then one checkbox each for **Ammo**, **Reagents** and **Supplies**. Their sliders and details are on their own pages.
-- **Warnings:** a **Supplies** checkbox, the one switch for food, water, pet food and the healthstone reminder.
-- **Warnings:** a checkbox for the on-screen notice.
-- **Navigation:** a dropdown for when the closest target is on another map. You choose to ask which one, or to navigate without asking.
-- **Navigation:** a dropdown to prefer the target on your map or the closest target.
-- **Navigation:** a dropdown for the waypoint method: Automatic (the order above), TomTom, WaypointUI or Game waypoint.
-- **Navigation:** a dropdown for the search anchor inside instances.
-- **Navigation:** a checkbox for the auction house.
+Home has every switch that decides whether the addon acts:
 
-The other pages are in alphabetical order, with the status window last.
+- **What to watch:** bag, durability and profession warning switches and thresholds, plus the Ammo, Reagents and Supplies switches.
+- **How to act:** **Destination on another map** (Ask which one / Navigate without asking) and **Preferred target**.
+- **Where to show it:** **On-screen notice**.
+
+Disabled controls retain their values; their descriptions explain which switch enables them.
+
+### Restock
+
+Restock holds **Ammo**, **Reagents** and **Supplies**: the counts that warn you, which items to watch, and merchant buying. Each warning is turned on or off on Home.
+
+### Navigation
+
+Choose the waypoint provider, instance anchor and auction routing here.
+
+### Appearance
+
+Appearance has three tabs: **Notifications**, **Status window** and **Sound**.
+
+Every route message, class reminder and test message is a notification. Notifications all look and sound the same:
+
+- **On-screen notice** (on Home) turns notifications on or off. Off keeps only the chat line, with no sound.
+- **Style** is **Toast** (default for fresh installs) or **Warning** (the game's large centered text). Existing users without a saved style keep Warning.
+- **Preview** shows a sample in your style, with your sound, without changing anything.
+- With Toast: **Background opacity, Text and icon opacity, Scale, Move, Reset position**. A new toast replaces the old one and lasts five seconds. Warning has no appearance or position settings, so these are hidden.
+
+The Status window tab has **Lock position, Background opacity, Text and icon opacity, Scale, Preview, Move, Reset position, Background color** and the row visibility choices.
+
+Only one notification is on screen at a time: the newest replaces the old one, live or sample, Toast or Warning. A status window click, a new `/cvn demo` or a `/cvn preview` also ends any demo or preview that is running; a stopped demo puts your previous waypoint back first. A click on a demo row routes for real.
+
+Move shows a placeholder with **Done** and **Cancel**: only Done saves; Cancel or Escape restores the starting position. Unlock the status window before moving it. Only the status window has **Lock position**. Reset position changes only the anchor. Normal unlocked HUD title/Shift-drag still saves immediately, and row clicks retain their navigation behavior.
+
+
+### Sound
+
+The Sound tab has one choice, **Notification sound**. It plays with every notification: Whisper ping (default), Minimap ping, Group invite, Ready check or None. Choosing one plays it. `/cvn sound <name>` sets the same choice. No sound plays while On-screen notice is off, and questions play no notification sound.
+
+### Advanced and About
+
+Advanced explains character settings and account-wide learned places, with Record debug information, Show debug report and confirmed diagnostic clearing. The report uses the same standard AceGUI window and scrollable, read-only text box as KeepThat, with copy instructions and a normal close button. About follows KeepThat’s layout: addon name, muted installed version, one-sentence purpose, then individual command rows with muted explanations.
 
 ### Ammo
 
@@ -239,15 +266,14 @@ The other pages are in alphabetical order, with the status window last.
 - A checkbox and a slider (1-40, default 5) for each of food, water and pet food.
 - A row shows only if your class can use it. A warrior sees no water. Only a hunter sees pet food.
 - A warlock also gets a **Healthstone reminder** checkbox.
-- Every class gets a **Reminder sound** dropdown (only mages and warlocks are reminded): Whisper ping (default), Minimap ping, Group invite, Ready check or None. Choosing one plays it.
 - All are on by default.
 - Each item has its own switch, and the **Supplies** checkbox on the main page turns all of them off. The Ammo and Reagents switches do not.
 
-### Status window
+### Status window in Appearance
 
-- **Lock window position** is the first control.
+- **Lock position** is the first control.
 - Sliders for scale, background opacity, and text and icon opacity.
-- The background color. It is a swatch that opens the game's color picker, where the game has one.
+- The background color. It is a button that opens the game's color picker, where the game has one.
 - An Only when low / Always / Never dropdown for each group, in window order: Ammo, Reagents, Supplies, Bag space, Durability, Professions.
 - A group that does not apply to your class is still listed. This is Ammo, or Reagents for a class with no reagents.
 - The addon greys out that group. A tooltip says why.
@@ -255,6 +281,13 @@ The other pages are in alphabetical order, with the status window last.
 ## Commands
 
 ```
+/cvn settings appearance
+/cvn status
+/cvn help appearance
+/cvn get bags.threshold
+/cvn set appearance.notification-style toast
+/cvn demo
+/cvn preview hud
 /cvn
 /cvn config
 /cvn bags 4
@@ -328,9 +361,32 @@ The other pages are in alphabetical order, with the status window last.
 /cvn ah off
 ```
 
+### Presentation commands
+
+- `/cvn settings [page]` accepts home, restock, ammo, reagents, supplies, navigation, appearance, sound, advanced, about; `status-window` aliases appearance. Page names are case insensitive.
+- `/cvn status` reports effective settings, scope and availability guidance; bare `/cvn` opens Home.
+- `/cvn help appearance` lists public keys and previews; `help diagnostics` explains reports. Domain topics: bags, ammo, reagents, supplies, navigation, hud.
+- `/cvn get <key>` is read-only. `/cvn set <key> <value>` validates the whole input and gives one acknowledgement. Missing, unknown, fractional, out-of-range and surplus input never changes a setting.
+- `/cvn demo` runs a tour of real outcomes, one every five seconds: a route set without asking (notification), a question (confirmation), food, water or pet food for your class, arrows, a status-window row click (your class reagent, which can route to an auction house, or repair) and a reminder. Each uses your real vendor data, waypoint and notification style, with your sound, even with On-screen notice off. The status window shows made-up rows meanwhile. At the end the waypoint you had before comes back. Settings are never changed, and no warning is marked as handled. Repeating restarts it.
+- `/cvn preview notice`, `hud` or `prompt` shows one safe sample for ten seconds. Samples cannot buy or set waypoints. Timers and supported drawing APIs are required.
+
+| Public key | Values | Default | Stored character key |
+| --- | --- | --- | --- |
+| bags.threshold | whole number 0–200 | 2 | bagThreshold |
+| appearance.notification-style | warning / toast | toast | notificationStyle |
+| appearance.hud.background-opacity | whole percent 0–100 | 80 | hudAlpha |
+| appearance.hud.text-opacity | whole percent 20–100 | 100 | hudTextAlpha |
+| appearance.hud.scale | whole percent 50–200 | 100 | hudScale |
+| appearance.hud.locked | on / off | off | hudLocked |
+| appearance.toast.background-opacity | whole percent 0–100 | 100 | toastAlpha |
+| appearance.toast.text-opacity | whole percent 0–100 | 100 | toastTextAlpha |
+| appearance.toast.scale | whole percent 50–200 | 100 | toastScale |
+
+These values are per character. Prior saved values override defaults. Commands and UI use the same typed registry and refresh hooks; positions are saved separately in the character's `hud` and `toast` tables. No profile switching is offered.
+
 ### General
 
-- `/cvn` shows the current settings.
+- `/cvn` opens settings on Home; `/cvn status` shows current values.
 - `/cvn config` opens the settings page.
 - `/closestvendor` works the same as `/cvn`.
 - Settings are saved per character. The vendors, trainers and auctioneers the addon learns are shared by the account. A character you have not used with the addon before starts from the settings you had before this was per character.
@@ -356,7 +412,7 @@ The other pages are in alphabetical order, with the status window last.
 - `/cvn petfood <count>` sets the pet food threshold (1 to 40).
 - `/cvn food on`, `/cvn water on` and `/cvn petfood on` turn that warning on. Use `off` to turn it off.
 - The healthstone reminder has a switch on the Supplies page only.
-- `/cvn sound` shows the reminder sound. `/cvn sound <name>` picks whisper, ping, invite, ready or none, and plays it.
+- `/cvn sound` shows the notification sound. `/cvn sound <name>` picks whisper, ping, invite, ready or none, and plays it.
 
 ### Navigation
 
@@ -366,8 +422,8 @@ The other pages are in alphabetical order, with the status window last.
 - `/cvn prefer map` is the default. It prefers the closest target on your current map.
 - `/cvn prefer distance` prefers the closest target by distance.
 - The `prefer` setting decides the first button. It also decides what `auto` picks.
-- `/cvn notice on` is the default. It shows the on-screen text when the addon chooses a target without asking.
-- `/cvn notice off` hides the on-screen text.
+- `/cvn notice on` is the default. It shows every notification on screen, with the notification sound.
+- `/cvn notice off` hides notifications and their sound. Chat lines still print.
 - The chat line is always printed.
 - `/cvn anchor hearth` is the default. In a dungeon or raid, a row click searches near your hearthstone point.
 - `/cvn anchor last` makes a row click search near your last position outside.
@@ -401,22 +457,24 @@ The other pages are in alphabetical order, with the status window last.
 - `/cvn hud row <group> low/always/never` sets when a group of rows shows.
 - The group is `ammo`, `reagents`, `professions`, `bags` or `durability`.
 - Example: `/cvn hud row professions always`.
-- `/cvn` lists the groups you changed.
+- `/cvn status` lists the groups you changed.
 
 ### Test and debug
+
+The legacy `test` commands are live integration tests: accepting a question can set a real waypoint. Use `preview` for safe visual inspection; `demo` sets real waypoints and puts yours back at the end.
 
 - `/cvn test sell`, `/cvn test repair`, `/cvn test arrows`, `/cvn test bullets` and `/cvn test reagent` ask the question now for that kind of vendor.
 - `/cvn test food`, `/cvn test water` and `/cvn test petfood` do the same for food, water and pet food.
   - A rogue or warrior who tests water gets "Your class does not use water."
   - Without a pet, the pet food test says "There is no pet to feed."
-- `/cvn test remind` shows the conjure reminder for a mage, or the healthstone reminder for a warlock, and plays the reminder sound. It always works: any other class gets a plain test line and the sound.
+- `/cvn test remind` shows the conjure reminder for a mage, or the healthstone reminder for a warlock, as a notification with the notification sound. It always works: any other class gets a plain test notification.
 - They ignore the state of your bags, gear and ammo.
 - Yes sets the pin.
 - Opening any vendor window clears the pin.
 - `/cvn debug on` turns on the debug log.
 - `/cvn debug off` turns it off.
 - `/cvn log` shows a report that you can copy.
-- `/cvn log clear` empties the log.
+- `/cvn log clear` asks for confirmation before clearing diagnostic entries only. Cancel keeps everything.
 
 ## How it finds vendors
 
@@ -465,6 +523,7 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 - Professions are matched by the name that the game shows.
 - After you change the game language, the addon learns trainers again.
 - The addon skips vendors of the other faction.
+- Reputation: each character remembers vendors it has seen as Unfriendly or Hostile (target, mouseover, nameplate) and never routes to them. A vendor of no side that another character taught you, such as a clan quartermaster, is used only after this character has seen it at Neutral or better or opened its window. The game does not say which reputation a vendor needs, so a shipped vendor you cannot trade with is skipped only after you have seen it.
 - Neutral vendors count for everyone.
 
 ### Ammo
@@ -559,7 +618,7 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 The report holds:
 
 - The game build.
-- Your settings. This includes whether the game's color picker and settings button exist, and why the background color swatch is missing if it is.
+- Your settings. This includes picker and AceConfig availability, effective notice style and HUD/toast appearance, toast position, character scope and sample/Move state.
 - What the addon saw and decided.
 
 The report holds no character name.

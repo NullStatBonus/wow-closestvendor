@@ -487,6 +487,10 @@ local function noticeGame()
     local function frame()
         local f = { shown = false, strata = nil }
         function f:SetSize() end
+        function f:SetWidth() end
+        function f:SetHeight() end
+        function f:SetTextColor() end
+        function f:GetStringHeight() return 24 end
         function f:SetPoint() end
         function f:SetFrameStrata(s) self.strata = s end
         function f:EnableMouse(on) self.mouse = on end

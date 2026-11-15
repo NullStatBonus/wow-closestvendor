@@ -102,7 +102,7 @@ For every vendor or trainer search the addon SHALL find, among targets eligible 
 - **THEN** the nearest trainer on the player's map, if any, is the other candidate
 
 ### Requirement: Automatic pin
-When the map choice mode is `auto`, the addon SHALL set the waypoint without asking: with two candidates, the current-map one if the preference is `map` and the closer one if it is `distance`; with one, that one. It SHALL announce the target in chat and as a silent on-screen message shown for about five seconds, naming it with its zone and distance, and the other candidate when there were two.
+When the map choice mode is `auto`, the addon SHALL set the waypoint without asking: with two candidates, the current-map one if the preference is `map` and the closer one if it is `distance`; with one, that one. It SHALL announce the target in chat and when notices are enabled, once as a notification in the selected Warning or Toast style, with the notification sound, for about five seconds, naming it with its zone and distance, and the other candidate when there were two.
 
 #### Scenario: Auto with map preference
 - **WHEN** the mode is `auto`, the preference is `map`, and both candidates exist
@@ -118,7 +118,7 @@ When the map choice mode is `auto`, the addon SHALL set the waypoint without ask
 
 #### Scenario: Notice names the target
 - **WHEN** a target is pinned in `auto` mode
-- **THEN** the chat line and the on-screen message both name it with its zone and its distance in yards
+- **THEN** the chat line and, when enabled, the selected on-screen presentation both name it with its zone and its distance in yards
 
 #### Scenario: Notice names the other candidate
 - **WHEN** two candidates existed
@@ -128,9 +128,13 @@ When the map choice mode is `auto`, the addon SHALL set the waypoint without ask
 - **WHEN** only one candidate existed
 - **THEN** the notice names only the pinned target
 
-#### Scenario: Silent on screen
+#### Scenario: Notification sound
 - **WHEN** the on-screen message is shown
-- **THEN** the addon plays no sound of its own
+- **THEN** the notification sound plays once (none when the sound is None)
+
+#### Scenario: Silent on screen
+- **WHEN** notices are off and the waypoint is set without asking
+- **THEN** only the chat line appears and no notification sound plays
 
 #### Scenario: Stays about five seconds
 - **WHEN** the on-screen message is shown

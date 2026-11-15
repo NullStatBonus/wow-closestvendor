@@ -97,7 +97,7 @@ Clicking a routable row SHALL pin the closest eligible vendor for that item at o
 - **THEN** the clicked pin stays until a merchant window opens or the condition resolves
 
 ### Requirement: Moving and locking
-The window SHALL move when the title is dragged, or when Shift is held and the window is dragged anywhere. It SHALL stay on screen. The position SHALL be saved and restored. A "Lock window position" setting SHALL block all moving, Shift-drag included, and SHALL be the first control on the Status window settings page.
+The window SHALL move when the title is dragged, or when Shift is held and the window is dragged anywhere. It SHALL stay on screen. The position SHALL be saved and restored. A "Lock position" setting SHALL block all moving, Shift-drag included, and SHALL be the first control in Appearance’s Status window section. The addon SHALL additionally provide transactional Move mode under visual-preview: Done saves, Cancel or Escape restores the starting position without writes, and a locked window cannot enter movement until explicitly unlocked. Existing title and Shift-drag shortcuts outside Move mode SHALL retain their immediate-save behavior.
 
 #### Scenario: Drag the title
 - **WHEN** the window is unlocked and the player drags the title
@@ -146,7 +146,7 @@ The addon SHALL provide scale (50 to 200 percent), background opacity (0 to 100 
 - **THEN** nothing changes and chat names the five groups
 
 ### Requirement: OLED-safe appearance
-The window SHALL default to a pure black background, SHALL draw no border and no bright fixed fill, and SHALL mark a low row by its text color only. At background opacity 0 it SHALL draw nothing behind the text (no fill, border or texture), whatever the color. Text opacity SHALL apply to the title, the cog and every row, including rows added later, and not to the background.
+The window SHALL default to a pure black background, SHALL draw no border and no bright fixed fill, and SHALL mark a low row with red row text, a red warning symbol and a visible low label; rows that are not low use neutral text. At background opacity 0 it SHALL draw nothing behind the text (no fill, border or texture), whatever the color. Text opacity SHALL apply to the title, the cog and every row, including rows added later, and not to the background.
 
 #### Scenario: Background off
 - **WHEN** the background opacity is 0, with any color
@@ -180,23 +180,27 @@ The background color SHALL be chosen with a swatch in the settings page that sho
 - **THEN** the debug log and the report say which of the color picker, the page layout, `layout.AddInitializer` or `CreateSettingsButtonInitializer` is missing, and the report says whether the picker and settings button exist
 
 ### Requirement: Demo
-The addon SHALL accept a `/cvn demo` command that is not listed in help, the README or the listing. Each use SHALL roll a random window setup (random rows, including the food, water and pet food rows, counts and modes, with at least one row low) and one random outcome: a warning for any kind of vendor, including food, water and pet food, shown through the real notice, question and pin paths, or a reminder with its sound, for 10 seconds, then restore the real window and clear anything the demo pinned. A new use SHALL re-roll and restart the 10 seconds. The demo SHALL NOT change saved settings.
+The addon SHALL accept and document `/cvn demo` in help, About and README as the real routing tour defined in visual-preview. While it runs, the status window SHALL show representative made-up rows, including supplies and at least one low row; a click on one SHALL go nowhere. When the tour ends, current live rows SHALL return. Sample counts, modes and settings SHALL never persist. Legacy integration `test` commands SHALL retain their separate documented behavior.
 
 #### Scenario: Demo shows and restores
-- **WHEN** the player runs `/cvn demo`
-- **THEN** a random window is shown with a random warning and, after 10 seconds, the real window state returns
+- **WHEN** `/cvn demo` runs
+- **THEN** made-up rows show and when the tour ends current live HUD state returns
 
 #### Scenario: Demo does not save
 - **WHEN** a demo has finished
-- **THEN** saved settings are exactly as before it
+- **THEN** saved settings are unchanged
 
 #### Scenario: Repeat
-- **WHEN** the player runs `/cvn demo` again during a demo
-- **THEN** a new setup replaces the old one and the 10 seconds restart
+- **WHEN** demo is run during an existing demo
+- **THEN** new rows replace old ones and the newer tour runs
 
 #### Scenario: Demo covers supplies
-- **WHEN** the player runs `/cvn demo` repeatedly
-- **THEN** the window sometimes has food, water and pet food rows, and the outcome is sometimes a food, water or pet food question or pin (with a made-up count and, when no pet is out, a made-up diet) or a reminder that plays the reminder sound
+- **WHEN** demo runs
+- **THEN** the made-up rows include supplies, and the tour routes to a food seller and to water or pet food when the class uses them
+
+#### Scenario: Existing route
+- **WHEN** a real waypoint exists before a demo
+- **THEN** the tour may replace it while running and restores it when the tour ends
 
 ### Requirement: Supply rows
 The status window SHALL have a sixth row group, Supplies, listed after Reagents on the settings page, with one mode dropdown (`low`, `always`, `never`, default `low`) and `/cvn hud row supplies low|always|never`. It SHALL hold a Food row for every class, a Water row for classes that use mana, and a Pet food row for a hunter whose pet's family is known. Each row SHALL show the count of matching items in the bags.

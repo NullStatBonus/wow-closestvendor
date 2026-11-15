@@ -38,15 +38,16 @@ local function boot(opts)
         function f:HighlightText() self.highlighted = true end
         function f:SetFocus() self.focused = true end
         function f:CreateTexture() return g.newFrame("Texture") end
-        function f:CreateFontString() self.fontString = g.newFrame("FontString"); return self.fontString end
+        function f:CreateFontString() local text = g.newFrame("FontString"); self.fontString = self.fontString or text; return text end
         -- Unrecorded API calls (CapitalizedMethods) do nothing; other missing fields stay nil.
         return setmetatable(f, { __index = function(_, k) if k:match("^%u") then return function() end end end })
     end
     local env = {
         print = function(t) g.printed[#g.printed + 1] = t end,
-        CreateFrame = function(kind, name)
+        CreateFrame = function(kind, name, parent)
             if g.frameThrows and name == g.frameThrows then error("no frames today", 0) end
             local f = g.newFrame(kind, name)
+            f.parent = parent
             g.frames[#g.frames + 1] = f
             return f
         end,
@@ -105,7 +106,7 @@ local function boot(opts)
             g.shown = (g.shown or 0) + 1
             if g.autoAccept ~= false then (type(data) == "table" and data.accept or data)() end -- tests say g.autoAccept = false to hold it open
         end,
-        StaticPopup_Hide = function() g.popup = nil; g.hidden = (g.hidden or 0) + 1 end,
+        StaticPopup_Hide = function(which) if g.popup and g.popup.which == which then g.popup = nil end; g.hidden = (g.hidden or 0) + 1 end,
         ClosestVendorDB = opts.db,
         NorgannonDB = opts.ng,
         ClosestVendorCharDB = opts.charDb,
@@ -117,14 +118,15 @@ local function boot(opts)
     if opts.settings then
         local S, rec = fakeSettings.new(nil, { swatch = opts.swatch })
         if opts.settingsThrows then S.RegisterVerticalLayoutCategory = function() error("settings API changed") end end
-        env.Settings, g.settings = S, rec
+        env.Settings = S
+        env.LibStub, g.settings = require("fake_ace").new({ failRegister = opts.settingsThrows })
         env.MinimalSliderWithSteppersMixin = { Label = { Right = "right" } }
     end
     setmetatable(env, { __index = _G })
     env._G = env
 
     local ns = {}
-    for _, f in ipairs({ "Locales/enUS", "Triggers", "Ammo", "Professions", "Reagents", "Supplies", "Status", "Adapter", "Search", "Discovery", "Nav", "Controller", "Commands", "Options", "Log", "Report", "Tracker" }) do
+    for _, f in ipairs({ "Locales/enUS", "Triggers", "Ammo", "Professions", "Reagents", "Supplies", "Status", "Adapter", "Search", "Discovery", "Nav", "Controller", "Presentation", "Move", "Toast", "Commands", "Options", "Log", "Report", "Tracker" }) do
         setmetatable(ns, nil)
         local chunk = assert(loadfile("ClosestVendor/" .. f .. ".lua"))
         setfenv(chunk, env)
@@ -367,6 +369,34 @@ g.onEvent("UPDATE_INVENTORY_DURABILITY")
 eq((g.hidden or 0) > hiddenBefore, true, "old question hidden before the new one")
 eq(g.popup.text:find("needs repair", 1, true) ~= nil, true, "now asks about repair")
 
+-- Reputation: a neutral vendor another character taught is used only once this character has seen it
+-- trade (merchant window, or Neutral or better on target, mouseover or nameplate); one seen as
+-- Unfriendly or Hostile is never used.
+do
+    local gq = boot({ tomtom = true, db = { learned = { [77] = { 77, "Gorhak", 100, 0.52, 0.50, 0, false } } } }); login(gq)
+    gq.autoAccept = false
+    local reaction
+    gq.env.UnitReaction = function() return reaction end
+    gq.env.SlashCmdList.CLOSESTVENDOR("test sell")
+    eq(gq.popup.text:find("Gorhak", 1, true), nil, "an unseen learned neutral vendor is not offered")
+    gq.npc = { guid = "Creature-0-4372-0-55-77-0000A1B2C3", name = "Gorhak" }
+    reaction = 5; gq.onEvent("PLAYER_TARGET_CHANGED")
+    gq.env.SlashCmdList.CLOSESTVENDOR("test sell")
+    eq(gq.popup.text:find("Gorhak", 1, true) ~= nil, true, "seen as Friendly: now the closest")
+    reaction = 3; gq.onEvent("UPDATE_MOUSEOVER_UNIT")
+    eq(gq.env.ClosestVendorCharDB.standing[77], false, "Unfriendly is remembered for this character")
+    gq.env.SlashCmdList.CLOSESTVENDOR("test sell")
+    eq(gq.popup.text:find("Gorhak", 1, true), nil, "seen as Unfriendly: never offered")
+    reaction = nil; gq.onEvent("NAME_PLATE_UNIT_ADDED", "nameplate1")
+    eq(gq.env.ClosestVendorCharDB.standing[77], false, "no reaction from the game changes nothing")
+    gq.npc = { guid = "Creature-0-4372-0-55-999-0000A1B2C3", name = "Some Mob" }
+    reaction = 2; gq.onEvent("PLAYER_TARGET_CHANGED")
+    eq(gq.env.ClosestVendorCharDB.standing[999], nil, "a creature that is not a known vendor is not stored")
+    gq.env.SlashCmdList.CLOSESTVENDOR("log")
+    local rw; for _, f in ipairs(gq.frames) do if f.name == "ClosestVendorReport" then rw = f end end
+    eq(rw ~= nil and rw.box.text:find("standing (this character): 0 vendors trade, 1 will not", 1, true) ~= nil, true, "the report counts what this character has seen")
+end
+
 -- 14. /cvn test: shows the dialog whatever the state; Yes sets the closest pin.
 g = boot({ tomtom = true }); login(g)
 g.autoAccept = false
@@ -542,13 +572,22 @@ eq(line:find("Odd||Vendor", 1, true) ~= nil, true, "pipe doubled in chat: " .. l
 eq((line:gsub("^|cff33ffccClosestVendor|r ", ""):gsub("||", "")):find("|", 1, true), nil, "no lone pipe left")
 
 -- 19. Settings page: registered against the saved settings, changes apply at once.
-local function setting(g, key) for _, s in ipairs(g.settings.settings) do if s.key == key then return s end end end
+local function setting(g, key)
+    local found
+    local function scan(args)
+        for k, o in pairs(args) do
+            if k == key or (g.ns.Presentation.KEYS[k] and g.ns.Presentation.KEYS[k].storage == key) then found = o end
+            if o.args then scan(o.args) end
+        end
+    end
+    scan(g.settings.tree.args)
+    return { SetValue = function(_, v) found.set(nil,v) end, GetValue = function() return found.get() end }
+end
 g = boot({ settings = true }); login(g)
-eq(g.settings.category.name, "Closest Vendor", "settings page registered")
-eq(g.settings.registered, g.settings.category, "listed under AddOns")
-eq(setting(g, "bagThreshold").tbl, g.env.ClosestVendorCharDB.cfg, "page edits the saved settings table")
-eq(setting(g, "ammoThreshold").default, 200, "ammo default shown")
-eq(setting(g, "bagThreshold").default, 2, "bag default shown")
+eq(g.settings.registrations, 1, "one Ace tree registered")
+eq(g.settings.categories, 1, "listed under AddOns")
+eq(setting(g, "ammoThreshold"):GetValue(), 200, "ammo default shown")
+eq(setting(g, "bagThreshold"):GetValue(), 2, "bag default shown")
 g.autoAccept = false
 g.free = 20
 g.onEvent("BAG_UPDATE_DELAYED")
@@ -571,18 +610,22 @@ g = boot({ settings = true }); login(g)
 g.env.SlashCmdList.CLOSESTVENDOR("ammo 500")
 eq(setting(g, "ammoThreshold"):GetValue(), 500, "page shows what the command set")
 setting(g, "durThreshold"):SetValue(35)
-g.env.SlashCmdList.CLOSESTVENDOR("")
+g.env.SlashCmdList.CLOSESTVENDOR("status")
 eq(table.concat(g.printed, "\n"):find("trigger below 35%", 1, true) ~= nil, true, "command shows what the page set")
 
 -- 19c. /cvn config opens the page; without the API it says so; a throwing API never breaks the addon.
 g = boot({ settings = true }); login(g)
 g.env.SlashCmdList.CLOSESTVENDOR("config")
 eq(g.settings.opened, 42, "/cvn config opens the page")
+g.settings.opened=nil
+g.env.SlashCmdList.CLOSESTVENDOR("")
+eq(g.settings.opened,42,"bare /cvn opens settings")
+eq(g.settings.page,"home","bare /cvn opens Home")
 g = boot(); login(g)
 g.env.SlashCmdList.CLOSESTVENDOR("config")
 eq(lastPrinted(g):find("not available", 1, true) ~= nil, true, "no settings API: says so")
 g = boot({ settings = true }); login(g)
-g.env.Settings.OpenToCategory = function() error("settings are locked right now") end
+g.settings.dialog.Open = function() error("settings are locked right now") end
 g.env.SlashCmdList.CLOSESTVENDOR("config")
 eq(lastPrinted(g):find("not available", 1, true) ~= nil, true, "a failing open says so instead of erroring")
 g = boot({ settings = true, settingsThrows = true }); login(g)
@@ -790,7 +833,7 @@ eq(#g.env.ClosestVendorCharDB.log.entries > 0, true, "something to clear")
 g.env.SlashCmdList.CLOSESTVENDOR("log clear")
 eq(#g.env.ClosestVendorCharDB.log.entries, 0, "cleared")
 eq(g.env.ClosestVendorCharDB.log.enabled, true, "clearing does not switch it off")
-eq(has(lastPrinted(g), "Debug log cleared"), true, "says so")
+eq(g.popup.which, "CLOSESTVENDOR_CLEAR_LOG", "dedicated diagnostic confirmation")
 
 -- Before login the commands do nothing and do not error.
 g = boot()
@@ -1004,6 +1047,7 @@ g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup.which, "CLOSESTVENDOR_CONFIRM_DISTANCE", "distance preference: the closer target is the first button")
 
 g = twoMaps()
+g.env.SlashCmdList.CLOSESTVENDOR("set appearance.notification-style warning")
 g.env.SlashCmdList.CLOSESTVENDOR("choice auto")
 g.free = 1
 g.onEvent("BAG_UPDATE_DELAYED")
@@ -1340,7 +1384,7 @@ local function window(game)
     local w = { rows = {} }
     for _, f in ipairs(game.frames) do
         if f.name == "ClosestVendorTracker" then w.frame = f
-        elseif w.frame and f.kind == "Button" then
+        elseif w.frame and f.parent == w.frame and f.kind == "Button" then
             if not w.cog then w.cog = f else w.rows[#w.rows + 1] = f end
         end
     end
@@ -1367,7 +1411,7 @@ eq(#g.hudTimers, 1, "three events, one redraw timer")
 eq(w.frame.shown, false, "not redrawn before the timer")
 flush(g)
 eq(w.frame.shown, true, "bags low: the window shows")
-eq(shownRows(g), "Bag space: 1 free", "with the bag row only")
+eq(shownRows(g), "Low: Bag space: 1 free", "with the bag row only")
 g.onEvent("BAG_UPDATE_DELAYED")
 eq(#g.hudTimers, 1, "the timer is armed again after it fired")
 g.free = 20; flush(g)
@@ -1386,10 +1430,10 @@ g = boot(); login(g); g.autoAccept = false
 g.spells = { [23028] = true, [5504] = true }; g.counts = { [17020] = 3, [5350] = 3, [2288] = 10 }
 g.env.ClosestVendorCharDB.cfg.reagentOff[17020] = true
 g.onEvent("SPELLS_CHANGED"); flush(g)
-eq(shownRows(g), "Arcane Powder: 3", "a low reagent shows even with its warning switched off")
+eq(shownRows(g), "Low: Arcane Powder: 3", "a low reagent shows even with its warning switched off")
 eq(g.popup, nil, "and no question is asked about it")
 g.env.SlashCmdList.CLOSESTVENDOR("hud row reagents always")
-eq(shownRows(g), "Arcane Powder: 3 | Conjured Water: 13", "Reagents always shows conjured water, summed over its ranks")
+eq(shownRows(g), "Low: Arcane Powder: 3 | Conjured Water: 13", "Reagents always shows conjured water, summed over its ranks")
 
 -- Clicking a row pins at once, without a question, and is logged.
 g = boot({ tomtom = true }); login(g); g.autoAccept = false
@@ -1452,7 +1496,7 @@ eq(has(lastPrinted(g), "settings page is not available"), true, "no settings pag
 -- A settings-page change redraws the window at once.
 g = boot({ settings = true }); login(g)
 g.env.ClosestVendorCharDB.cfg.hudRow.bags = "always"
-for _, st in ipairs(g.settings.settings) do if st.key == "hudLocked" then st:SetValue(true) end end
+setting(g, "hudLocked"):SetValue(true)
 eq(shownRows(g), "Bag space: 20 free", "changing a setting on the page redraws the window")
 
 -- Skills are read once and kept until they change; every row never reads nothing.
@@ -1463,16 +1507,16 @@ g.env.GetNumSkillLines = function() skillReads = skillReads + 1 return #g.skillL
 g.env.ClosestVendorCharDB.professions.Mining = true
 g.onEvent("BAG_UPDATE_DELAYED"); flush(g)
 g.onEvent("BAG_UPDATE_DELAYED"); flush(g)
-eq(shownRows(g), "Mining: 70/75", "a profession near its cap shows")
+eq(shownRows(g), "Low: Mining: 70/75", "a profession near its cap shows")
 eq(skillReads, 1, "two redraws, skills read once")
 g.skillLines = { { "Mining", 75, 150 } }
 g.onEvent("BAG_UPDATE_DELAYED"); flush(g)
-eq(shownRows(g), "Mining: 70/75", "no skill event yet: the kept list is used")
+eq(shownRows(g), "Low: Mining: 70/75", "no skill event yet: the kept list is used")
 g.onEvent("SKILL_LINES_CHANGED"); flush(g)
 eq(window(g).frame.shown, false, "skill event: read again, no longer near the cap")
 g.skillLines = { { "Mining", 145, 150 } }
 g.onEvent("SKILL_LINES_CHANGED"); flush(g)
-eq(shownRows(g), "Mining: 145/150", "near the next cap")
+eq(shownRows(g), "Low: Mining: 145/150", "near the next cap")
 for _, name in ipairs({ "ammo", "bags", "durability", "professions", "reagents", "supplies" }) do
     g.env.SlashCmdList.CLOSESTVENDOR("hud row " .. name .. " never")
 end
@@ -1499,7 +1543,7 @@ g = boot(); login(g); flush(g)
 g.env.C_Timer = nil
 g.free = 1
 g.onEvent("BAG_UPDATE_DELAYED")
-eq(shownRows(g), "Bag space: 1 free", "no timers: redrawn at once")
+eq(shownRows(g), "Low: Bag space: 1 free", "no timers: redrawn at once")
 
 -- The report header lists the window, anchor and auction settings.
 g = boot(); login(g)
@@ -1541,7 +1585,7 @@ g.env.SlashCmdList.CLOSESTVENDOR("log")
 for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then win = f end end
 eq(has(win.box.text, "auctioneers: 2 shipped, 1 learned"), true, "report counts the auctioneers")
 -- With auction routing on, a reagent row click goes to the learned auctioneer when it is closer than a vendor.
-g = boot({ tomtom = true, db = { learned = { [90] = { 90, "Powder Seller", 100, 0.9, 0.5, 0, false, 0, 1 } } } })
+g = boot({ tomtom = true, db = { learned = { [90] = { 90, "Powder Seller", 100, 0.9, 0.5, 0, false, 0, 1 } } }, charDb = { standing = { [90] = true } } })
 login(g)
 g.npc = { guid = "Creature-0-4372-0-55-50-0000A1B2C3", name = "Auctioneer Near" }
 g.pos = { map = 100, x = 0.52, y = 0.5 }
@@ -1556,136 +1600,118 @@ g.env.SlashCmdList.CLOSESTVENDOR("ah on")
 window(g).rows[1].scripts.OnClick()
 eq(g.tomtom[#g.tomtom], "Auctioneer Near", "auction routing on: the auctioneer just learned, which is closer")
 
--- /cvn demo: a made-up window and one warning, rolled from the game time, gone after 10 seconds,
--- with the saved settings exactly as they were.
+-- Upgrade defaults differ from a genuinely fresh install; saved choices always win.
+for _,case in ipairs({
+    {opts={},want="toast"},
+    {opts={db={cfg={autoNotice=false}}},want="warning"},
+    {opts={charDb={cfg={bagThreshold=7}}},want="warning"},
+    {opts={charDb={cfg={notificationStyle="toast"}}},want="toast"},
+    {opts={charDb={cfg={notificationStyle="warning"}}},want="warning"},
+}) do
+    local upgraded=boot(case.opts);login(upgraded)
+    eq(upgraded.env.ClosestVendorCharDB.cfg.notificationStyle,case.want,"upgrade/new-install notification default")
+end
+
+-- Read-only/invalid public commands do not evaluate a newly low condition.
+g=boot();login(g);g.autoAccept=false;g.free=1
+for _,msg in ipairs({"get bags.threshold","get bags.threshold extra","set bags.threshold 2.5","set unknown 3"}) do
+    g.env.SlashCmdList.CLOSESTVENDOR(msg)
+    eq(g.popup,nil,"read/invalid input cannot initiate gameplay: "..msg)
+end
+-- Live routes select exactly one transient renderer, without affecting the notice gate.
+g=boot({tomtom=true});login(g)
+eq(g.env.ClosestVendorCharDB.cfg.notificationStyle,"toast","fresh character defaults to Toast")
+g.env.SlashCmdList.CLOSESTVENDOR("hud row bags always")
+window(g).rows[1].scripts.OnClick()
+local liveToast
+for _,f in ipairs(g.frames) do if f.name=="ClosestVendorToast" then liveToast=f end end
+eq(liveToast.shown,true,"route renders toast")
+local warnings=0
+for _,f in ipairs(g.frames) do if not f.name and f.scripts.OnUpdate and f.fontString and f.shown then warnings=warnings+1 end end
+eq(warnings,0,"toast route does not duplicate warning")
+liveToast:Hide();g.env.SlashCmdList.CLOSESTVENDOR("notice off")
+window(g).rows[1].scripts.OnClick();eq(liveToast.shown,false,"disabled notice gate retained")
+-- The newest request replaces what is on screen: a notification, a preview, a demo or a row click.
+g=boot({tomtom=true});login(g);flush(g)
+local function named(n) for _,f in ipairs(g.frames) do if f.name==n then return f end end end
+g.env.SlashCmdList.CLOSESTVENDOR("hud row bags always")
+window(g).rows[1].scripts.OnClick()
+eq(named("ClosestVendorToast").shown,true,"a click shows the live toast")
+g.env.SlashCmdList.CLOSESTVENDOR("preview notice")
+eq(named("ClosestVendorToast").shown,false,"a preview replaces the live toast")
+eq(named("ClosestVendorSampleToast").shown,true,"and shows its sample")
+window(g).rows[1].scripts.OnClick()
+eq(named("ClosestVendorSampleToast").shown,false,"a click replaces the sample toast")
+eq(named("ClosestVendorToast").shown,true,"with the live one")
+g.autoAccept=false;g.timers={}
+g.env.SlashCmdList.CLOSESTVENDOR("demo")
+local pinsInDemo=#g.tomtom
+window(g).rows[1].scripts.OnClick()
+eq(#g.timers>0 and (table.remove(g.timers,1)() or true),true,"the old demo step timer runs")
+eq(#g.tomtom>pinsInDemo,true,"a click during the demo routes for real")
+local afterClick=#g.tomtom
+for _=1,10 do if #g.timers==0 then break end table.remove(g.timers,1)() end
+eq(#g.tomtom,afterClick,"the stopped demo sets no more waypoints")
+g=boot({tomtom=true});login(g);flush(g)
+local function named2(n) for _,f in ipairs(g.frames) do if f.name==n then return f end end end
+g.env.SlashCmdList.CLOSESTVENDOR("choice auto")
+g.env.SlashCmdList.CLOSESTVENDOR("preview notice")
+eq(named2("ClosestVendorSampleToast").shown,true,"a sample toast is up")
+g.free=0;g.onEvent("BAG_UPDATE_DELAYED")
+eq(named2("ClosestVendorToast").shown,true,"an automatic route shows its notification")
+eq(named2("ClosestVendorSampleToast").shown,false,"and replaces the sample")
+-- A cancelled clear request cannot clear diagnostic or gameplay data.
+g=boot();login(g);g.autoAccept=false
+g.env.SlashCmdList.CLOSESTVENDOR("debug on");g.onEvent("BAG_UPDATE_DELAYED")
+local diagnosticCount=#g.env.ClosestVendorCharDB.log.entries
+local bagThreshold=g.env.ClosestVendorCharDB.cfg.bagThreshold
+g.env.SlashCmdList.CLOSESTVENDOR("log clear")
+eq(#g.env.ClosestVendorCharDB.log.entries,diagnosticCount,"clear awaits acceptance")
+g.env.StaticPopup_Hide("CLOSESTVENDOR_CLEAR_LOG")
+eq(#g.env.ClosestVendorCharDB.log.entries,diagnosticCount,"cancel retains diagnostics")
+g.env.SlashCmdList.CLOSESTVENDOR("log clear");g.popup.accept()
+eq(#g.env.ClosestVendorCharDB.log.entries,0,"accept clears diagnostics")
+eq(g.env.ClosestVendorCharDB.cfg.bagThreshold,bagThreshold,"clear retains configuration")
+
+-- /cvn demo: a tour of real routes, questions and notifications, then the previous waypoint is back.
 local function deep(t)
     if type(t) ~= "table" then return tostring(t) end
-    local parts = {}
-    for k, v in pairs(t) do parts[#parts + 1] = tostring(k) .. "=" .. deep(v) end
-    table.sort(parts)
-    return "{" .. table.concat(parts, ",") .. "}"
+    local parts = {}; for k,v in pairs(t) do parts[#parts+1] = tostring(k).."="..deep(v) end
+    table.sort(parts); return "{"..table.concat(parts,",").."}"
 end
-g = boot({ tomtom = true }); login(g); g.autoAccept = false; flush(g)
-g.env.ClosestVendorCharDB.cfg.hudRow.bags = "never"
-local savedCfg, savedHud = deep(g.env.ClosestVendorCharDB.cfg), deep(g.env.ClosestVendorCharDB.hud)
-g.time = 123.456
+g = boot({tomtom=true}); login(g); flush(g)
+local demoSounds={};g.env.PlaySound=function(id) demoSounds[#demoSounds+1]=id end
+g.env.SlashCmdList.CLOSESTVENDOR("test sell")
+local before = g.tomtom[#g.tomtom]
+local pins = #g.tomtom
+g.env.ClosestVendorCharDB.cfg.remindSound="ping"
+g.env.ClosestVendorCharDB.cfg.autoNotice=false
+local saved = deep(g.env.ClosestVendorCharDB.cfg)
+g.autoAccept=false; g.timers={}; demoSounds={}
 g.env.SlashCmdList.CLOSESTVENDOR("demo")
-w = window(g)
-local demoRows = shownRows(g)
-eq(w.frame.shown and demoRows ~= "", true, "demo: the window shows made-up rows")
-eq(g.popup ~= nil or #g.tomtom > 0, true, "demo: and a warning, as a question or a waypoint")
-eq(#g.timers, 1, "demo: one timer to end it")
-g.onEvent("BAG_UPDATE_DELAYED"); flush(g)
-eq(shownRows(g), demoRows, "demo: an ordinary redraw does not bring the real rows back early")
-eq(deep(g.env.ClosestVendorCharDB.cfg), savedCfg, "demo: saved settings untouched while it runs")
-g.timers[1]()
-eq(w.frame.shown, false, "demo over: the real window (nothing low, so hidden) is back")
-eq(g.popup, nil, "demo over: no question left open")
-eq(#g.tomtom == 0 or g.tomtom.removed == true, true, "demo over: a waypoint it set is removed")
-eq(deep(g.env.ClosestVendorCharDB.cfg), savedCfg, "demo over: saved settings exactly as before")
-eq(deep(g.env.ClosestVendorCharDB.hud), savedHud, "demo over: saved position exactly as before")
--- The same game time rolls the same demo; other times roll others, through every kind of warning.
+eq(window(g).frame.shown,true,"made-up status rows during the demo")
+eq(#g.tomtom,pins+1,"step 1 sets a real waypoint without asking")
+eq(demoSounds[1],3175,"its notification plays the chosen sound, even with On-screen notice off")
+eq(#g.timers,1,"the next step is scheduled")
+table.remove(g.timers,1)()
+eq(g.popup and g.popup.which,"CLOSESTVENDOR_CONFIRM","step 2 asks a real question")
+local steps=2
+while #g.timers>0 and steps<20 do table.remove(g.timers,1)(); steps=steps+1 end
+eq(steps>=6,true,"the tour has several steps: "..steps)
+eq(g.tomtom[#g.tomtom],before,"the waypoint from before the demo is restored")
+eq(deep(g.env.ClosestVendorCharDB.cfg),saved,"the demo changes no setting")
+eq(window(g).rows[1].row ~= nil and window(g).rows[1].row.text ~= nil,true,"real rows are back")
+-- A second demo replaces the first: the old chain stops.
+g.timers={}
 g.env.SlashCmdList.CLOSESTVENDOR("demo")
-eq(shownRows(g), demoRows, "the same time gives the same window")
-g.timers[#g.timers]()
-local sawQuestion, sawPin, sawNotice, sawReminder, windowsSeen = false, false, false, false, {}
-for i = 1, 40 do
-    g.time = 200 + i * 1.7
-    g.tomtom = {}
-    local printed = #g.printed
-    g.env.SlashCmdList.CLOSESTVENDOR("demo")
-    windowsSeen[shownRows(g)] = true
-    if g.popup then sawQuestion = true end
-    if #g.tomtom > 0 then
-        sawPin = true
-        if #g.printed > printed and has(lastPrinted(g), "Navigating to") then sawNotice = true end
-    end
-    -- One warning (a question or a pin), or a line in chat: a reminder, or no known vendor for a supply.
-    eq(not (g.popup ~= nil and #g.tomtom > 0), true, "each demo has at most one warning")
-    if g.popup == nil and #g.tomtom == 0 then
-        eq(#g.printed > printed, true, "a demo without a question or a pin says something")
-        if has(lastPrinted(g), "reminder") or has(lastPrinted(g), "Conjure") or has(lastPrinted(g), "healthstone") then sawReminder = true end
-    end
-    g.timers[#g.timers]()
-    eq(g.popup == nil and (#g.tomtom == 0 or g.tomtom.removed == true), true, "each demo cleans up after itself")
-end
-eq(sawQuestion and sawPin and sawNotice, true, "questions, pins and notices all turn up")
-eq(sawReminder, true, "and so does a reminder")
-local n = 0
-for _ in pairs(windowsSeen) do n = n + 1 end
-eq(n > 10, true, "and the windows differ")
-eq(deep(g.env.ClosestVendorCharDB.cfg), savedCfg, "after 42 demos the saved settings are still exactly as before")
--- A second demo during the first re-rolls and restarts the time: the first timer does nothing.
-g.time = 300; g.env.SlashCmdList.CLOSESTVENDOR("demo")
-local firstTimer = g.timers[#g.timers]
-g.time = 301.3; g.env.SlashCmdList.CLOSESTVENDOR("demo")
-local second = shownRows(g)
-firstTimer()
-eq(w.frame.shown and shownRows(g) == second, true, "the first demo's timer does not end the second demo")
-g.timers[#g.timers]()
-eq(w.frame.shown, false, "the second demo's timer does")
--- Before login, without a window, and without timers: no error, nothing shown.
-g = boot(); g.env.SlashCmdList.CLOSESTVENDOR("demo")
-g = boot({ tomtom = true }); g.frameThrows = "ClosestVendorTracker"; login(g); g.autoAccept = false
-g.time = 123.456
+local old=g.timers[1]
 g.env.SlashCmdList.CLOSESTVENDOR("demo")
-eq(g.popup ~= nil or #g.tomtom > 0, true, "no window: the warning is still shown")
-g.timers[#g.timers]()
-eq(g.popup == nil and (#g.tomtom == 0 or g.tomtom.removed == true), true, "and taken back")
-g = boot({ tomtom = true }); login(g); flush(g); g.autoAccept = false
-g.env.C_Timer = nil
-g.env.SlashCmdList.CLOSESTVENDOR("demo")
-eq(window(g).frame.shown == false and g.popup == nil and #g.tomtom == 0, true, "no timers: no demo, since nothing could end it")
-
--- Background colour: /cvn hud color with no colour opens the game's picker, the report says what the
--- client offers and why the settings swatch was or was not built.
-do
-    local function reportOf(g)
-        g.env.SlashCmdList.CLOSESTVENDOR("log")
-        local w
-        for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then w = f end end
-        return w.box.text
-    end
-    local function picker(g)
-        local p = { shown = false }
-        function p:SetColorRGB(r, gg, b) self.rgb = { r, gg, b } end
-        function p:GetColorRGB() return self.rgb[1], self.rgb[2], self.rgb[3] end
-        function p:Show() self.shown = true end
-        g.env.ColorPickerFrame = p
-        return p
-    end
-    g = boot({ settings = true }); g.env.CreateSettingsButtonInitializer = function(n, t, onClick) return { text = t, onClick = onClick, data = {} } end
-    local p = picker(g); login(g)
-    eq(#g.settings.buttons, 1, "swatch built where picker and button exist")
-    eq(has(reportOf(g), "color picker: available, settings button: available, background color control built"), true, "report: built")
-    g.env.SlashCmdList.CLOSESTVENDOR("hud color")
-    eq(p.shown, true, "/cvn hud color opens the picker")
-    eq(p.rgb[1] .. "," .. p.rgb[2] .. "," .. p.rgb[3], "0,0,0", "at the saved colour")
-    p.rgb = { 1, 0, 0.5 }; p.func() -- the player picks
-    eq(g.env.ClosestVendorCharDB.cfg.hudColor, "ff0080", "a pick from the command is saved")
-    -- No picker, no button maker: say so in chat, log the reasons, show them in the report.
-    g = boot({ settings = true }); login(g)
-    g.env.SlashCmdList.CLOSESTVENDOR("hud color")
-    eq(has(lastPrinted(g), "This game has no color picker; use /cvn hud color #rrggbb"), true, "chat says there is no picker")
-    local text = reportOf(g)
-    eq(has(text, "color picker: missing, settings button: missing, background color control not built, missing: color picker (ColorPickerFrame), CreateSettingsButtonInitializer"), true, "report names what is missing: " .. text)
-    g = boot({ settings = true }); g.env.SlashCmdList = g.env.SlashCmdList; g.env.ClosestVendorCharDB = { log = { enabled = true, entries = {} } }
-    login(g)
-    local logged = false
-    for _, e in ipairs(g.env.ClosestVendorCharDB.log.entries) do if has(e.msg, "background color control not built, missing:") then logged = true end end
-    eq(logged, true, "the reason is in the debug log")
-    -- Era and Forever: the game's own swatch row, where its picker takes the swatch's calls.
-    g = boot({ settings = true, swatch = true }); g.env.CreateSettingsButtonInitializer = function(n, t, onClick) return { text = t, onClick = onClick, data = {} } end
-    p = picker(g); p.SetupColorPickerAndShow = function() end; p.GetPreviousValues = function() end
-    login(g)
-    eq(#g.settings.swatches .. "/" .. #g.settings.buttons, "1/0", "swatch row, not a button")
-    eq(has(reportOf(g), "background color control built as a swatch"), true, "report: swatch")
-    g.settings.swatches[1].setting:SetValue("ff336699")
-    eq(g.env.ClosestVendorCharDB.cfg.hudColor, "336699", "a swatch pick is saved")
-    -- A client with no settings page at all.
-    g = boot(); login(g)
-    eq(has(reportOf(g), "background color control not built, missing: the Settings API"), true, "report: no settings API")
-end
+local count=#g.timers
+old();eq(#g.timers,count,"an old step timer does nothing")
+g.env.C_Timer=nil;g.env.SlashCmdList.CLOSESTVENDOR("demo")
+eq(has(lastPrinted(g),"working timer"),true,"missing timer explained")
+g.env.SlashCmdList.CLOSESTVENDOR("preview notice")
+eq(has(lastPrinted(g),"working timer"),true,"a preview without timers is explained")
 
 -- 40. Supplies: food, water and pet food from the bags, learned from merchants, the report line and the
 -- commands; a mage who can conjure and a warlock without a healthstone get a reminder instead.
@@ -1847,10 +1873,10 @@ end
 do
     local gg = supplyGame("PRIEST", { { 117, 2 }, { 159, 30 } })
     flush(gg)
-    eq(shownRows(gg), "Food: 2", "mode low: only the low row")
+    eq(shownRows(gg), "Low: Food: 2", "mode low: only the low row")
     gg.env.SlashCmdList.CLOSESTVENDOR("hud row supplies always")
     flush(gg)
-    eq(shownRows(gg), "Food: 2 | Water: 30", "always: food and water")
+    eq(shownRows(gg), "Low: Food: 2 | Water: 30", "always: food and water")
     gg.bag[1] = { 117, 40 }
     gg.onEvent("BAG_UPDATE_DELAYED"); flush(gg)
     eq(shownRows(gg), "Food: 40 | Water: 30", "the bags changed: the rows follow")
@@ -1891,10 +1917,10 @@ g.env.SlashCmdList.CLOSESTVENDOR("log")
 local swin
 for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then swin = f end end
 eq(has(swin.box.text, "supplies: on; food on (5), water off (5), pet food on (5), healthstone reminder on"), true, "report line")
-g.env.SlashCmdList.CLOSESTVENDOR("")
+g.env.SlashCmdList.CLOSESTVENDOR("status")
 eq(has(table.concat(g.printed, "\n"), "Supplies: food on (5), water off (5), pet food on (5), healthstone reminder on"), true, "settings line")
-eq(has(table.concat(g.printed, "\n"), "Reminder sound: Whisper ping"), true, "sound line")
-eq(has(swin.box.text, "reminder sound whisper"), true, "sound in the report header")
+eq(has(table.concat(g.printed, "\n"), "Notification sound: Whisper ping"), true, "sound line")
+eq(has(swin.box.text, "notification sound whisper"), true, "sound in the report header")
 
 -- 32. NorgannonDB (optional): its vendors on the Forever-only maps join the pool; nothing changes without it.
 local function fakeNG()

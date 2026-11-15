@@ -135,7 +135,7 @@ The addon SHALL clear a vendor waypoint when a merchant window opens at a vendor
 - **THEN** the trainer waypoint stays
 
 ### Requirement: Settings panel
-The addon SHALL add a "Closest Vendor" page under Options, AddOns. The main page SHALL hold, under "Warnings", an on/off checkbox and a threshold slider for bags, durability and professions, in that order, then an on/off checkbox for "Ammo", "Reagents" and "Supplies", whose thresholds are on their own pages; and, under "Navigation", the target choice, the target preference, the waypoint method, the on-screen message checkbox, the dungeon and raid anchor, and the auction house checkbox. Subcategories SHALL follow in alphabetical order: "Ammo" (the ammo threshold, then buy, ask first, arrow and bullet grade), "Reagents" (the reagent threshold, a warning checkbox for each of the player's class reagents, then the reagent buying controls: buy, ask first and the amount to carry), "Supplies" (food, water, pet food and the healthstone reminder, and the reminder sound), and last "Status window" (first the Lock checkbox, then scale, opacity, and a visibility dropdown `low`, `always` or `never` for each row that applies to the player). Changes SHALL edit the same saved settings as the slash commands, take effect at once, and the panel SHALL honor the same limits as the commands. `/cvn config` SHALL open the main page. If subcategories are unavailable, all controls SHALL appear on the one page under section headers.
+The addon SHALL expose Home, Restock (Ammo, Reagents, Supplies), Navigation, Appearance (Notifications, Status window, Sound), Advanced and About using AceConfig/AceConfigDialog and AceGUI, following settings-interaction. Home SHALL hold every switch that decides whether the addon acts: the warning switches with bag, durability and profession thresholds, Destination on another map with Preferred target, and On-screen notice. Ammo, Reagents and Supplies SHALL retain all existing feature, threshold, grade and buying controls. Navigation SHALL contain waypoint method, instance anchor and auction routing. Appearance SHALL contain notification style, Status window controls with Lock position first, visibility modes, visual previews and positioning. The notification sound SHALL be on the Appearance Sound tab. Advanced SHALL show character scope and diagnostics; About SHALL show version and commands. `/cvn config`, `/cvn options` and `/cvn settings` SHALL open Home; `/cvn settings <page>` SHALL open a child page or tab by its own name. Changes SHALL use the same saved values, limits and immediate refresh as slash commands. Game-options entries SHALL use AceConfigDialog registration where supported; without native Settings the standalone Ace dialog and slash commands SHALL continue working.
 
 #### Scenario: Change a threshold in the panel
 - **WHEN** the player moves the bag slider to 4
@@ -162,24 +162,24 @@ The addon SHALL add a "Closest Vendor" page under Options, AddOns. The main page
 - **THEN** ammo questions stop and the ammo slider has no effect and the reagent settings are unaffected
 
 #### Scenario: Panel unavailable
-- **WHEN** the client lacks the settings API
-- **THEN** the addon still loads and the slash commands work
+- **WHEN** the client lacks native Settings registration
+- **THEN** the addon still loads, slash commands work and the standalone Ace dialog opens
 
 #### Scenario: Subcategories
 - **WHEN** the client supports subcategories
-- **THEN** Reagents, Ammo and Status window appear under Closest Vendor
+- **THEN** the approved landmarks appear under Closest Vendor with a recognizable Status window section in Appearance
 
 #### Scenario: Subcategories unavailable
 - **WHEN** the client lacks subcategories
-- **THEN** every control appears on the one page under section headers
+- **THEN** the standalone Ace tree contains every page and control without requiring native subcategories
 
 #### Scenario: Lock first
-- **WHEN** the Status window page opens
-- **THEN** the Lock window position checkbox is its first control
+- **WHEN** Appearance’s Status window section opens
+- **THEN** the Lock position checkbox is its first control
 
 #### Scenario: Only the player's rows
 - **WHEN** a warrior opens the Status window page
-- **THEN** no reagent rows are listed
+- **THEN** the Reagents visibility mode remains visible but disabled with a reason when no class reagent or display-only item applies, consistent with status-window; irrelevant item-specific controls are not actionable
 
 ### Requirement: Test commands
 The addon SHALL provide `/cvn test sell`, `/cvn test repair`, `/cvn test arrows` and `/cvn test bullets`, which ask the same question as a real trigger for the nearest sell or repair vendor, regardless of bag space, durability, combat state or trigger settings, and SHALL set the destination if the player accepts.
@@ -258,7 +258,7 @@ The addon SHALL provide a mode (`ask`, the default, or `auto`) and a preference 
 - **THEN** nothing changes and the valid choices are printed
 
 ### Requirement: On-screen notice setting
-The addon SHALL provide an on/off setting for the on-screen message shown when it pins a target automatically. It SHALL be on by default, saved, settable by `/cvn notice on` and `/cvn notice off` and by a checkbox on the settings page, take effect at once, and appear in the debug report. The chat line SHALL NOT depend on it.
+The addon SHALL provide an on/off setting for the on-screen message shown when it pins a target automatically. It SHALL be on by default, saved, settable by `/cvn notice on` and `/cvn notice off` and by a checkbox on Appearance, take effect at once, and appear in the debug report. The chat line SHALL NOT depend on it. The Warning/Toast presentation choice SHALL be independent of this enabled state; a style change SHALL NOT enable notices.
 
 #### Scenario: Default
 - **WHEN** the addon loads with no saved choice

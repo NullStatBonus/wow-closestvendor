@@ -45,3 +45,6 @@ The debug log and the bug report stay in English. This lets the maintainer read 
 4. Use `say(L["..."])`. Do not use `say("...")`.
 
 The locale test rejects pieces and variable keys. Translators cannot reorder the words of such sentences.
+
+
+Presentation text (Home, Appearance, Sound, Advanced, About, Warning/Toast, safe previews, Move/Done/Cancel and typed-command feedback) also uses whole-sentence English keys with the existing English fallback. Keep warning meaning in the visible Low label as well as the symbol. Test long translations in wrapping HUD/toast content and full native button labels; see test-plan section 20.

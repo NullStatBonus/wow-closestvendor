@@ -7,7 +7,7 @@
 --                       another) and hudTextAlpha (text and icons, percent, 20-100)
 -- OLED-safe: the background is pure black by default and is not drawn at all at 0, whatever its
 -- colour; there is no border and no
--- other fill, a low row is marked by its text colour only, and text and icons dim with hudTextAlpha.
+-- other fill, a low row is red with a warning symbol and a visible Low label, and text and icons dim with hudTextAlpha.
 --   env.pos             saved position table (DB.hud): { point, relPoint, x, y }; empty means the default
 --   env.go(row)         a routable row was clicked
 --   env.openSettings()  the cog was clicked
@@ -21,7 +21,7 @@ local T = {}
 ns.Tracker = T
 
 local NAME = "ClosestVendorTracker"
-local PAD, TITLE_H, ROW_H, MIN_W, COG = 6, 16, 14, 130, 14
+local PAD, TITLE_H, ROW_H, MIN_W, COG = 8, 16, 16, 130, 16
 local DEFAULT = { point = "LEFT", x = 60, y = 60 }
 
 function T.New(env)
@@ -30,6 +30,8 @@ function T.New(env)
     local moving = false
     local buttons = {}
     local textAlpha = 1 -- set by Apply; a line made later starts with it
+    local transaction
+    local moveControls, escapeMode
     local real, demo = {}, nil -- the rows last given to Show, and the demo rows drawn in their place
 
     local f = CreateFrame("Frame", NAME, UIParent)
@@ -54,7 +56,7 @@ function T.New(env)
         moving = false
         f:StopMovingOrSizing()
         local point, _, relPoint, x, y = f:GetPoint(1)
-        if point then pos.point, pos.relPoint, pos.x, pos.y = point, relPoint, x, y end
+        if point and not (transaction and transaction.active) then pos.point, pos.relPoint, pos.x, pos.y = point, relPoint, x, y end
     end
     local function draggable(frame, needShift)
         frame:EnableMouse(true)
@@ -68,9 +70,10 @@ function T.New(env)
     title:SetPoint("TOPLEFT", PAD, -PAD)
     title:SetPoint("TOPRIGHT", -(PAD + COG + 2), -PAD)
     title:SetHeight(TITLE_H)
-    title.text = title:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    title.text = ns.Presentation.Font(title, "GameFontNormal")
     title.text:SetPoint("LEFT")
     title.text:SetText(L["Closest Vendor"])
+    title.text:SetTextColor(0.867, 0.867, 0.867)
     draggable(title, false)
     self.title = title
 
@@ -81,7 +84,7 @@ function T.New(env)
     icon:SetAllPoints()
     icon:SetTexture("Interface\\Buttons\\UI-OptionsButton")
     if not icon:GetTexture() then -- no such texture on this client: a plain mark instead
-        cog.text = cog:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        cog.text = ns.Presentation.Font(cog, "GameFontNormal")
         cog.text:SetPoint("CENTER")
         cog.text:SetText("*")
     end
@@ -93,14 +96,18 @@ function T.New(env)
         b:SetPoint("TOPLEFT", PAD, -(PAD + TITLE_H + (i - 1) * ROW_H))
         b:SetPoint("TOPRIGHT", -PAD, -(PAD + TITLE_H + (i - 1) * ROW_H))
         b:SetHeight(ROW_H)
-        b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        b.text:SetPoint("LEFT")
+        b.text = ns.Presentation.Font(b, "GameFontHighlightSmall")
+        b.text:SetPoint("LEFT", 12, 0)
+        b.text:SetJustifyH("LEFT")
+        b.cue = ns.Presentation.Font(b, "GameFontHighlightSmall")
+        b.cue:SetPoint("LEFT"); b.cue:SetText("!"); b.cue:SetTextColor(1, 0.25, 0.25)
         b:SetAlpha(textAlpha)
         draggable(b, true)
         b:SetScript("OnClick", function()
             -- Shift on an unlocked window is the move gesture, and the end of a drag is not a click.
             if moving or (not cfg.hudLocked and env.shiftDown() == true) then return end
-            if demo then return end -- demo rows are made up: a click on one goes nowhere
+            if transaction and transaction.active then return end
+            -- A demo or preview row stands for a real row kind: the click ends the demo and routes it.
             if b.row and b.row.routable then env.go(b.row) end -- a display-only row does nothing
         end)
         buttons[i] = b
@@ -127,6 +134,10 @@ function T.New(env)
         title:SetAlpha(textAlpha)
         cog:SetAlpha(textAlpha)
         for _, b in ipairs(buttons) do b:SetAlpha(textAlpha) end
+        if transaction and transaction.active then
+            if cfg.hudLocked then transaction.Cancel() end
+            return
+        end
         local point = pos.point or DEFAULT.point
         f:ClearAllPoints()
         f:SetPoint(point, UIParent, pos.relPoint or point, pos.x or DEFAULT.x, pos.y or DEFAULT.y)
@@ -134,23 +145,33 @@ function T.New(env)
 
     -- Back to the default position.
     function self.Reset()
+        if transaction then transaction.Cancel() end
         pos.point, pos.relPoint, pos.x, pos.y = nil, nil, nil, nil
         self.Apply()
     end
 
     local function draw(rows)
         if #rows == 0 then f:Hide() return end
-        local width = MIN_W
+        local width, height = MIN_W, TITLE_H + 2 * PAD
         for i, row in ipairs(rows) do
             local b = buttons[i] or button(i)
             b.row = row
-            b.text:SetText(row.text)
-            if row.low then b.text:SetTextColor(1, 0.25, 0.25) else b.text:SetTextColor(1, 1, 1) end
+            b.text:SetText(row.low and L["Low: %s"]:format(row.text) or row.text)
+            if row.low then b.text:SetTextColor(1, 0.25, 0.25) else b.text:SetTextColor(0.867, 0.867, 0.867) end
+            if row.low then b.cue:Show() else b.cue:Hide() end
+            local textWidth = math.min(520, b.text:GetStringWidth() or MIN_W)
+            b.text:SetWidth(textWidth)
+            local rowHeight = math.max(ROW_H, (b.text:GetStringHeight() or ROW_H) + 4)
+            b:ClearAllPoints()
+            b:SetPoint("TOPLEFT", PAD, -(height - PAD))
+            b:SetPoint("TOPRIGHT", -PAD, -(height - PAD))
+            b:SetHeight(rowHeight)
             b:Show()
-            width = math.max(width, (b.text:GetStringWidth() or 0) + 2 * PAD)
+            width = math.max(width, textWidth + 12 + 2 * PAD)
+            height = height + rowHeight
         end
         for i = #rows + 1, #buttons do buttons[i].row = nil; buttons[i]:Hide() end
-        f:SetSize(width, TITLE_H + #rows * ROW_H + 2 * PAD)
+        f:SetSize(width, height)
         f:Show()
     end
 
@@ -164,12 +185,39 @@ function T.New(env)
     -- Draw made-up rows in place of the real ones (/cvn demo); nil ends that and draws the real rows.
     function self.Demo(rows)
         demo = rows
+        title.text:SetText(rows and L["Preview — Closest Vendor"] or L["Closest Vendor"])
         draw(demo or real)
     end
 
     -- The row buttons in use, for tests.
     function self.Buttons() return buttons end
 
+    if ns.Move then
+        transaction = ns.Move.New({
+            locked = function() return cfg.hudLocked end,
+            stop = function() if moving then moving = false; f:StopMovingOrSizing() end end,
+            apply = self.Apply,
+            save = function()
+                local point, _, relPoint, x, y = f:GetPoint(1)
+                if point then pos.point, pos.relPoint, pos.x, pos.y = point, relPoint, x, y end
+            end,
+            placeholder = function()
+                f:SetFrameStrata("TOOLTIP")
+                self.Demo({ { text = L["Move status window — Done saves; Cancel restores."], low = false } })
+                if escapeMode then escapeMode(true) end
+                if moveControls then moveControls:Show() end
+            end,
+            finish = function() f:SetFrameStrata("MEDIUM"); if escapeMode then escapeMode(false) end; if moveControls then moveControls:Hide() end; self.Demo(nil) end,
+        })
+        self.Move = transaction
+        moveControls = CreateFrame("Frame", nil, f)
+        moveControls:SetSize(240, 28); moveControls:SetPoint("TOP", f, "BOTTOM", 0, -4); moveControls:Hide()
+        for i, spec in ipairs({ { L["Done"], transaction.Done }, { L["Cancel"], transaction.Cancel } }) do
+            local b = ns.Presentation.Button(CreateFrame, moveControls, spec[1], spec[2])
+            b:SetPoint("LEFT", (i-1)*120, 0)
+        end
+        if env.escape then escapeMode = env.escape(f, transaction.Cancel) end
+    end
     self.Apply()
     return self
 end

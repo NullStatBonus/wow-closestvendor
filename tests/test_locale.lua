@@ -142,13 +142,13 @@ loadModules(ns2, { "Locales/enUS", "Locales/Example", "Commands" }, "xxXX")
 local cfg = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true }
 eq(ns2.Commands.Run(cfg, "config")[1], "[xx] Opening the settings page...", "translated at call time")
 local helpTexts = ns2.Commands.Run(cfg, "help")
-eq(helpTexts[1], "/cvn  show settings", "an untranslated help line stays English")
+eq(helpTexts[3], "/cvn  show settings", "an untranslated help line stays English")
 
 ns2 = {}
 loadModules(ns2, { "Locales/enUS" }, "xxXX")
 ns2.L["/cvn  show settings"] = "translated help line"
 loadModules(ns2, { "Commands" }, "xxXX")
-eq(ns2.Commands.Run(cfg, "help")[1], "translated help line", "translated before the module loads (help lines)")
+eq(ns2.Commands.Run(cfg, "help")[3], "translated help line", "translated before the module loads (help lines)")
 
 -- Translated prompts keep their placeholders working.
 ns2 = {}

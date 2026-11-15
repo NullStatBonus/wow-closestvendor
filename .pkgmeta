@@ -4,8 +4,8 @@ package-as: ClosestVendor
 move-folders:
   ClosestVendor/ClosestVendor: ClosestVendor
 
-# No libraries are fetched: the addon has none. LICENSE and THIRD_PARTY.md ship in the package
-# so the pfQuest notice travels with the data.
+# AceGUI, AceConfigRegistry/Dialog, CallbackHandler and LibStub are vendored in Libs.
+# Their upstream license and provenance ship with the addon; no release-time fetch is needed.
 manual-changelog:
   filename: CHANGELOG.md
   markup-type: markdown

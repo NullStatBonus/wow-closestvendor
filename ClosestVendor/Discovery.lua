@@ -114,3 +114,19 @@ function D.Pool(shipped, external, learned)
     end
     return D.Merge(base, rest)
 end
+
+-- The vendors this character can trade with, from a search pool. standing[npcId] is what this
+-- character has seen: true (Neutral or better), false (Unfriendly or Hostile), nil (never seen).
+-- known is the set of npc ids from the shipped and external lists. Dropped: every vendor seen as
+-- Unfriendly or Hostile, and a learned-only vendor of no side (faction 0, such as a reputation
+-- quartermaster another character taught) that this character has not seen as Neutral or better.
+-- Does not modify its inputs.
+function D.Tradable(pool, known, standing)
+    local out = {}
+    for i = 1, #pool do
+        local v = pool[i]
+        local seen = standing[v[1]]
+        if seen ~= false and (seen == true or v[6] ~= 0 or known[v[1]]) then out[#out + 1] = v end
+    end
+    return out
+end

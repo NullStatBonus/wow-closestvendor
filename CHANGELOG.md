@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.0
+
+- Every route message and reminder is now one kind of notification: a compact Toast (default) or a Warning, with one sound you choose.
+- Low rows in the status window are red again.
+- `/cvn demo` tours real routes, questions and notifications, then puts your waypoint back.
+- Settings are simpler: Home holds the main switches, and Ammo, Reagents and Supplies sit under Restock.
+- Vendors you are Unfriendly or Hostile with, such as a rival clan's quartermaster, are no longer suggested.
+- Done/Cancel movement and safe previews make appearance easier to adjust.
+
 ## 1.5.0
 
 - If the NorgannonDB addon is installed, its vendors in WoW Forever's new zones are used too.
