@@ -551,6 +551,10 @@ Run on Classic Era and WoW Forever with only Closest Vendor installed, at matchi
 - [ ] On a character Unfriendly with that clan, target or mouse over the quartermaster. Expected: the debug log says it will not trade, and no later route goes to it. `/cvn log` shows the standing count.
 - [ ] Raise reputation to Neutral, target the quartermaster again. Expected: it can be offered again.
 
+## 22. AddOns list icon
+
+- [ ] Open the game's AddOns list (Menu > AddOns) on Classic Era and WoW Forever. Expected: Closest Vendor shows its badge icon next to its name.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.
