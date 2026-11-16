@@ -195,7 +195,7 @@ The addon has one TOC file for each game:
 
 ## Settings page
 
-Type `/cvn settings` (also `/cvn config` or `/cvn options`) or click the HUD cog to open Home. Settings use the bundled AceConfig tree; no other addon is needed. An Options > AddOns entry is also registered where supported. The standalone tree remains available without native Settings registration.
+Type `/cvn settings` (also `/cvn config` or `/cvn options`) or click the HUD cog to open Home. Settings use the bundled AceConfig tree; no other addon is needed. Where supported, Options > AddOns also lists Closest Vendor: the entry opens Home, with Restock, Navigation, Appearance, Advanced and About under it. The standalone tree remains available without native Settings registration.
 
 Pages appear in this order: **Home, Restock (Ammo, Reagents, Supplies), Navigation, Appearance (Notifications, Status window, Sound), Advanced, About**. The window title is **Closest Vendor**; Advanced explains where settings are saved. The settings window starts at 600×460, matching KeepThat, and can be resized. Pages use readable rows, section headings and spacing, with compact dropdowns, sliders and buttons. Each page and Appearance tab explains its purpose; section notes explain the decisions and their consequences before the controls, including warning counts versus buying targets and purchases without confirmation. Commands and controls edit the same saved settings immediately. Existing settings and learned places retain their scopes.
 

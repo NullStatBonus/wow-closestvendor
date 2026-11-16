@@ -12,9 +12,12 @@ function M.new(opts)
     }
     local dialog = {
         SetDefaultSize = function(_, app, width, height) rec.defaultSize = {app=app,width=width,height=height} end,
-        AddToBlizOptions = function()
+        AddToBlizOptions = function(_, app, name, parent, ...)
             if opts.noNative then error("native registration unavailable") end
-            rec.categories = rec.categories + 1; return 42
+            rec.categories = rec.categories + 1
+            rec.entries = rec.entries or {}
+            rec.entries[#rec.entries + 1] = { app = app, name = name, parent = parent, path = table.concat({ ... }, "/") }
+            return 42
         end,
         Open = function() if opts.failOpen then error("dialog unavailable") end; rec.opened = 42 end,
         SelectGroup = function(_, _, ...) rec.page = table.concat({ ... }, "/") end,
