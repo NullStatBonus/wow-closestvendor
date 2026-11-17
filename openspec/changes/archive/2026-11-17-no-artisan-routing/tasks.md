@@ -1,0 +1,4 @@
+- [x] 1.1 `Professions.NO_ROUTE_CAP = 225` excluded in `Within`; row click explains in chat
+- [x] 1.2 Status demo uses caps 75 and 150
+- [x] 1.3 Tests (professions, controller), mutation-checked
+- [x] 1.4 README, listing, test plan section 26

@@ -38,7 +38,7 @@ When a warning fires, the addon shows the closest vendor that fits.
   - A warlock who knows Create Healthstone and has no healthstone gets a reminder to make one.
   - The reminder shows once, until the cause is gone. It is a notification: it shows as a Toast or Warning, with the notification sound, if the on-screen notice is on.
   - The reminder waits while you are in combat or in an instance.
-- **Professions:** a profession is within the threshold (default **10**) points of its current skill limit. The addon shows the closest trainer for that profession that you opened before. It asks on every skill-up and every craft.
+- **Professions:** a profession is within the threshold (default **10**) points of its current skill limit. The addon shows the closest trainer for that profession that you opened before. It asks on every skill-up and every craft. It does this for Journeyman and Expert only: at 225, Artisan comes next, and only a few trainers teach it, so the addon does not route you (a click on that row says so in chat).
 
 If more than one warning is active, the addon asks one question at a time.
 The order is: repair, ammo, reagent, food, water, pet food, sell, trainer.
@@ -581,10 +581,11 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 
 - The addon takes the last skill tier to end at 300.
 - The addon never asks about a profession whose limit is already 300.
-- The addon does not ask about a profession while you are too low a level to learn its next tier from a trainer (level 10 for 75, 20 for 150, 35 for 225).
+- The addon does not ask about a profession while you are too low a level to learn its next tier from a trainer (level 10 for 75, 20 for 150).
+- Artisan (after 225) is never routed: few trainers teach it and the addon cannot tell which. Journeyman and Expert trainers usually stand side by side, so the closest trainer is used for those.
 - It is not verified if WoW Forever has tiers above 300.
 - The addon does not check the level requirement of the trainer.
-- A character that is too low can be sent to a trainer who cannot teach the next tier yet.
+- The closest trainer is not checked for which tier it teaches; see issue #27.
 
 ### Distance and maps
 

@@ -38,7 +38,7 @@ Closest Vendor tells you when it is a good time to repair, restock or make bag s
 - Your ammo is running low: it offers the closest vendor that sells it.
 - A class reagent is running low: it offers the closest vendor that sells it.
 - Food, water or pet food is running low: it offers the closest vendor that sells it. Mages and warlocks who can make their own get a reminder with a sound instead.
-- A profession is near its skill limit and you are high enough level to learn the next tier: it offers the closest trainer you have visited.
+- A profession is near its skill limit and you are high enough level to learn Journeyman or Expert: it offers the closest trainer you have visited. Artisan, taught by only a few trainers, is left to you.
 
 **Restock without the trip planning.** At any merchant, it can fill your quiver or ammo pouch. It can also top up your class reagents (off by default). It buys only what you can afford and tells you in chat.
 

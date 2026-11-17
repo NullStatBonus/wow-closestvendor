@@ -1128,6 +1128,10 @@ eq(w.setCount + #w.says, 0, "silently")
 w = trade({ trainers = {} })
 eq(w.c.Go("trainer", "Mining"), false, "no trainer known")
 eq(w.says[1]:find("No known trainer for Mining", 1, true) ~= nil, true, "chat says so")
+w = trade({ skills = { { name = "Mining", rank = 220, max = 225 } } })
+eq(w.c.Go("trainer", "Mining"), false, "Artisan next: not routed")
+eq(w.setCount, 0, "no pin")
+eq(w.says[1], "Artisan Mining is taught by only a few trainers, so the addon does not route to one.", "chat says why")
 
 -- Direct pin inside an instance: the search starts from an anchor, and chat says which.
 local HEARTH, LAST = { continent = 1, x = 95, y = 0, map = 100 }, { continent = 1, x = 48, y = 0, map = 100 }

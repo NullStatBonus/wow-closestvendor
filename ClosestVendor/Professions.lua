@@ -12,8 +12,12 @@ P.LAST_CAP = 300
 -- (level 10), 150 -> Expert (20), 225 -> Artisan (35). A cap not listed has no level gate.
 P.TIER_LEVEL = { [75] = 10, [150] = 20, [225] = 35 }
 
+-- The cap before the highest tier (Artisan). Few trainers teach Artisan and the addon cannot tell which,
+-- so it never routes for it; Journeyman and Expert trainers usually stand side by side.
+P.NO_ROUTE_CAP = 225
+
 -- Known professions (set of names) within threshold points of their current cap, with a higher
--- tier still to learn. Nearest the cap first, then by name. Unreadable skills give an empty list.
+-- tier still to learn that the addon routes for (not Artisan, see NO_ROUTE_CAP). Nearest the cap first, then by name. Unreadable skills give an empty list.
 -- level is the player's level; a skill whose next tier the player is too low to learn is left out
 -- (the trainer would refuse). An unknown level (nil) gates nothing.
 function P.Within(skills, known, threshold, level)
@@ -22,7 +26,7 @@ function P.Within(skills, known, threshold, level)
     for _, s in ipairs(skills) do
         local rank, max = s.rank, s.max
         if known[s.name] and type(rank) == "number" and type(max) == "number"
-                and max > 0 and max < P.LAST_CAP and rank <= max and max - rank <= threshold
+                and max > 0 and max < P.LAST_CAP and max ~= P.NO_ROUTE_CAP and rank <= max and max - rank <= threshold
                 and not (type(level) == "number" and level < (P.TIER_LEVEL[max] or 0)) then
             out[#out + 1] = { name = s.name, remaining = max - rank }
         end

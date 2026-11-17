@@ -308,7 +308,7 @@ function S.Demo(roll, cfg)
     for i = 0, 1 do
         local name = DEMO_PROFESSIONS[(at + i - 1) % #DEMO_PROFESSIONS + 1]
         makers[#makers + 1] = function(low)
-            local max = 75 * roll(3)
+            local max = 75 * roll(2) -- Journeyman or Expert next: the tiers the addon routes for
             local left = low and upTo(cfg.tradeThreshold) or cfg.tradeThreshold + roll(20)
             snap.known[name] = true
             snap.skills[#snap.skills + 1] = { name = name, rank = math.max(1, max - left), max = max }

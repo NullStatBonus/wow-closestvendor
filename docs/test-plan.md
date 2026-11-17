@@ -583,6 +583,11 @@ Run on Classic Era and WoW Forever with only Closest Vendor installed, at matchi
 - [ ] On the Reagents page in a non-English client, the reagent checkboxes show the game's item names.
 - [ ] `/cvn debug on`, then open a small-town profession trainer and a capital-city trainer for the same profession, ideally on a character below Expert. `/cvn log`: each shows "trainer services: N listed; filters ..." and one "service:" line per entry with level and skill requirements. Copy the report into the trainer-tier issue. The trainer window's filters are unchanged.
 
+## 26. Artisan is not routed
+
+- [ ] A profession at 215-225 of 225 (level 35 or more): no trainer question on skill-ups or crafts; the status window row is not red. Click the row: chat says Artisan is taught by only a few trainers and no waypoint is set.
+- [ ] A profession at 145 of 150 (level 20 or more): the trainer question still comes, as before.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

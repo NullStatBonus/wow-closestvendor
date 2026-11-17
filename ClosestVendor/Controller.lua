@@ -614,7 +614,15 @@ function C.New(env)
             for _, p in ipairs(ns.Professions.Within(env.skills and env.skills(), env.known or {}, env.cfg.tradeThreshold, env.level and env.level())) do
                 if p.name == id then near = true end
             end
-            if not near then log("direct pin: profession is not near its cap") return false end
+            if not near then
+                for _, s in ipairs(env.skills and env.skills() or {}) do
+                    if s.name == id and s.max == ns.Professions.NO_ROUTE_CAP then
+                        say(L["Artisan %s is taught by only a few trainers, so the addon does not route to one."]:format(id))
+                        return false
+                    end
+                end
+                log("direct pin: profession is not near its cap") return false
+            end
             trade = id
         elseif kind ~= "sell" and kind ~= "repair" then
             return false
