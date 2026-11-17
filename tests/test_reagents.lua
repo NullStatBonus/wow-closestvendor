@@ -233,6 +233,16 @@ eq(#b .. #s, "00", "ask first: nothing bought yet")
 eq(asked[1][1], "Buy 5 Arcane Powder, 10 Rune of Teleportation for 1g 5s 0c?", "the question names reagents, counts and price")
 asked[1][2]()
 eq(table.concat(b, ",") .. "/" .. s[1], "3:5,4:10/Bought 5 Arcane Powder, 10 Rune of Teleportation for 1g 5s 0c.", "bought after Yes")
+-- Yes answered after the merchant window changed: nothing is bought if any slot changed.
+local slot = { [3] = 17020, [4] = 17031 }
+b, s, asked = run({ reagentBuyPrompt = true }, { sells = function(i) return slot[i] end })
+slot[4] = 99
+asked[1][2]()
+eq(#b .. "/" .. #s, "0/0", "one slot changed: nothing bought and no Bought line")
+slot = { [3] = 17020, [4] = 17031 }
+b, s, asked = run({ reagentBuyPrompt = true }, { sells = function(i) return slot[i] end })
+asked[1][2]()
+eq(table.concat(b, ","), "3:5,4:10", "same merchant: bought after Yes")
 b, s, asked = run({ reagentBuyPrompt = true }, { money = function() return 50 end })
 eq(#asked .. "/" .. s[1], "0/You cannot afford any reagents here.", "nothing to buy: no question")
 

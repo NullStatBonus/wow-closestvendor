@@ -231,11 +231,28 @@ function C.New(env)
         notice(text)
     end
 
+    local function dead() return env.dead and env.dead() or false end
+
+    -- The trigger a question's kind answers: ammo for arrows and bullets, the supply key for supplies.
+    local function triggerOf(kind, id)
+        if kind == "arrow" or kind == "bullet" then return "ammo" end
+        if kind == "supply" then return id end
+        return kind
+    end
+
+    -- The request for kind ended without a trip (No, or no vendor): the next need may be asked.
+    local function release(kind, id)
+        if triggers.Release(triggerOf(kind, id), id) then
+            log("request released: " .. kind)
+            if env.after then env.after(0.1, function() self.Evaluate() end) end
+        end
+    end
+
     -- Ask about the nearest target v (and, when v is on another map, the nearest on the player's
     -- map), navigating only on a choice. trade is set for trainers, count is the ammo or reagent left
     -- or the points left to the cap. name is the reagent's name and id its item id for a reagent.
-    -- pinned (optional) is called after an answer set the waypoint.
-    local function ask(kind, v, onMap, x, y, count, trade, name, id, pinned)
+    -- pinned (optional) is called after an answer set the waypoint; declined (optional) after No.
+    local function ask(kind, v, onMap, x, y, count, trade, name, id, pinned, declined)
         local cfg = env.cfg
         local mapFirst = cfg.vendorPrefer ~= "distance"
         local i = kind == "trainer" and 8 or 9
@@ -258,15 +275,21 @@ function C.New(env)
                 if pinned then pinned() end
             end
         end
+        local function decline()
+            if mine ~= promptId then return end
+            log("question declined: " .. kind)
+            if declined then declined() end
+        end
         local two = second and { other = second, acceptOther = answer(second), mapFirst = mapFirst,
             dist = yards(first, i, x, y), otherDist = yards(second, i, x, y) }
-        env.confirm(kind, first, answer(first), count, trade or name, two)
+        env.confirm(kind, first, answer(first), count, trade or name, two, decline)
     end
 
     -- Offer a target: in "auto" mode pin without asking, otherwise ask (see ask for the arguments).
-    local function offer(kind, v, onMap, x, y, count, trade, name, id)
+    -- yields: a warning asked this, so No ends that request (a test command's question does not).
+    local function offer(kind, v, onMap, x, y, count, trade, name, id, yields)
         if env.cfg.vendorMode == "auto" then return autoPin(kind, v, onMap, x, y, trade, name, id) end
-        ask(kind, v, onMap, x, y, count, trade, name, id)
+        ask(kind, v, onMap, x, y, count, trade, name, id, nil, yields and function() release(kind, id) end or nil)
     end
 
     -- skills: the player's skill list. Asks about the profession nearest its cap that has a
@@ -281,7 +304,7 @@ function C.New(env)
             if not still then log("trainer waypoint cleared: " .. pinTrade .. " is no longer near its cap") clearNav() end
         end
         if #within == 0 then return end
-        if env.inCombat() then log("profession check skipped: in combat") return end
+        if env.inCombat() or dead() then log("profession check skipped: in combat or dead") return end
         if instance() then log("profession check skipped: in an instance") return end
         -- Lowest priority: never over an open question, an open or active vendor request, or a trainer trip.
         if pinTrade or questionOpen() or triggers.Active() then return end
@@ -340,10 +363,11 @@ function C.New(env)
             log("no map position yet: " .. key .. " request kept for a retry")
         elseif v then
             self.pending, self.pendingId = nil, nil
-            offer("supply", v, onMap, x, y, s.count, nil, s.name, key)
+            offer("supply", v, onMap, x, y, s.count, nil, s.name, key, true)
         else
             self.pending, self.pendingId = nil, nil
             log("no known vendor for " .. key .. " on this continent")
+            release("supply", key)
             if not noticedSupply[s.noticeKey] then
                 noticedSupply[s.noticeKey] = true
                 if key == "pet" then
@@ -369,10 +393,11 @@ function C.New(env)
             log("no map position yet: " .. trigger .. " request kept for a retry")
         elseif v then
             self.pending, self.pendingId = nil, nil
-            offer(kind, v, onMap, x, y, trigger == "ammo" and ammoCount or (r and r.count) or nil, nil, r and r.name, id)
+            offer(kind, v, onMap, x, y, trigger == "ammo" and ammoCount or (r and r.count) or nil, nil, r and r.name, id, true)
         else
             self.pending, self.pendingId = nil, nil
             log("no known vendor for " .. kind .. " on this continent")
+            release(kind, id)
             if r and not noticedReagent[id] then
                 noticedReagent[id] = true
                 say(L["No known vendor sells %s on this continent yet. Open a vendor that sells it once and the addon will remember it."]:format(r.name))
@@ -382,7 +407,8 @@ function C.New(env)
 
     function self.Evaluate()
         ammoKind, ammoCount = env.ammo()
-        local free, dur, combat, inside = env.freeSlots(), env.lowestDurability(), env.inCombat(), instance()
+        -- Dead or a ghost is held like combat: the game would hide the question and use it up.
+        local free, dur, combat, inside = env.freeSlots(), env.lowestDurability(), env.inCombat() or dead(), instance()
         -- Reagents.Low is the one "is it low" test for reagents; the status window uses it too.
         local items, watched = {}, {}
         for _, r in ipairs(env.reagents and env.reagents() or {}) do

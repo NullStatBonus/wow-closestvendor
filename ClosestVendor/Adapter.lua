@@ -35,6 +35,11 @@ function A.isAddOnLoaded(name)
     return call("IsAddOnLoaded", f, name) and true or false
 end
 
+-- Dead or a ghost: the game shows no questions then (whileDead = false).
+function A.isDead()
+    return call("UnitIsDeadOrGhost", UnitIsDeadOrGhost, "player") and true or false
+end
+
 function A.inCombat()
     return call("InCombatLockdown", InCombatLockdown) and true or false
 end
@@ -586,6 +591,12 @@ function A.ammoSpace(id, kind)
 end
 
 -- Buy one purchase (one batch) of merchant item `index`, or `quantity` single items of it.
+-- The item id at a slot of the open merchant window, or nil (no merchant open, or no data).
+function A.merchantItemId(index)
+    local link = call("GetMerchantItemLink", GetMerchantItemLink, index)
+    return type(link) == "string" and tonumber(link:match("item:(%d+)")) or nil
+end
+
 function A.buyMerchantItem(index, quantity)
     if quantity then call("BuyMerchantItem", BuyMerchantItem, index, quantity)
     else call("BuyMerchantItem", BuyMerchantItem, index) end

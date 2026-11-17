@@ -44,9 +44,13 @@ If more than one warning is active, the addon asks one question at a time.
 The order is: repair, ammo, reagent, food, water, pet food, sell, trainer.
 A repair trip or an ammo trip also covers selling.
 A food, water or pet food trip does not cover selling.
-If no known vendor sells what you need, the addon prints one chat line and shows no question.
+If you answer No, that warning is not asked again until it clears, and the next warning is asked. A No to repair or ammo can still be followed by the sell question.
+If no known vendor sells what you need, the addon prints one chat line and shows no question, and moves on to the next warning.
+Questions wait while you are dead or a ghost, as in combat, and come once you are alive.
 
 ### Buying
+
+A purchase question closes when you close the merchant window. Nothing is bought if the merchant changed before you answered.
 
 - **Ammo buying:** at any merchant, with a bow, crossbow or gun equipped, the addon buys ammo to fill your quiver or ammo pouch.
   - It does not ask by default.

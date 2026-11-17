@@ -69,6 +69,7 @@ local function boot(opts)
         C_Container = { GetContainerNumFreeSlots = function(bag) if bag == 0 then return g.free, 0 end return g.otherBags and g.otherBags[bag] or 0, 0 end },
         GetInventoryItemDurability = function(slot) if slot == 1 then return g.dur, 100 end end,
         InCombatLockdown = function() return g.combat end,
+        UnitIsDeadOrGhost = function(u) return u == "player" and g.dead end,
         IsInInstance = function() if g.instance then return true, g.instance end return false, "none" end,
         GetBindLocation = function() return g.bind end,
         UnitFactionGroup = function(u) if u == "player" then return "Alliance" end return g.npcFaction end,
@@ -102,7 +103,7 @@ local function boot(opts)
         SlashCmdList = {},
         StaticPopupDialogs = {},
         StaticPopup_Show = function(which, text, _, data)
-            g.popup = { which = which, text = text, accept = data }
+            g.popup = { which = which, text = text, accept = type(data) == "table" and data.accept or data, data = data }
             g.shown = (g.shown or 0) + 1
             if g.autoAccept ~= false then (type(data) == "table" and data.accept or data)() end -- tests say g.autoAccept = false to hold it open
         end,
@@ -332,6 +333,32 @@ eq(dlg.text, "%s", "text passed as an argument")
 eq(dlg.hideOnEscape, true, "Escape declines")
 dlg.OnAccept(nil, g.popup.accept)
 eq(g.tomtom[1], "Ally Seller", "Yes navigates")
+
+-- 13a. No (or Escape) to the first question asks the next need; a replaced question is not a No.
+g = boot({ tomtom = true }); login(g)
+g.autoAccept = false
+g.dur, g.free = 10, 1
+g.onEvent("UPDATE_INVENTORY_DURABILITY")
+eq(((g.popup and g.popup.text or ""):find("repair", 1, true) ~= nil), true, "repair asked first")
+local repairData, before = g.popup.data, g.shown
+dlg.OnCancel(nil, repairData, "override")
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.shown, before, "a replaced question is not an answer: nothing new asked")
+dlg.OnCancel(nil, repairData, "clicked")
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(((g.popup and g.popup.text or ""):find("bags are almost full", 1, true) ~= nil), true, "No to repair: selling is asked next")
+eq(#g.tomtom, 0, "No navigates nowhere")
+
+-- 13c. Dead or a ghost: no question is shown or used up; coming back to life asks.
+g = boot({ tomtom = true }); login(g)
+g.autoAccept = false
+g.dead, g.free = true, 1
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(g.popup, nil, "dead: no question")
+eq(g.ns.frame.events.PLAYER_UNGHOST and g.ns.frame.events.PLAYER_ALIVE, true, "listens for coming back to life")
+g.dead = false
+g.onEvent("PLAYER_UNGHOST")
+eq(((g.popup and g.popup.text or ""):find("bags are almost full", 1, true) ~= nil), true, "alive again: asked")
 
 -- 13b. Declining (doing nothing) does not navigate and does not ask again.
 g = boot({ tomtom = true }); login(g)
@@ -1031,13 +1058,13 @@ eq(g.env.StaticPopupDialogs.CLOSESTVENDOR_CONFIRM_DISTANCE.button1, d3.button3, 
 eq(#g.tomtom, 0, "nothing before a choice")
 d3.OnAlt(nil, nil)
 eq(#g.tomtom, 0, "missing data is harmless")
-local data = g.popup.accept
+local data = g.popup.data
 d3.OnAlt(nil, data)
 eq(g.tomtom[1], "Other Shop", "second button navigates to the closer target")
 g = twoMaps(); g.autoAccept = false
 g.free = 1
 g.onEvent("BAG_UPDATE_DELAYED")
-d3.OnAccept(nil, g.popup.accept)
+d3.OnAccept(nil, g.popup.data)
 eq(g.tomtom[1], "Home Shop", "first button navigates to the map target")
 
 g = twoMaps(); g.autoAccept = false
@@ -1187,6 +1214,14 @@ eq(#g.bought, 0, "nothing before Yes")
 g.env.StaticPopupDialogs.CLOSESTVENDOR_CONFIRM_REAGENTS.OnAccept(nil, g.popup.accept)
 eq(table.concat(g.bought, ","), "1:17", "Yes buys, in one call")
 eq(has(lastPrinted(g), "Bought 17 Arcane Powder for 17s 0c."), true, "and says so: " .. lastPrinted(g))
+-- A purchase question ends with its merchant window; ammo has a dialog of its own.
+g = reagentShop()
+g.env.SlashCmdList.CLOSESTVENDOR("reagentbuy on")
+g.onEvent("MERCHANT_SHOW")
+eq(g.popup and g.popup.which, "CLOSESTVENDOR_CONFIRM_REAGENTS", "purchase asked")
+g.onEvent("MERCHANT_CLOSED")
+eq(g.popup, nil, "closing the merchant closes the purchase question")
+eq(g.env.StaticPopupDialogs.CLOSESTVENDOR_CONFIRM_AMMO ~= nil, true, "ammo purchases have their own dialog")
 g = reagentShop(); g.autoAccept = true
 g.env.SlashCmdList.CLOSESTVENDOR("reagentbuy on"); g.env.SlashCmdList.CLOSESTVENDOR("reagentbuy auto")
 g.ns.Ammo.OnMerchant = function() return 2, 99000 end -- an ammo purchase a moment before

@@ -551,6 +551,17 @@ Run on Classic Era and WoW Forever with only Closest Vendor installed, at matchi
 - [ ] On a character Unfriendly with that clan, target or mouse over the quartermaster. Expected: the debug log says it will not trade, and no later route goes to it. `/cvn log` shows the standing count.
 - [ ] Raise reputation to Neutral, target the quartermaster again. Expected: it can be offered again.
 
+## 23. Safe questions
+
+- [ ] Ammo: turn on "ask first", open an ammo merchant, leave the question open and close the merchant. Expected: the question closes, nothing is bought. Repeat with reagents.
+- [ ] With the ammo question open, a route question shown at the same time does not replace it.
+- [ ] Gear worn below the threshold and bags full: answer **No** to the repair question. Expected: the sell question appears within a moment. Repair is not asked again until you repair.
+- [ ] Press Escape on a route question. Expected: same as No.
+- [ ] Need repair where no repairer is known on the continent, with bags full. Expected: the sell question is asked.
+- [ ] Die with gear just above the threshold so death drops it below. Expected: no question while dead or a ghost. After resurrecting (corpse or spirit healer), the repair question appears.
+- [ ] Same, but accept a resurrection from another player before releasing. Expected: the repair question appears once alive.
+- [ ] Bags full: the sell question shows; then gear drops below the threshold. Answer **No** to repair. Expected: the sell question is asked again.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

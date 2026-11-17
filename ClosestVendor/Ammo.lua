@@ -102,6 +102,8 @@ function M.OnMerchant(cfg, env)
         return 0
     end
     local function buy()
+        -- A question answered later: buy only if this merchant still offers the item at that slot.
+        if env.sells and env.sells(o.index) ~= o.id then log("purchase dropped: the merchant window changed") return end
         for _ = 1, n do env.buy(o.index) end
         env.say((partial and L["Bought %d %s for %s (all you could afford)."] or L["Bought %d %s for %s."])
             :format(items, o.name, M.Coins(cost)))

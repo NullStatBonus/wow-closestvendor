@@ -103,6 +103,20 @@ eq(#b, 0, "prompt: nothing bought yet")
 eq(asked[1][1], "Buy 400 Sharp for 16s 0c?", "prompt text")
 asked[1][2]()
 eq(#b, 4, "prompt: bought after Yes")
+-- Yes answered after the merchant window changed: the slot no longer holds the item, nothing is bought.
+local slot = { [2] = 11 }
+b, s, asked = run({ ammoBuyPrompt = true }, { sells = function(i) return slot[i] end })
+slot[2] = 99
+asked[1][2]()
+eq(#b .. "/" .. #s, "0/0", "slot changed: nothing bought and no Bought line")
+slot = {}
+b, s, asked = run({ ammoBuyPrompt = true }, { sells = function(i) return slot[i] end })
+asked[1][2]()
+eq(#b, 0, "merchant closed: nothing bought")
+slot = { [2] = 11 }
+b, s, asked = run({ ammoBuyPrompt = true }, { sells = function(i) return slot[i] end })
+asked[1][2]()
+eq(#b, 4, "same merchant: bought after Yes")
 local lines = {}
 run(nil, { space = function() return nil end, log = function(t) lines[#lines + 1] = t end })
 eq(lines[#lines], "ammo buy: space, price or money unknown", "silent exits are logged")

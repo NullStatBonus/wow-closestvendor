@@ -39,6 +39,7 @@ local function world(over)
         freeSlots = function() return w.free end,
         lowestDurability = function() return w.dur end,
         inCombat = function() return w.combat end,
+        dead = function() return w.dead end,
         instanceType = function() return w.instance end,
         anchor = function(which) return w.anchors and w.anchors[which] end,
         after = (not w.noAfter) and function(s, fn)
@@ -52,8 +53,8 @@ local function world(over)
         buckets = w.buckets or { [1] = VENDORS },
         log = (not w.noLog) and function(m) w.logs[#w.logs + 1] = m end or nil,
         ammo = function() return w.ammoKind, w.ammoCount end,
-        confirm = function(kind, v, accept, count, trade, two)
-            w.prompts[#w.prompts + 1] = { kind = kind, vendor = v, accept = accept, count = count, trade = trade, two = two }
+        confirm = function(kind, v, accept, count, trade, two, decline)
+            w.prompts[#w.prompts + 1] = { kind = kind, vendor = v, accept = accept, count = count, trade = trade, two = two, decline = decline }
             if w.autoAccept ~= false then (w.pickOther and two and two.acceptOther or accept)() else w.open = true end -- tests say autoAccept = false to hold the question open
         end,
         cancelConfirm = function() w.cancelCount = w.cancelCount + 1; w.open = false end,
@@ -1435,5 +1436,59 @@ eq(w.says[1], "This is a test reminder. Only mages and warlocks get real ones.",
 eq(world({ buckets = { [1] = { SV[3] } }, supplies = { class = "WARRIOR", totals = { food = 1 }, knows = function() return false end } }).c.Test("food"),
     "No known vendor selling food on this continent for your faction.", "test food with no seller")
 eq(world().c.Test("food"), "Your bags cannot be read right now.", "no supply source")
+
+-- No to a question ends that request: the next need is asked, the declined one is not asked again.
+w = world({ dur = 10, free = 1, autoAccept = false })
+w.c.Evaluate()
+eq(#w.prompts .. ":" .. w.prompts[1].kind, "1:repair", "repair asked first")
+w.c.Evaluate()
+eq(#w.prompts, 1, "nothing else while repair is open")
+w.prompts[1].decline()
+eq(w.timers and #w.timers, 1, "No checks again shortly")
+w.timers[1].fn()
+eq(#w.prompts .. ":" .. w.prompts[2].kind, "2:sell", "No to repair: selling is asked next")
+w.c.Evaluate()
+eq(#w.prompts, 2, "repair is not asked again")
+eq(w.setCount, 0, "No sets no waypoint")
+w = world({ dur = 10, free = 1, autoAccept = false })
+w.c.Evaluate()
+local stale = w.prompts[1].decline
+w.dur = 100; w.c.Evaluate() -- the repair question is withdrawn
+w.dur = 10; w.c.Evaluate() -- and a new one asked
+eq(#w.prompts .. ":" .. w.prompts[2].kind, "2:repair", "a new repair question")
+stale()
+eq(w.timers == nil or #w.timers == 0, true, "No to the withdrawn question does nothing")
+w.c.Evaluate()
+eq(#w.prompts, 2, "the new repair request is still the active one: selling waits")
+
+-- No to a test command's question leaves the real request alone.
+w = world({ dur = 10 })
+w.c.Evaluate()
+eq(w.setCount, 1, "real repair request accepted")
+w.autoAccept = false
+w.c.Test("repair")
+w.prompts[#w.prompts].decline()
+eq(w.timers == nil or #w.timers == 0, true, "No to /cvn test releases nothing")
+local cleared = w.clearCount
+w.dur = 100; w.c.Evaluate()
+eq(w.clearCount > cleared, true, "repairing still clears the real waypoint")
+
+-- No vendor for the need: it ends too, so it does not hold back the next one.
+w = world({ dur = 10, free = 1, autoAccept = false, buckets = { [1] = { VENDORS[1] } } })
+w.c.Evaluate()
+eq(#w.prompts, 0, "no repairer: no question")
+w.timers[1].fn()
+eq(#w.prompts .. ":" .. w.prompts[1].kind, "1:sell", "no repairer: selling is asked")
+
+-- Dead or a ghost: the game would hide the question, so nothing is asked or used up until alive.
+w = world({ dur = 10, dead = true, autoAccept = false })
+w.c.Evaluate()
+eq(#w.prompts, 0, "dead: no question")
+w.dead = false
+w.c.Evaluate()
+eq(#w.prompts .. ":" .. w.prompts[1].kind, "1:repair", "alive again: repair asked")
+w = world({ free = 1, dead = true, cfg = { vendorMode = "auto" } })
+w.c.Evaluate()
+eq(w.setCount, 0, "dead: auto mode sets no waypoint either")
 
 H.done()

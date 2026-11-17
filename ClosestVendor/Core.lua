@@ -22,17 +22,25 @@ local POLL_SECONDS = 5
 local WINDOW_DELAY = 0.25 -- one redraw of the status window this long after the first change
 
 local POPUP = "CLOSESTVENDOR_CONFIRM"
--- The reagent purchase question has a dialog of its own, so it can show beside an ammo purchase
--- question at the same merchant instead of replacing it.
-local POPUP_REAGENTS = "CLOSESTVENDOR_CONFIRM_REAGENTS"
+-- The ammo and reagent purchase questions have dialogs of their own, so they show side by side at
+-- the same merchant, never replace a route question, and close with the merchant window.
+local POPUP_AMMO, POPUP_REAGENTS = "CLOSESTVENDOR_CONFIRM_AMMO", "CLOSESTVENDOR_CONFIRM_REAGENTS"
 -- The question text is passed whole as the first argument, so "%" in vendor names is safe.
 if StaticPopupDialogs then
-    for _, which in ipairs({ POPUP, POPUP_REAGENTS, "CLOSESTVENDOR_SAMPLE", "CLOSESTVENDOR_CLEAR_LOG" }) do
+    for _, which in ipairs({ POPUP, POPUP_AMMO, POPUP_REAGENTS, "CLOSESTVENDOR_SAMPLE", "CLOSESTVENDOR_CLEAR_LOG" }) do
         StaticPopupDialogs[which] = {
             text = "%s",
             button1 = YES or "Yes",
             button2 = NO or "No",
-            OnAccept = function(_, accept) if accept then accept() end end,
+            -- data is the Yes function, or { accept, decline } for a route question.
+            OnAccept = function(_, data)
+                local accept = type(data) == "table" and data.accept or data
+                if type(accept) == "function" then accept() end
+            end,
+            -- No or Escape (not a question replaced or withdrawn) is an answer.
+            OnCancel = function(_, data, reason)
+                if reason == "clicked" and type(data) == "table" and data.decline then data.decline() end
+            end,
             timeout = which == "CLOSESTVENDOR_SAMPLE" and 10 or 0,
             whileDead = false,
             hideOnEscape = true,
@@ -53,6 +61,9 @@ if StaticPopupDialogs then
             button2 = CANCEL or "Cancel",
             OnAccept = function(_, data) if data and data.accept then data.accept() end end,
             OnAlt = function(_, data) if data and data.alt then data.alt() end end,
+            OnCancel = function(_, data, reason)
+                if reason == "clicked" and data and data.decline then data.decline() end
+            end,
             timeout = 0,
             whileDead = false,
             hideOnEscape = true,
@@ -96,7 +107,8 @@ local AMMO_ENV = {
     buy = function(...) merchantActed = true; return A.buyMerchantItem(...) end,
     say = say,
     log = function(text) if log then log.Add(text) end end,
-    confirm = function(text, accept) merchantActed = true; A.showPopup(POPUP, text, accept) end,
+    confirm = function(text, accept) merchantActed = true; A.showPopup(POPUP_AMMO, text, accept) end,
+    sells = A.merchantItemId,
 }
 
 -- Failures of guarded game calls go to the debug log (once per kind of failure).
@@ -360,6 +372,7 @@ local REAGENT_ENV = {
     say = say,
     log = function(text) if log then log.Add(text) end end,
     confirm = function(text, accept) merchantActed = true; A.showPopup(POPUP_REAGENTS, text, accept) end,
+    sells = A.merchantItemId,
 }
 
 -- Status window ---------------------------------------------------------------------------------
@@ -553,6 +566,7 @@ local function start()
         freeSlots = A.freeSlots,
         lowestDurability = A.lowestDurability,
         inCombat = A.inCombat,
+        dead = A.isDead,
         playerPos = A.playerWorldPos,
         playerFaction = A.factionId("player"),
         buckets = buckets,
@@ -560,14 +574,14 @@ local function start()
         ammo = A.ammoStatus,
         reagents = reagentList,
         supplies = supplyState,
-        confirm = function(kind, v, accept, count, trade, two)
+        confirm = function(kind, v, accept, count, trade, two, decline)
             closeQuestions() -- one question is open at a time, whichever kind it is
             if not two then
-                A.showPopup(POPUP, ns.Controller.PromptText(kind, v, A.mapName(v[3]), count, trade), accept)
+                A.showPopup(POPUP, ns.Controller.PromptText(kind, v, A.mapName(v[3]), count, trade), { accept = accept, decline = decline })
                 return
             end
             local text = ns.Controller.PromptText(kind, v, A.mapName(v[3]), count, trade, two, A.mapName(two.other[3]))
-            A.showPopup(two.mapFirst and POPUP_MAP or POPUP_DIST, text, { accept = accept, alt = two.acceptOther })
+            A.showPopup(two.mapFirst and POPUP_MAP or POPUP_DIST, text, { accept = accept, alt = two.acceptOther, decline = decline })
         end,
         cancelConfirm = closeQuestions,
         questionOpen = function() return A.popupShown(POPUP) or A.popupShown(POPUP_MAP) or A.popupShown(POPUP_DIST) end,
@@ -763,7 +777,11 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         end
         return
     end
-    if event == "MERCHANT_CLOSED" then retryParts, retryItems = {}, {} return end
+    if event == "MERCHANT_CLOSED" then
+        retryParts, retryItems = {}, {}
+        A.hidePopup(POPUP_AMMO); A.hidePopup(POPUP_REAGENTS) -- a purchase question ends with its merchant
+        return
+    end
     if event == "PLAYER_TARGET_CHANGED" or event == "UPDATE_MOUSEOVER_UNIT" or event == "NAME_PLATE_UNIT_ADDED" then
         local unit = event == "PLAYER_TARGET_CHANGED" and "target" or event == "UPDATE_MOUSEOVER_UNIT" and "mouseover" or arg1
         if DB and type(unit) == "string" then learnStanding(unit) end
@@ -824,6 +842,9 @@ end
 pcall(ns.frame.RegisterEvent, ns.frame, "AUCTION_HOUSE_SHOW")
 pcall(ns.frame.RegisterEvent, ns.frame, "GET_ITEM_INFO_RECEIVED")
 pcall(ns.frame.RegisterEvent, ns.frame, "MERCHANT_CLOSED")
+-- Warnings wait while dead or a ghost; coming back to life checks again.
+pcall(ns.frame.RegisterEvent, ns.frame, "PLAYER_ALIVE")
+pcall(ns.frame.RegisterEvent, ns.frame, "PLAYER_UNGHOST")
 -- Seeing an NPC tells whether it will trade with this character (reputation).
 for _, e in ipairs({ "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT", "NAME_PLATE_UNIT_ADDED" }) do
     pcall(ns.frame.RegisterEvent, ns.frame, e)
