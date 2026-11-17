@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.0
+
+- Closest Vendor shows its badge icon in the game's AddOns list, with its pages listed under it.
+- Questions behave better: No moves on to the next need, nothing is asked while you are dead, a question is dropped when you change zone, and a purchase question closes with its merchant.
+- The hearthstone point is learned at the inn, and trainers and auction houses that will not deal with you are skipped.
+- Trainer questions stop at Expert: Artisan, taught by only a few trainers, is left to you.
+- Pet diets and reagent names show in your game's language.
+
 ## 1.6.0
 
 - Every route message and reminder is now one kind of notification: a compact Toast (default) or a Warning, with one sound you choose.
