@@ -7,6 +7,7 @@
 ## SavedVariablesPerCharacter: ClosestVendorCharDB
 ## OptionalDeps: TomTom, WaypointUI, NorgannonDB
 ## Category: Interface Enhancements
+## IconTexture: Interface\AddOns\ClosestVendor\Media\icon.tga
 ## X-Curse-Project-ID: 1787879
 ## X-Wago-ID: v63Q1oGb
 

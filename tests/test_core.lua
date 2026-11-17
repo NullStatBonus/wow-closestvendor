@@ -625,7 +625,7 @@ local function setting(g, key)
 end
 g = boot({ settings = true }); login(g)
 eq(g.settings.registrations, 1, "one Ace tree registered")
-eq(g.settings.categories, 1, "listed under AddOns")
+eq(g.settings.categories, 6, "listed under AddOns with its pages")
 eq(setting(g, "ammoThreshold"):GetValue(), 200, "ammo default shown")
 eq(setting(g, "bagThreshold"):GetValue(), 2, "bag default shown")
 g.autoAccept = false
