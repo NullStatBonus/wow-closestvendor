@@ -1269,6 +1269,14 @@ w = supply("HUNTER", { food = 30, water = 30, healthstone = 0, pet = 1 }, { Brea
 w.c.Evaluate()
 eq(w.prompts[1].trade, "pet food (Bread, Cheese)", "several diets in table order")
 eq(w.prompts[1].vendor[2], "Baker", "any of the diets")
+do -- the diet names in the question are the translated labels
+    local saved = ns.Supplies.DIET_LABEL.Bread
+    ns.Supplies.DIET_LABEL.Bread = "Brot"
+    w = supply("HUNTER", { food = 30, water = 30, healthstone = 0, pet = 1 }, { Bread = true, Cheese = true })
+    w.c.Evaluate()
+    eq(w.prompts[1].trade, "pet food (Brot, Cheese)", "diet names use the translated labels")
+    ns.Supplies.DIET_LABEL.Bread = saved
+end
 
 -- No known seller: one chat line, no question; once per supply.
 w = supply("HUNTER", { food = 30, water = 30, healthstone = 0, pet = 1 }, { Fruit = true })

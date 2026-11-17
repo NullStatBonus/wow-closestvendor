@@ -349,6 +349,25 @@ function A.trainer()
     return { id = id, name = name, faction = A.factionId("npc"), trades = trades }
 end
 
+-- What the open trainer window lists, as its filters show it, for the debug log: a list of
+-- { skill, name, sub, kind, level, reqSkill, reqRank }, and the filter states { available, unavailable,
+-- used }. Read only: the player's filters are never changed. Any value the client lacks is nil.
+function A.trainerServices()
+    local out = {}
+    local count = call("GetNumTrainerServices", GetNumTrainerServices) or 0
+    for i = 1, count do
+        local name, sub, kind = call("GetTrainerServiceInfo", GetTrainerServiceInfo, i)
+        local reqSkill, reqRank = call("GetTrainerServiceSkillReq", GetTrainerServiceSkillReq, i)
+        out[#out + 1] = { skill = call("GetTrainerServiceSkillLine", GetTrainerServiceSkillLine, i), name = name, sub = sub,
+            kind = kind, level = call("GetTrainerServiceLevelReq", GetTrainerServiceLevelReq, i), reqSkill = reqSkill, reqRank = reqRank }
+    end
+    local filters = {}
+    for _, f in ipairs({ "available", "unavailable", "used" }) do
+        filters[f] = call("GetTrainerServiceTypeFilter", GetTrainerServiceTypeFilter, f)
+    end
+    return out, filters
+end
+
 -- Units and merchants ----------------------------------------------------------------------------
 
 -- 1 Alliance, 2 Horde, 0 neutral or unknown.

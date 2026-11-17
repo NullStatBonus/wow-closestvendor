@@ -330,7 +330,7 @@ function C.New(env)
     -- "Meat, Fish" for a pet's diet set, in the table's order.
     local function dietList(diets)
         local out = {}
-        for _, d in ipairs(ns.Supplies.DIETS) do if diets and diets[d] then out[#out + 1] = d end end
+        for _, d in ipairs(ns.Supplies.DIETS) do if diets and diets[d] then out[#out + 1] = ns.Supplies.DIET_LABEL[d] end end
         return table.concat(out, ", ")
     end
 

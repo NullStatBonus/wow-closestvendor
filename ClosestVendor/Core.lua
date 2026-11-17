@@ -654,6 +654,7 @@ local function start()
     ns.Options.Run = function(cmd) SlashCmdList["CLOSESTVENDOR"](cmd) end
     ns.Options.DebugEnabled = log.Enabled
     ns.Options.Version = function() return A.clientInfo().addon end
+    ns.Options.itemName = A.itemName -- reagent labels in the player's language
     ns.Options.Move = function(kind)
         sampleToken = sampleToken + 1; sampleKind = nil
         if A.hideSamples then A.hideSamples() end
@@ -855,6 +856,17 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         end
     elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
         local trades = DB and learnTrainer()
+        -- Probe for trainer tiers (which trainer teaches which rank): with debugging on, log every
+        -- service the window lists, with its level and skill requirements and the filter states.
+        if trades and event == "TRAINER_SHOW" and log and log.Enabled() then
+            local services, filters = A.trainerServices()
+            log.Add(("trainer services: %d listed; filters available=%s unavailable=%s used=%s"):format(#services,
+                tostring(filters.available), tostring(filters.unavailable), tostring(filters.used)))
+            for _, s in ipairs(services) do
+                log.Add(("  service: %s | %s | %s | %s | level %s | needs %s %s"):format(tostring(s.skill), tostring(s.name),
+                    tostring(s.sub), tostring(s.kind), tostring(s.level), tostring(s.reqSkill), tostring(s.reqRank)))
+            end
+        end
         if trades and controller then controller.OnTrainerShow(trades) end
     elseif event == "AUCTION_HOUSE_SHOW" then
         if DB then learnAuctioneer() end

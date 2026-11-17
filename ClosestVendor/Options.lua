@@ -99,7 +99,8 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note)
     cfg.reagentOff = cfg.reagentOff or {}
     for _, item in ipairs(items) do
         local id = item.id
-        add(reagents, "item" .. id, { type = "toggle", name = L["Reagent: %s"]:format(item.name),
+        -- The game's name for the item, in the player's language, once it has loaded; English until then.
+        add(reagents, "item" .. id, { type = "toggle", name = function() return L["Reagent: %s"]:format(O.itemName and O.itemName(id) or item.name) end,
             disabled = off("reagentsEnabled"), desc = L["Enable Reagents on Home to edit this value."],
             get = function() return not cfg.reagentOff[id] end,
             set = function(_, v) cfg.reagentOff[id] = not v or nil; onChange(); O.Refresh() end })

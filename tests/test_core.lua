@@ -952,6 +952,26 @@ eq(g.popup, nil, "another unit's cast is ignored")
 g.onEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 eq(g.popup ~= nil, true, "a craft near the cap asks (no skill-up needed)")
 g.popup = nil
+-- Trainer tier probe: with debugging on, each listed service is logged with its requirements.
+do
+    local function logged(game, text)
+        for _, e in ipairs(game.env.ClosestVendorCharDB.log.entries or {}) do if e.msg:find(text, 1, true) then return true end end
+        return false
+    end
+    local gp = boot({ tomtom = true }); login(gp)
+    gp.env.ClosestVendorCharDB.log.enabled = true
+    gp.env.GetTrainerServiceInfo = function(i) return i == 1 and "Expert Miner" or "Smelt Iron", "", i == 1 and "unavailable" or "available" end
+    gp.env.GetTrainerServiceLevelReq = function(i) return i == 1 and 20 or 0 end
+    gp.env.GetTrainerServiceSkillReq = function(i) return "Mining", i == 1 and 125 or 100 end
+    gp.env.GetTrainerServiceTypeFilter = function(f) return f ~= "used" end
+    visit(gp, 5513, "Gelman Stonehand", { "Mining", "Mining" }, { map = 100, x = 0.6, y = 0.5 })
+    eq(logged(gp, "trainer services: 2 listed; filters available=true unavailable=true used=false"), true, "probe logs the count and filters")
+    eq(logged(gp, "  service: Mining | Expert Miner |  | unavailable | level 20 | needs Mining 125"), true, "probe logs a tier service")
+    local gq = boot({ tomtom = true }); login(gq)
+    visit(gq, 5513, "Gelman Stonehand", { "Mining" }, { map = 100, x = 0.6, y = 0.5 })
+    eq(logged(gq, "trainer services"), false, "debugging off: nothing logged")
+end
+
 -- A trainer that refused this character (Unfriendly with its faction) is not offered.
 do
     local gt = boot({ tomtom = true }); login(gt)

@@ -8,6 +8,14 @@ loadfile("ClosestVendor/Reagents.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Supplies.lua")("ClosestVendor", ns)
 local S = ns.Supplies
 
+-- Diet labels go through the translation table; the internal keys stay English.
+do
+    local de = { L = setmetatable({ Meat = "Fleisch", Fish = "Fisch" }, { __index = function(_, k) return k end }) }
+    loadfile("ClosestVendor/Supplies.lua")("ClosestVendor", de)
+    eq(de.Supplies.DIET_LABEL.Meat .. "/" .. de.Supplies.DIET_LABEL.Fish .. "/" .. de.Supplies.DIET_LABEL.Fungus, "Fleisch/Fisch/Fungus", "diet labels are translated")
+    eq(de.Supplies.DIETS[1], "Meat", "internal diet keys stay English")
+end
+
 -- Item masks: 1 food, 2 drink, 4 Meat, 8 Fish, 16 Bread, 32 Cheese, 64 Fruit, 128 Fungus, 256 healthstone.
 local JERKY, BREAD, WATER, CHEESE, WOLF, STONE = 117, 4540, 159, 414, 729, 5509
 ns.PetFamilies = { [1] = 4, [2] = 12, [4] = 252, [21] = 200 }
