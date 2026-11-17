@@ -38,7 +38,7 @@ When a warning fires, the addon shows the closest vendor that fits.
   - A warlock who knows Create Healthstone and has no healthstone gets a reminder to make one.
   - The reminder shows once, until the cause is gone. It is a notification: it shows as a Toast or Warning, with the notification sound, if the on-screen notice is on.
   - The reminder waits while you are in combat or in an instance.
-- **Professions:** a profession is within the threshold (default **10**) points of its current skill limit. The addon shows the closest trainer for that profession that you opened before. It asks on every skill-up and every craft. It does this for Journeyman and Expert only: at 225, Artisan comes next, and only a few trainers teach it, so the addon does not route you (a click on that row says so in chat).
+- **Professions:** a profession is within the threshold (default **10**) points of its current skill limit. The addon shows the closest trainer for that profession that you opened before. It asks on every skill-up and every craft. At 225, Artisan comes next, and only a few trainers teach it. With the optional NorgannonDB addon installed, the addon knows which trainers teach which tier and routes every tier, Artisan included, only to a trainer who teaches it. Without NorgannonDB, it uses the closest trainer for Journeyman and Expert and does not route for Artisan (a click on that row says so in chat).
 
 If more than one warning is active, the addon asks one question at a time.
 The order is: repair, ammo, reagent, food, water, pet food, sell, trainer.
@@ -504,7 +504,7 @@ The new zones are Mount Hyjal, Riverglades, Zephras Isle, Darkspear Islands and 
 
 ### NorgannonDB (optional)
 
-If the NorgannonDB addon is installed, the addon also reads its vendors in the new zones of WoW Forever.
+If the NorgannonDB addon is installed, the addon also reads its vendors in the new zones of WoW Forever, and its profession trainers everywhere.
 
 - It is read when you log in, and again if NorgannonDB finishes loading later.
 - It adds vendors, with their position, faction, repair and what they sell. It adds nothing in other zones.
@@ -512,7 +512,8 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 - All vendors are one list, and the closest one wins.
 - For the same vendor, NorgannonDB's data comes before the shipped list. What you see when you open a vendor comes before both.
 - If you open a vendor that is more than 3% of the map away from NorgannonDB's position, your position is used.
-- `/cvn log` says whether NorgannonDB was found and how many vendors it added.
+- It adds profession trainers whose title tells which tier they teach, with their position and the professions of the recipes they teach, named in your game's language. A trainer you opened keeps its position, and gains the tier.
+- `/cvn log` says whether NorgannonDB was found, how many vendors it added and how many trainers with a tier.
 
 ## Limitations
 
@@ -582,7 +583,8 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 - The addon takes the last skill tier to end at 300.
 - The addon never asks about a profession whose limit is already 300.
 - The addon does not ask about a profession while you are too low a level to learn its next tier from a trainer (level 10 for 75, 20 for 150).
-- Artisan (after 225) is never routed: few trainers teach it and the addon cannot tell which. Journeyman and Expert trainers usually stand side by side, so the closest trainer is used for those.
+- Without NorgannonDB, Artisan (after 225) is never routed: few trainers teach it and the addon cannot tell which. Journeyman and Expert trainers usually stand side by side, so the closest trainer is used for those.
+- With NorgannonDB, a trainer's tier comes from its title: before patch 2.3 a trainer teaches the tiers below its title (a Journeyman Blacksmith teaches Apprentice, an Expert Journeyman, an Artisan Expert, a Master Artisan). Trainers with other titles, such as specialization masters or "Mining Trainer", have no known tier: they are used for Journeyman and Expert, never for Artisan.
 - It is not verified if WoW Forever has tiers above 300.
 - The addon does not check the level requirement of the trainer.
 - The closest trainer is not checked for which tier it teaches; see issue #27.

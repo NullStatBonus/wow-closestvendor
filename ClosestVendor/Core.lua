@@ -116,17 +116,22 @@ A.onError = function(name, err)
     if log then log.Add("game call failed: " .. name .. ": " .. err) end
 end
 
--- The optional NorgannonDB addon, read for the maps that are only in WoW Forever (Mount Hyjal,
--- Riverglades, Shen'dralas, Zephras Isle and the Darkspear Islands). Read after login, and again if
+-- The optional NorgannonDB addon, read for vendors on the maps that are only in WoW Forever (Mount
+-- Hyjal, Riverglades, Shen'dralas, Zephras Isle and the Darkspear Islands), and for profession
+-- trainers whose title tells which tier they teach, on every map. Read after login, and again if
 -- NorgannonDB finishes loading later; never on bag, merchant or movement events.
 local EXTERNAL_MAPS = { [2482] = true, [2548] = true, [2652] = true, [2521] = true, [2665] = true, [2524] = true }
-local external = { list = {}, skipped = 0 }
+local external = { list = {}, skipped = 0, trainers = {} }
 local started = false
 
 local function readExternal()
     local list, skipped, schema = A.externalVendors(EXTERNAL_MAPS)
-    external = { list = list or {}, skipped = list and skipped or 0, schema = schema, unsupported = skipped == "unsupported" }
+    external = { list = list or {}, skipped = list and skipped or 0, schema = schema, unsupported = skipped == "unsupported",
+                 trainers = list and A.externalTrainers() or {} }
 end
+
+-- Trainer tiers are known (NorgannonDB gave trainers with titles), so Artisan is routed too.
+local function trainerTiers() return #external.trainers > 0 end
 
 -- Shipped, NorgannonDB and learned vendors, converted to world coordinates once and bucketed by continent.
 local vendorIds = {} -- every npc id in the search pool, before the trade filter
@@ -150,9 +155,25 @@ local function rebuildBuckets()
 end
 
 -- Learned profession trainers, converted to world coordinates and bucketed by continent.
+-- Learned trainers (where the player stood, each profession's tier not known) and NorgannonDB's
+-- (with the tier its title gives). For a trainer in both, the learned position and professions are
+-- kept and NorgannonDB's tiers fill them in.
 local function rebuildTrainers()
     for k in pairs(trainerBuckets) do trainerBuckets[k] = nil end
-    for _, t in pairs(DB.trainers) do
+    local all = {}
+    for id, t in pairs(DB.trainers) do all[id] = t end
+    for _, e in ipairs(external.trainers) do
+        local t = all[e[1]]
+        if t then
+            local trades = {}
+            for name, v in pairs(t[7]) do trades[name] = v end
+            for name, tier in pairs(e[7]) do trades[name] = tier end
+            all[e[1]] = { t[1], t[2], t[3], t[4], t[5], t[6], trades }
+        else
+            all[e[1]] = e
+        end
+    end
+    for _, t in pairs(all) do
         local continent, wx, wy = A.toWorld(t[3], t[4], t[5])
         if continent and CHAR.standing[t[1]] ~= false then -- not one seen refusing this character
             local b = trainerBuckets[continent]
@@ -416,6 +437,7 @@ local STATUS_SRC = {
     freeSlots = A.freeSlots, lowestDurability = A.lowestDurability, ammo = A.ammoStatus,
     knows = A.knowsSpell, itemCount = A.itemCount, itemName = A.itemName,
     supplies = supplyState,
+    trainerTiers = function() return trainerTiers() end,
     level = A.level,
     skills = function()
         if not skillCache then skillCache = A.skills() end
@@ -552,7 +574,7 @@ local function reportText()
             for _, v in pairs(CHAR.standing or {}) do if v then yes = yes + 1 else no = no + 1 end end
             return ("standing (this character): %d vendors trade, %d will not (Unfriendly or Hostile)"):format(yes, no)
         end)(),
-        external.schema and ("NorgannonDB: found, schema %s, %d vendors added, %d skipped"):format(external.schema, #external.list, external.skipped)
+        external.schema and ("NorgannonDB: found, schema %s, %d vendors added, %d skipped, %d trainers with a tier"):format(external.schema, #external.list, external.skipped, #external.trainers)
             or (external.unsupported and "NorgannonDB: installed, but its data is not a supported schema" or "NorgannonDB: not found"),
         ("settings: bags %s/%d, durability %s/%d, ammo %s/%d, professions %s/%d"):format(c.bagEnabled and "on" or "off", c.bagThreshold,
             c.durEnabled and "on" or "off", c.durThreshold, c.ammoEnabled and "on" or "off", c.ammoThreshold,
@@ -623,6 +645,7 @@ local function start()
         level = A.level,
         known = CHAR.professions,
         trainerBuckets = trainerBuckets,
+        trainerTiers = trainerTiers,
         auctionBuckets = auctionBuckets,
         say = say,
         notify = function(text)
@@ -842,6 +865,7 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         elseif arg1 == "NorgannonDB" and started then
             readExternal()
             rebuildBuckets()
+            rebuildTrainers()
             evaluate()
             touchWindow()
         end

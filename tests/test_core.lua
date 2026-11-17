@@ -2075,6 +2075,57 @@ g.free = 1
 g.onEvent("BAG_UPDATE_DELAYED")
 eq(lastPrinted(g):find("Hyjal Seller", 1, true) ~= nil, true, "NorgannonDB vendor is the nearest: " .. lastPrinted(g))
 eq(has(reportOf(g), "NorgannonDB: found, schema 1.5, 1 vendors added, 0 skipped"), true, "report line")
+-- Trainers with a tier from NorgannonDB: Artisan is routed, only to a trainer whose title teaches it;
+-- a learned trainer of unknown tier is not used for Artisan, and its position wins when NorgannonDB has it.
+do
+    local ng = fakeNG()
+    local tnpcs = {
+        [9100] = { name = "Master Smith", subName = "Master Blacksmith", reaction = "AH", spawns = { [700] = { { 90, 50 } } } },
+        [9101] = { name = "Expert Smith", subName = "Expert Blacksmith", reaction = "AH", spawns = { [700] = { { 51, 50 } } } },
+    }
+    local peekVendor = ng.Peek
+    ng.Peek = function(self, kind, id) return tnpcs[id] or peekVendor(self, kind, id) end
+    ng.zones[700] = { uiMapId = 100 }
+    ng.categories.trainer = { npcs = { [9100] = "AH", [9101] = "AH" } }
+    ng.recipes = { [1] = { skill = 164, trainers = { [9100] = 1, [9101] = 1 } } }
+    ng.L = function(_, kind, id) if kind == "professions" and id == 164 then return "Blacksmithing" end end
+    local gt = boot({ tomtom = true, ng = ng, db = { trainers = { [9102] = { 9102, "Learned Smith", 100, 0.5, 0.5, 0, { Blacksmithing = true } } } },
+        charDb = { professions = { Blacksmithing = true } } })
+    login(gt)
+    gt.env.UnitLevel = function() return 40 end
+    gt.pos = { map = 100, x = 0.5, y = 0.5 }
+    gt.autoAccept = false
+    gt.skillLines = { { "Blacksmithing", 219, 225 } }; gt.onEvent("SKILL_LINES_CHANGED")
+    gt.skillLines = { { "Blacksmithing", 220, 225 } }; gt.onEvent("SKILL_LINES_CHANGED")
+    eq(gt.popup and gt.popup.text:find("Master Smith", 1, true) ~= nil, true, "Artisan next: the Master Blacksmith, not the nearer ones: " .. tostring(gt.popup and gt.popup.text))
+    eq(has(reportOf(gt), "1 vendors added, 0 skipped, 2 trainers with a tier"), true, "report counts the trainers")
+    gt.env.ClosestVendorCharDB.cfg.hudRow = { professions = "always" }
+    gt.onEvent("BAG_UPDATE_DELAYED"); flush(gt)
+    local lowRow = false
+    for _, r in ipairs(window(gt).rows) do if r.text and r.text.text and r.text.text:find("Low: Blacksmithing", 1, true) then lowRow = true end end
+    eq(lowRow, true, "the status window marks the Artisan row low")
+    -- A learned trainer NorgannonDB also has keeps its learned name and position, and gains the tier.
+    local gm = boot({ tomtom = true, ng = ng, db = { trainers = { [9100] = { 9100, "Learned Master", 100, 0.52, 0.5, 0, { Blacksmithing = true } } } },
+        charDb = { professions = { Blacksmithing = true } } })
+    login(gm)
+    gm.env.UnitLevel = function() return 40 end
+    gm.pos = { map = 100, x = 0.5, y = 0.5 }
+    gm.autoAccept = false
+    gm.skillLines = { { "Blacksmithing", 219, 225 } }; gm.onEvent("SKILL_LINES_CHANGED")
+    gm.skillLines = { { "Blacksmithing", 220, 225 } }; gm.onEvent("SKILL_LINES_CHANGED")
+    eq(gm.popup and gm.popup.text:find("Learned Master", 1, true) ~= nil, true, "learned record with NorgannonDB's tier: " .. tostring(gm.popup and gm.popup.text))
+    -- NorgannonDB loading after login: its trainers are read too.
+    local gl = boot({ tomtom = true, charDb = { professions = { Blacksmithing = true } } })
+    login(gl)
+    gl.env.UnitLevel = function() return 40 end
+    gl.pos = { map = 100, x = 0.5, y = 0.5 }
+    gl.autoAccept = false
+    gl.env.NorgannonDB = ng
+    gl.onEvent("ADDON_LOADED", "NorgannonDB")
+    gl.skillLines = { { "Blacksmithing", 219, 225 } }; gl.onEvent("SKILL_LINES_CHANGED")
+    gl.skillLines = { { "Blacksmithing", 220, 225 } }; gl.onEvent("SKILL_LINES_CHANGED")
+    eq(gl.popup and gl.popup.text:find("Master Smith", 1, true) ~= nil, true, "a late load adds the trainers")
+end
 -- Not installed at login, loaded later: read once more, no reload needed.
 g = boot(); login(g)
 g.env.NorgannonDB = fakeNG()

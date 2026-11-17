@@ -483,6 +483,56 @@ function A.externalVendors(mapIds)
     return list, skipped, v and (tostring(v.major) .. "." .. tostring(v.minor)) or "?"
 end
 
+-- Profession trainers from NorgannonDB (optional) whose title tells the highest tier they teach
+-- (Professions.TitleTier). Their professions come from the recipes each one teaches (skill line ids),
+-- named with NorgannonDB's profession names in the player's language. A list of trainer records
+-- { id, name, uiMapID, x, y, faction, trades = { [profession] = tier } }, or nil when NorgannonDB is
+-- missing, too old or unreadable. Reads with Peek and keeps nothing of NorgannonDB's own tables.
+local function scanTrainers(DB)
+    local trainers = type(DB.categories) == "table" and type(DB.categories.trainer) == "table" and DB.categories.trainer.npcs
+    if type(trainers) ~= "table" or type(DB.recipes) ~= "table" then return end
+    local skills = {}
+    for _, r in pairs(DB.recipes) do
+        if type(r) == "table" and type(r.trainers) == "table" and type(r.skill) == "number" then
+            for npc in pairs(r.trainers) do
+                if trainers[npc] then skills[npc] = skills[npc] or {}; skills[npc][r.skill] = true end
+            end
+        end
+    end
+    local list = {}
+    for id, set in pairs(skills) do
+        local r = DB:Peek("npcs", id)
+        local tier = type(r) == "table" and ns.Professions.TitleTier(r.subName)
+        if tier and type(r.spawns) == "table" then
+            for area, spots in pairs(r.spawns) do
+                local zone = type(DB.zones) == "table" and DB.zones[area]
+                local map = type(zone) == "table" and zone.uiMapId
+                local s = type(spots) == "table" and spots[1]
+                local x, y = type(s) == "table" and s[1], type(s) == "table" and s[2]
+                if map and type(x) == "number" and type(y) == "number" and x > 0 and y > 0 and x <= 100 and y <= 100 then
+                    local trades = {}
+                    for skill in pairs(set) do
+                        local name = DB:L("professions", skill)
+                        if type(name) == "string" then trades[name] = tier end
+                    end
+                    local name = DB:L("npcs", id, "name")
+                    list[#list + 1] = { id, type(name) == "string" and name or r.name, map, x / 100, y / 100, REACTION_FACTION[r.reaction] or 0, trades }
+                    break
+                end
+            end
+        end
+    end
+    return list
+end
+
+function A.externalTrainers()
+    local DB = NorgannonDB
+    if type(DB) ~= "table" or type(DB.RequireSchema) ~= "function" or type(DB.L) ~= "function" then return end
+    if not call("NorgannonDB.RequireSchema", DB.RequireSchema, DB, 1, 4) then return end
+    local ok, list = pcall(scanTrainers, DB)
+    return ok and list or nil
+end
+
 -- Whether the player can trade with unit: true at Neutral or better, false at Unfriendly or Hostile,
 -- nil when the game does not say.
 function A.canTrade(unit)

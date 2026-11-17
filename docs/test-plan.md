@@ -583,10 +583,18 @@ Run on Classic Era and WoW Forever with only Closest Vendor installed, at matchi
 - [ ] On the Reagents page in a non-English client, the reagent checkboxes show the game's item names.
 - [ ] `/cvn debug on`, then open a small-town profession trainer and a capital-city trainer for the same profession, ideally on a character below Expert. `/cvn log`: each shows "trainer services: N listed; filters ..." and one "service:" line per entry with level and skill requirements. Copy the report into the trainer-tier issue. The trainer window's filters are unchanged.
 
-## 26. Artisan is not routed
+## 26. Artisan without NorgannonDB
 
 - [ ] A profession at 215-225 of 225 (level 35 or more): no trainer question on skill-ups or crafts; the status window row is not red. Click the row: chat says Artisan is taught by only a few trainers and no waypoint is set.
 - [ ] A profession at 145 of 150 (level 20 or more): the trainer question still comes, as before.
+
+## 27. Trainer tiers with NorgannonDB
+
+- [ ] With NorgannonDB installed, `/cvn log`: the NorgannonDB line counts "trainers with a tier".
+- [ ] A profession at 145 of 150 (level 20+), near a Journeyman Blacksmith and further from an Expert or Artisan Blacksmith: the question names the Expert or Artisan Blacksmith, not the Journeyman one.
+- [ ] A profession at 220 of 225 (level 35+): the question names a Master trainer for it (for example Brikk Keencraft in Booty Bay for Blacksmithing); the status window row is red, and a row click routes there.
+- [ ] A non-English client: the trainer question uses the game's profession name and the trainer's localized name.
+- [ ] Disable NorgannonDB: section 26 behaviour returns.
 
 ## Not covered yet
 

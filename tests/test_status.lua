@@ -91,6 +91,8 @@ eq(row(rows, "prof:Mining").kind .. ":" .. row(rows, "prof:Mining").id, "trainer
 eq(keys(S.Rows({ skills = skills, known = { Mining = true } }, cfg({ tradeEnabled = false }))), "prof:Mining", "profession warning off: not low")
 eq(keys(S.Rows({ skills = { { name = "Mining", rank = 75, max = 75 } }, known = { Mining = true }, level = 5 }, cfg())), "prof:Mining", "too low a level for the next tier: shown, not low")
 eq(keys(S.Rows({ skills = { { name = "Mining", rank = 75, max = 75 } }, known = { Mining = true }, level = 10 }, cfg())), "prof:Mining!", "level reached: low")
+eq(keys(S.Rows({ skills = { { name = "Mining", rank = 220, max = 225 } }, known = { Mining = true }, level = 40 }, cfg())), "prof:Mining", "Artisan next: not low without trainer tiers")
+eq(keys(S.Rows({ skills = { { name = "Mining", rank = 220, max = 225 } }, known = { Mining = true }, level = 40, artisan = true }, cfg())), "prof:Mining!", "with trainer tiers (NorgannonDB): low")
 eq(keys(S.Rows({ skills = "broken", known = { Mining = true } }, cfg())), "", "unreadable skills: no rows")
 
 -- Display-only items: a row that is never low and cannot be routed to.
@@ -156,6 +158,12 @@ local function src(over)
     }
     for k, v in pairs(over or {}) do s[k] = v end
     return s
+end
+do -- the snapshot reads whether trainer tiers are known, so an Artisan row can be low
+    local art = { { name = "Mining", rank = 220, max = 225 } }
+    local sn = S.Snapshot(src({ skills = function() return art end, level = function() return 40 end, trainerTiers = function() return true end }), cfg(), "MAGE")
+    eq(sn.artisan, true, "trainer tiers read")
+    eq(row(S.Rows(sn, cfg(), "MAGE"), "prof:Mining").low, true, "Artisan row low with tiers")
 end
 c = cfg({ hudRow = { reagents = "always" } })
 snap = S.Snapshot(src(), c, "MAGE")

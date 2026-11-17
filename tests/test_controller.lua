@@ -31,6 +31,7 @@ local function world(over)
         known = w.known,
         level = w.level and function() return w.level end,
         trainerBuckets = w.trainers or {},
+        trainerTiers = function() return w.tiers or false end,
         auctionBuckets = w.auction,
         say = function(t) w.says[#w.says + 1] = t end,
         notify = (not w.noNotify) and function(t) w.notes[#w.notes + 1] = t end or nil,
@@ -1132,6 +1133,24 @@ w = trade({ skills = { { name = "Mining", rank = 220, max = 225 } } })
 eq(w.c.Go("trainer", "Mining"), false, "Artisan next: not routed")
 eq(w.setCount, 0, "no pin")
 eq(w.says[1], "Artisan Mining is taught by only a few trainers, so the addon does not route to one.", "chat says why")
+-- With trainer tiers known (NorgannonDB), each tier goes only to a trainer that teaches it, Artisan included.
+local TIERED = {
+    { 30, "Journeyman Miner", 100, 0.1, 0.1, 0, { Mining = 1 }, 5, 0 },
+    { 31, "Expert Miner",     100, 0.2, 0.1, 0, { Mining = 2 }, 20, 0 },
+    { 32, "Unknown Miner",    100, 0.3, 0.1, 0, { Mining = true }, 30, 0 },
+    { 33, "Master Miner",     100, 0.9, 0.1, 0, { Mining = 4 }, 90, 0 },
+}
+w = trade({ tiers = true, trainers = { [1] = TIERED }, autoAccept = false })
+w.c.OnCraft()
+eq(w.prompts[1] and w.prompts[1].vendor[2], "Expert Miner", "Journeyman next: the closest one that teaches it")
+w = trade({ tiers = true, trainers = { [1] = TIERED }, skills = { { name = "Mining", rank = 220, max = 225 } }, level = 40, autoAccept = false })
+w.c.OnCraft()
+eq(w.prompts[1] and w.prompts[1].vendor[2], "Master Miner", "Artisan next: only a trainer known to teach it")
+eq(w.c.Go("trainer", "Mining"), true, "a row click routes for Artisan too")
+eq(w.last[2], "Master Miner", "to that trainer")
+w = trade({ tiers = true, trainers = { [1] = { TIERED[1], TIERED[3] } }, skills = { { name = "Mining", rank = 220, max = 225 } }, level = 40 })
+eq(w.c.Go("trainer", "Mining"), false, "no trainer known to teach Artisan")
+eq(w.says[1]:find("No known trainer for Mining", 1, true) ~= nil, true, "chat says so")
 
 -- Direct pin inside an instance: the search starts from an anchor, and chat says which.
 local HEARTH, LAST = { continent = 1, x = 95, y = 0, map = 100 }, { continent = 1, x = 48, y = 0, map = 100 }

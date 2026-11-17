@@ -47,6 +47,16 @@ eq(names(P.Within(at150, known, 10, nil)), "Mining:0", "unknown level gates noth
 eq(names(P.Within({ { name = "Mining", rank = 100, max = 100 } }, known, 100, 1)), "Mining:0", "a cap with no listed tier is not gated")
 eq(names(P.Within({ { name = "Mining", rank = 0, max = 0 } }, known, 10)), "", "zero cap")
 
+-- Trainer tiers.
+eq(tostring(P.NeedTier(75)) .. tostring(P.NeedTier(150)) .. tostring(P.NeedTier(225)) .. tostring(P.NeedTier(300)) .. tostring(P.NeedTier(100)), "234nilnil", "tier to learn from the cap")
+eq(P.TitleTier("Journeyman Blacksmith") .. P.TitleTier("Expert Alchemist") .. P.TitleTier("Artisan Tailor") .. P.TitleTier("Master Engineer"), "1234", "title rank: teaches below it")
+eq(tostring(P.TitleTier("Master Gnome Engineer")) .. tostring(P.TitleTier("Mining Trainer")) .. tostring(P.TitleTier("Weapon Master")) .. tostring(P.TitleTier(nil)), "nilnilnilnil", "other titles: not known")
+eq(tostring(P.Teaches(2, 2)) .. tostring(P.Teaches(1, 2)) .. tostring(P.Teaches(true, 3)) .. tostring(P.Teaches(true, 4)) .. tostring(P.Teaches(4, 4)) .. tostring(P.Teaches(nil, 2)) .. tostring(P.Teaches(true, nil)),
+    "truefalsetruefalsetruefalsetrue", "Teaches")
+eq(names(P.Within(at225, known, 10, 35, true)), "Mining:0", "tiers known: Artisan is routed")
+eq(P.Within(at225, known, 10, 35, true)[1].need, 4, "and needs tier 4")
+eq(P.Within(at75, known, 10, 10)[1].need, 2, "75 needs Journeyman")
+
 -- Order: closest to the cap first, ties by name.
 local many = { { name = "Tailoring", rank = 70, max = 75 }, { name = "Mining", rank = 73, max = 75 }, { name = "Herbalism", rank = 70, max = 75 } }
 eq(names(P.Within(many, known, 10)), "Mining:2,Herbalism:5,Tailoring:5", "ordering")

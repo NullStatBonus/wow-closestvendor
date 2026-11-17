@@ -131,7 +131,7 @@ function S.Snapshot(src, cfg, class)
         end
     end
     if S.Mode(cfg, "supplies") ~= "never" and src.supplies then snap.supplies = src.supplies() end
-    if next(snap.known) and S.Mode(cfg, "professions") ~= "never" then snap.skills = src.skills(); snap.level = src.level and src.level() end
+    if next(snap.known) and S.Mode(cfg, "professions") ~= "never" then snap.skills = src.skills(); snap.level = src.level and src.level(); snap.artisan = src.trainerTiers and src.trainerTiers() end
     return snap
 end
 
@@ -200,7 +200,7 @@ function S.Rows(snap, cfg, class)
     if type(snap.skills) == "table" then
         local near = {}
         if cfg.tradeEnabled then
-            for _, p in ipairs(ns.Professions.Within(snap.skills, snap.known or {}, cfg.tradeThreshold, snap.level)) do near[p.name] = true end
+            for _, p in ipairs(ns.Professions.Within(snap.skills, snap.known or {}, cfg.tradeThreshold, snap.level, snap.artisan)) do near[p.name] = true end
         end
         local profs = {}
         for _, s in ipairs(snap.skills) do

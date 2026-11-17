@@ -232,6 +232,8 @@ function C.New(env)
     end
 
     local function dead() return env.dead and env.dead() or false end
+    -- Trainer tiers are known (NorgannonDB), so Artisan is routed too, to trainers that teach it.
+    local function tiers() return env.trainerTiers and env.trainerTiers() or false end
 
     -- The trigger a question's kind answers: ammo for arrows and bullets, the supply key for supplies.
     local function triggerOf(kind, id)
@@ -299,7 +301,7 @@ function C.New(env)
     -- known trainer. Runs on every skill change and craft: there is deliberately no latch.
     local function checkTrade(skills)
         if not env.cfg.tradeEnabled then return end
-        local within = ns.Professions.Within(skills, env.known or {}, env.cfg.tradeThreshold, env.level and env.level())
+        local within = ns.Professions.Within(skills, env.known or {}, env.cfg.tradeThreshold, env.level and env.level(), tiers())
         -- A trainer waypoint ends once its profession is no longer near the cap.
         if pinTrade then
             local still = false
@@ -314,7 +316,7 @@ function C.New(env)
         local continent, x, y, map = env.playerPos()
         if not continent then log("profession check: no map position") return end
         for _, p in ipairs(within) do
-            local v, onMap = ns.Search.NearestTrainer((env.trainerBuckets or {})[continent] or {}, x, y, p.name, env.playerFaction, map)
+            local v, onMap = ns.Search.NearestTrainer((env.trainerBuckets or {})[continent] or {}, x, y, p.name, env.playerFaction, map, p.need)
             if v then
                 if onMap == v then onMap = nil end
                 return offer("trainer", v, onMap, x, y, p.remaining, p.name)
@@ -588,7 +590,7 @@ function C.New(env)
     -- (nothing is said for a row that cannot be routed to).
     local function direct(kind, id, demo)
         log(("direct pin: %s%s"):format(tostring(kind), id and (" " .. tostring(id)) or ""))
-        local find, name, trade, supplyBits = kind, nil, nil, nil -- find: what to search for
+        local find, name, trade, supplyBits, need = kind, nil, nil, nil, nil -- find: what to search for; need: a trainer tier
         local item
         if kind == "ammo" then
             ammoKind, ammoCount = env.ammo()
@@ -611,8 +613,8 @@ function C.New(env)
         elseif kind == "trainer" then
             -- Only while the profession is near its cap: otherwise the next skill check would clear the pin.
             local near = false
-            for _, p in ipairs(ns.Professions.Within(env.skills and env.skills(), env.known or {}, env.cfg.tradeThreshold, env.level and env.level())) do
-                if p.name == id then near = true end
+            for _, p in ipairs(ns.Professions.Within(env.skills and env.skills(), env.known or {}, env.cfg.tradeThreshold, env.level and env.level(), tiers())) do
+                if p.name == id then near, need = true, p.need end
             end
             if not near then
                 for _, s in ipairs(env.skills and env.skills() or {}) do
@@ -642,7 +644,7 @@ function C.New(env)
 
         local v, onMap
         if trade then
-            v, onMap = ns.Search.NearestTrainer((env.trainerBuckets or {})[at.continent] or {}, at.x, at.y, trade, env.playerFaction, at.map)
+            v, onMap = ns.Search.NearestTrainer((env.trainerBuckets or {})[at.continent] or {}, at.x, at.y, trade, env.playerFaction, at.map, need)
             if not v then
                 say(L["No known trainer for %s on this continent yet. Open a %s trainer window once and the addon will remember where it is."]:format(trade, trade))
                 return false
