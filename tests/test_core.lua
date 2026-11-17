@@ -349,6 +349,19 @@ g.onEvent("BAG_UPDATE_DELAYED")
 eq(((g.popup and g.popup.text or ""):find("bags are almost full", 1, true) ~= nil), true, "No to repair: selling is asked next")
 eq(#g.tomtom, 0, "No navigates nowhere")
 
+-- 13d. Changing zone withdraws a warning's open question; it is asked again from the new place.
+g = boot({ tomtom = true }); login(g)
+g.autoAccept = false
+g.free = 1
+g.onEvent("BAG_UPDATE_DELAYED")
+local zoneShown = g.shown
+g.instance = "party"
+g.onEvent("ZONE_CHANGED_NEW_AREA")
+eq(g.popup, nil, "entering an instance closes the question")
+g.instance = nil
+g.onEvent("ZONE_CHANGED_NEW_AREA")
+eq(g.shown, zoneShown + 1, "outside again: asked again")
+
 -- 13c. Dead or a ghost: no question is shown or used up; coming back to life asks.
 g = boot({ tomtom = true }); login(g)
 g.autoAccept = false
@@ -890,6 +903,7 @@ visit(g, 5513, "Gelman Stonehand", { "Mining", "Engineering" }, { map = 100, x =
 local DB = g.env.ClosestVendorDB
 eq(DB.trainers[5513][2], "Gelman Stonehand", "trainer learned")
 eq(DB.trainers[5513][7].Mining and DB.trainers[5513][7].Engineering, true, "with what it teaches")
+eq(g.env.ClosestVendorCharDB.standing[5513], true, "an opened trainer trains this character")
 eq(DB.trainers[5513][6], 1, "and its faction")
 eq(g.env.ClosestVendorCharDB.professions.Mining and g.env.ClosestVendorCharDB.professions.Engineering, true, "professions seen at the trainer")
 g.onEvent("TRAINER_UPDATE")
@@ -938,6 +952,20 @@ eq(g.popup, nil, "another unit's cast is ignored")
 g.onEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 eq(g.popup ~= nil, true, "a craft near the cap asks (no skill-up needed)")
 g.popup = nil
+-- A trainer that refused this character (Unfriendly with its faction) is not offered.
+do
+    local gt = boot({ tomtom = true }); login(gt)
+    visit(gt, 5513, "Gelman Stonehand", { "Mining" }, { map = 100, x = 0.6, y = 0.5 })
+    gt.env.UnitReaction = function() return 3 end
+    gt.npc = { guid = "Creature-0-4372-0-55-5513-0000A1B2C3", name = "Gelman Stonehand" }
+    gt.onEvent("PLAYER_TARGET_CHANGED")
+    eq(gt.env.ClosestVendorCharDB.standing[5513], false, "trainer standing remembered")
+    gt.autoAccept = false
+    gt.pos = { map = 100, x = 0.5, y = 0.5 }
+    gt.skillLines = { { "Mining", 70, 75 } }; gt.onEvent("SKILL_LINES_CHANGED")
+    gt.skillLines = { { "Mining", 71, 75 } }; gt.onEvent("SKILL_LINES_CHANGED")
+    eq(gt.popup == nil or not has(gt.popup.text, "Gelman Stonehand"), true, "an Unfriendly trainer is not offered")
+end
 
 -- Learned trainers are saved and used after a reload.
 local saved = g.env.ClosestVendorDB
@@ -1170,6 +1198,23 @@ g.pos = { map = 100, x = 0.7, y = 0.5 }
 g.stock = { 17020 }
 g.onEvent("MERCHANT_SHOW")
 eq(g.env.ClosestVendorDB.learned[82][9], 1, "a shipped reagent vendor keeps its reagent when opened")
+-- A merchant list the game has not fully loaded never replaces what is known; it is read again
+-- when the item data arrives.
+do
+    local gg = mage(); gg.autoAccept = true
+    gg.npc = { guid = "Creature-0-4372-0-55-82-0000A1B2C3", name = "Reagent Shop" }
+    gg.pos = { map = 100, x = 0.7, y = 0.5 }
+    gg.stock = { false } -- the one item's link is not loaded yet
+    gg.onEvent("MERCHANT_SHOW")
+    eq(gg.env.ClosestVendorDB.learned[82], nil, "partial list: the shipped record is not replaced")
+    gg.stock = { 17020 }
+    gg.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
+    eq(gg.env.ClosestVendorDB.learned[82] and gg.env.ClosestVendorDB.learned[82][9], 1, "read again when the data arrives")
+    gg.npc = { guid = "Creature-0-4372-0-55-4321-0000A1B2C3", name = "Unknown Shop" }
+    gg.stock = { false, 17020 }
+    gg.onEvent("MERCHANT_SHOW")
+    eq(gg.env.ClosestVendorDB.learned[4321] and gg.env.ClosestVendorDB.learned[4321][9], 1, "a vendor not known yet is still learned from what could be read")
+end
 g.counts[17020] = 2; g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.shown, 1, "and is still found as a seller")
 eq(has(g.popup.text, "Reagent Shop"), true, "learned record still offered: " .. g.popup.text)
@@ -1349,7 +1394,7 @@ g.onEvent("PLAYER_ENTERING_WORLD")
 eq(g.env.ClosestVendorCharDB.lastOutside, nil, "never had a position: nothing saved")
 
 -- The hearthstone point. The first bind name seen has no position (bound before the addon saw it);
--- a new name takes the player's position.
+-- a new name takes the position where the innkeeper asked, never where the player is when noticed.
 g = boot(); login(g); g.bind = "Goldshire"
 g.env.ClosestVendorCharDB.log.enabled = true
 g.onEvent("PLAYER_ENTERING_WORLD")
@@ -1361,17 +1406,26 @@ eq(g.env.ClosestVendorCharDB.hearth.continent, nil, "same name: still no positio
 g.bind = "Stormwind"; g.pos = { map = 100, x = 0.3, y = 0.4 }
 g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.env.ClosestVendorCharDB.hearth.name, "Goldshire", "only read on login and zone change")
-g.instance = "party"
-g.onEvent("ZONE_CHANGED_NEW_AREA")
-eq(g.env.ClosestVendorCharDB.hearth.name, "Goldshire", "not learned inside an instance")
-g.instance = nil; g.pos = nil
-g.onEvent("ZONE_CHANGED_NEW_AREA")
-eq(g.env.ClosestVendorCharDB.hearth.name, "Goldshire", "no position: the old point is kept")
-g.pos = { map = 100, x = 0.3, y = 0.4 }
 g.onEvent("ZONE_CHANGED_NEW_AREA")
 hearth = g.env.ClosestVendorCharDB.hearth
-eq(hearth.name .. ":" .. hearth.continent .. ":" .. hearth.map .. ":" .. hearth.x .. ":" .. hearth.y, "Stormwind:1:100:300:400", "rebind: the player's position becomes the point")
-eq(logged(g, "hearthstone point learned: Stormwind"), true, "and it is logged")
+eq(hearth.name .. ":" .. tostring(hearth.continent), "Stormwind:nil", "a bind the addon did not see: name only, no guessed position")
+eq(g.ns.frame.events.CONFIRM_BINDER, true, "listens for the innkeeper's question")
+g.bind = "Goldshire"; g.pos = { map = 100, x = 0.3, y = 0.4 }
+g.onEvent("CONFIRM_BINDER", "Goldshire")
+g.pos = { map = 100, x = 0.9, y = 0.9 } -- walked away before the next zone change
+g.onEvent("ZONE_CHANGED_NEW_AREA")
+hearth = g.env.ClosestVendorCharDB.hearth
+eq(hearth.name .. ":" .. hearth.continent .. ":" .. hearth.map .. ":" .. hearth.x .. ":" .. hearth.y, "Goldshire:1:100:300:400", "rebind: where the innkeeper asked becomes the point")
+eq(logged(g, "hearthstone point learned: Goldshire"), true, "and it is logged")
+g.onEvent("CONFIRM_BINDER", "Darkshire") -- asked, declined
+g.bind = "Lakeshire"
+g.onEvent("ZONE_CHANGED_NEW_AREA")
+eq(tostring(g.env.ClosestVendorCharDB.hearth.continent), "nil", "a declined innkeeper question does not place another bind")
+g.bind = "Stormwind"; g.pos = { map = 100, x = 0.5, y = 0.5 }
+g.onEvent("CONFIRM_BINDER", "Stormwind")
+g.onEvent("HEARTHSTONE_BOUND")
+eq(g.env.ClosestVendorCharDB.hearth.x, 500, "the bind event learns it at once")
+g.bind = "Stormwind"
 g.bind = nil
 g.onEvent("ZONE_CHANGED_NEW_AREA")
 eq(g.env.ClosestVendorCharDB.hearth.name, "Stormwind", "an unreadable bind name keeps the point")
@@ -1634,6 +1688,18 @@ eq(g.tomtom[#g.tomtom], "Powder Seller", "auction routing off: the vendor")
 g.env.SlashCmdList.CLOSESTVENDOR("ah on")
 window(g).rows[1].scripts.OnClick()
 eq(g.tomtom[#g.tomtom], "Auctioneer Near", "auction routing on: the auctioneer just learned, which is closer")
+-- An auctioneer that refused this character (a goblin auction house while Unfriendly with its
+-- cartel) is never used; seeing it trade again brings it back.
+g.env.UnitReaction = function() return 3 end
+g.npc = { guid = "Creature-0-4372-0-55-50-0000A1B2C3", name = "Auctioneer Near" }
+g.onEvent("PLAYER_TARGET_CHANGED")
+eq(g.env.ClosestVendorCharDB.standing[50], false, "auctioneer standing remembered")
+window(g).rows[1].scripts.OnClick()
+eq(g.tomtom[#g.tomtom], "Powder Seller", "an Unfriendly auctioneer is skipped")
+g.env.UnitReaction = function() return 4 end
+g.onEvent("PLAYER_TARGET_CHANGED")
+window(g).rows[1].scripts.OnClick()
+eq(g.tomtom[#g.tomtom], "Auctioneer Near", "Neutral again: used again")
 
 -- Upgrade defaults differ from a genuinely fresh install; saved choices always win.
 for _,case in ipairs({

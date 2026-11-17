@@ -183,10 +183,14 @@ function T.New(cfg)
     -- The request for trigger (and reagent id) ended without a trip: the player said No, or no
     -- vendor serves it. It stays handled, so it is not asked again until its condition clears, and
     -- the next need may be asked. Selling, which the trip would have covered, may be asked too.
-    -- Returns whether that request was the active one.
-    function self.Release(trigger, id)
+    -- again: the question was withdrawn unanswered (the player changed zone), so the request is asked
+    -- again at the next check where questions are allowed. Returns whether it was the active one.
+    function self.Release(trigger, id, again)
         if not active or active ~= trigger or (trigger == "reagent" and activeReagent ~= id) then return false end
         if coveredSell then handled.sell = false end
+        if again then
+            if trigger == "reagent" then handledReagent[id] = nil else handled[trigger] = false end
+        end
         active, activeReagent, coveredSell = nil, nil, false
         return true
     end

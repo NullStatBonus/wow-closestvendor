@@ -562,6 +562,16 @@ Run on Classic Era and WoW Forever with only Closest Vendor installed, at matchi
 - [ ] Same, but accept a resurrection from another player before releasing. Expected: the repair question appears once alive.
 - [ ] Bags full: the sell question shows; then gear drops below the threshold. Answer **No** to repair. Expected: the sell question is asked again.
 
+## 24. Zone changes, hearth, partial merchants and standing
+
+- [ ] With the sell question open, enter a dungeon. Expected: the question closes; nothing is asked inside; after leaving, the sell question is asked again.
+- [ ] With the repair question open, ride into the next zone. Expected: the question is asked again, naming the closest repairer from the new zone.
+- [ ] With a question open, start combat. Expected: the question stays; Yes still sets the waypoint.
+- [ ] Set your hearthstone at an innkeeper, then walk out of town into another zone. `/cvn log`: the hearthstone point is the inn, not where you crossed the zone line. In a dungeon with `/cvn anchor hearth`, a row click searches near that inn.
+- [ ] Talk to an innkeeper and decline the bind, then bind elsewhere without the addon seeing it (or reload between). Expected: the new point is known by name only; dungeon searches use your last position outside.
+- [ ] After a fresh login, open a known ammo vendor straight away (items may not be loaded). Expected: the vendor still counts as an ammo vendor, and the debug log may say the list was not fully loaded and kept what was known.
+- [ ] On a character Unfriendly with the Steamwheedle Cartel (Booty Bay), target the Booty Bay auctioneer, turn on auction routing and click a reagent row nearby. Expected: it does not route to that auctioneer.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

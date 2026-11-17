@@ -47,6 +47,7 @@ A food, water or pet food trip does not cover selling.
 If you answer No, that warning is not asked again until it clears, and the next warning is asked. A No to repair or ammo can still be followed by the sell question.
 If no known vendor sells what you need, the addon prints one chat line and shows no question, and moves on to the next warning.
 Questions wait while you are dead or a ghost, as in combat, and come once you are alive.
+A question still open when you change zone or enter an instance is withdrawn, because its vendor was chosen from where you were. It is asked again from your new place, or once you leave the instance. Combat leaves an open question alone: you can still answer and route.
 
 ### Buying
 
@@ -168,7 +169,7 @@ When you leave, the question comes back.
 This way, a full-bags question in a battleground is not lost.
 
 - The addon remembers your last position outside.
-- The addon learns your hearthstone point from your bind location.
+- The addon learns your hearthstone point when you set it at an innkeeper. If you set it before installing the addon, or the addon misses it, the point is known by name only until you set it again; meanwhile the addon uses your last position outside.
 - If you click a row inside an instance, the addon searches near an anchor.
 - In a battleground, the anchor is your last position outside.
 - In a dungeon or raid, you choose the anchor:
@@ -487,6 +488,7 @@ It learns more as you play.
 
 - Each time you open a vendor window, the addon records that vendor.
 - It records the position, whether the vendor repairs, and which ammo, reagents, food and drink the vendor sells.
+- If the game has not loaded every item in the vendor's list yet, the addon keeps what it already knew about that vendor and reads the list again when the items arrive.
 - A learned vendor replaces a shipped vendor with the same NPC id.
 - The addon saves learned vendors between sessions.
 
@@ -495,7 +497,7 @@ Trainers work the same way, but the addon ships no trainers.
 - When you open a profession trainer window, the addon records where the trainer is.
 - It also records which professions the trainer teaches.
 - All your characters share the trainers.
-- All your characters also share the professions you saw at a trainer or in a crafting window.
+- Each character keeps its own list of the professions it saw at a trainer or in a crafting window.
 
 The vendors that you open in the new zones of WoW Forever cover those zones.
 The new zones are Mount Hyjal, Riverglades, Zephras Isle, Darkspear Islands and Shen'dralas.
@@ -527,7 +529,7 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 - Professions are matched by the name that the game shows.
 - After you change the game language, the addon learns trainers again.
 - The addon skips vendors of the other faction.
-- Reputation: each character remembers vendors it has seen as Unfriendly or Hostile (target, mouseover, nameplate) and never routes to them. A vendor of no side that another character taught you, such as a clan quartermaster, is used only after this character has seen it at Neutral or better or opened its window. The game does not say which reputation a vendor needs, so a shipped vendor you cannot trade with is skipped only after you have seen it.
+- Reputation: each character remembers vendors, profession trainers and auctioneers it has seen as Unfriendly or Hostile (target, mouseover, nameplate) and never routes to them. This covers the goblin auction houses in Booty Bay, Gadgetzan and Everlook when you are Unfriendly with their cartel. A vendor of no side that another character taught you, such as a clan quartermaster, is used only after this character has seen it at Neutral or better or opened its window. The game does not say which reputation a vendor needs, so a shipped vendor you cannot trade with is skipped only after you have seen it.
 - Neutral vendors count for everyone.
 
 ### Ammo

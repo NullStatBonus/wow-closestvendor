@@ -379,11 +379,13 @@ function A.auctioneer()
 end
 
 -- What the open merchant window sells: an ammo code (0 none, 1 arrows, 2 bullets, 3 both), a
--- reagent mask (bits of the Reagents table) and a supply mask (bits 0-7 of Supplies.lua). One pass
--- over the offered items.
+-- reagent mask (bits of the Reagents table) and a supply mask (bits 0-7 of Supplies.lua), and
+-- whether the list was only partly readable (the game had not loaded every item yet). One pass over
+-- the offered items.
 local function merchantScan()
-    local arrows, bullets, reagents, supplies = 0, 0, {}, {}
-    local count = call("GetMerchantNumItems", GetMerchantNumItems) or 0
+    local arrows, bullets, reagents, supplies, partial = 0, 0, {}, {}, false
+    local count = call("GetMerchantNumItems", GetMerchantNumItems)
+    if type(count) ~= "number" then count, partial = 0, true end
     for i = 1, count do
         local link = call("GetMerchantItemLink", GetMerchantItemLink, i)
         local id = type(link) == "string" and tonumber(link:match("item:(%d+)"))
@@ -392,9 +394,11 @@ local function merchantScan()
             if ns.Supplies.ItemMask(id) ~= 0 then supplies[id] = true end
             local c, sc = A.itemClass(id)
             if c == 6 and sc == 2 then arrows = 1 elseif c == 6 and sc == 3 then bullets = 2 end
+        else
+            partial = true
         end
     end
-    return arrows + bullets, ns.Reagents.Mask(reagents), ns.Supplies.VendorMask(supplies)
+    return arrows + bullets, ns.Reagents.Mask(reagents), ns.Supplies.VendorMask(supplies), partial
 end
 
 -- Vendors from the NorgannonDB addon (optional) on the maps in `mapIds` (a set of UiMap ids), in the
@@ -468,15 +472,15 @@ function A.canTrade(unit)
     return reaction >= 4
 end
 
--- The merchant window that just opened: { id, name, faction, repair, ammo, reagents, supplies }, or nil if
+-- The merchant window that just opened: { id, name, faction, repair, ammo, reagents, supplies, partial }, or nil if
 -- the merchant cannot be identified as a creature.
 function A.merchant()
     local id, name = A.npc()
     if not id then return end
-    local ammo, reagents, supplies = merchantScan()
+    local ammo, reagents, supplies, partial = merchantScan()
     return { id = id, name = name, faction = A.factionId("npc"),
              repair = call("CanMerchantRepair", CanMerchantRepair) and true or false, ammo = ammo, reagents = reagents,
-             supplies = supplies }
+             supplies = supplies, partial = partial }
 end
 
 -- Class reagents -------------------------------------------------------------------------------

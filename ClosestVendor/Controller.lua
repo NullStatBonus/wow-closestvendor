@@ -240,6 +240,8 @@ function C.New(env)
         return kind
     end
 
+    local asking -- { kind, id, prompt }: the question a warning asked, while it may still be open
+
     -- The request for kind ended without a trip (No, or no vendor): the next need may be asked.
     local function release(kind, id)
         if triggers.Release(triggerOf(kind, id), id) then
@@ -290,6 +292,7 @@ function C.New(env)
     local function offer(kind, v, onMap, x, y, count, trade, name, id, yields)
         if env.cfg.vendorMode == "auto" then return autoPin(kind, v, onMap, x, y, trade, name, id) end
         ask(kind, v, onMap, x, y, count, trade, name, id, nil, yields and function() release(kind, id) end or nil)
+        asking = yields and { kind = kind, id = id, prompt = promptId } or nil
     end
 
     -- skills: the player's skill list. Asks about the profession nearest its cap that has a
@@ -678,6 +681,18 @@ function C.New(env)
     end
 
     function self.Go(kind, id) return direct(kind, id) end
+
+    -- The player changed zone or entered an instance: a warning's open question names a vendor
+    -- chosen from where they were, so it is withdrawn and the warning is asked again at the next
+    -- check outside an instance. Combat withdraws nothing: the player may still answer and route.
+    function self.OnPlaceChange()
+        local a = asking
+        asking = nil
+        if not (a and a.prompt == promptId and env.questionOpen and env.questionOpen()) then return end
+        log("question withdrawn: the player changed zone")
+        cancelPrompt()
+        triggers.Release(triggerOf(a.kind, a.id), a.id, true)
+    end
 
     -- /cvn demo: a tour of real outcomes through the usual code. Each step searches the real vendor
     -- data, sets a real waypoint or asks a real question, and shows the real notification in the

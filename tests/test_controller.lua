@@ -1491,4 +1491,33 @@ w = world({ free = 1, dead = true, cfg = { vendorMode = "auto" } })
 w.c.Evaluate()
 eq(w.setCount, 0, "dead: auto mode sets no waypoint either")
 
+-- Changing zone or entering an instance withdraws a warning's open question; it is asked again
+-- from the new place, or once outside the instance. Combat withdraws nothing.
+w = world({ free = 1, autoAccept = false })
+w.c.Evaluate()
+eq(#w.prompts, 1, "sell asked")
+local cancels = w.cancelCount
+w.combat = true; w.c.Evaluate(); w.combat = false
+eq(w.cancelCount .. "/" .. #w.prompts, cancels .. "/1", "combat leaves the question open")
+w.instance = "party"
+w.c.OnPlaceChange()
+eq(w.cancelCount, cancels + 1, "entering an instance withdraws the question")
+w.c.Evaluate()
+eq(#w.prompts, 1, "not asked inside")
+w.instance = nil
+w.c.Evaluate()
+eq(#w.prompts .. ":" .. w.prompts[2].kind, "2:sell", "asked again outside")
+w.c.OnPlaceChange()
+w.c.Evaluate()
+eq(#w.prompts, 3, "a zone change asks again from the new place")
+w.prompts[3].accept(); w.open = false
+cancels = w.cancelCount
+w.c.OnPlaceChange()
+eq(w.cancelCount, cancels, "an answered question is not withdrawn")
+w = world({ free = 1, autoAccept = false })
+w.c.Test("sell")
+cancels = w.cancelCount
+w.c.OnPlaceChange()
+eq(w.cancelCount, cancels, "a test command's question is not withdrawn")
+
 H.done()

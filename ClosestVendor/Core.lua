@@ -154,7 +154,7 @@ local function rebuildTrainers()
     for k in pairs(trainerBuckets) do trainerBuckets[k] = nil end
     for _, t in pairs(DB.trainers) do
         local continent, wx, wy = A.toWorld(t[3], t[4], t[5])
-        if continent then
+        if continent and CHAR.standing[t[1]] ~= false then -- not one seen refusing this character
             local b = trainerBuckets[continent]
             if not b then b = {}; trainerBuckets[continent] = b end
             b[#b + 1] = { t[1], t[2], t[3], t[4], t[5], t[6], t[7], wx, wy }
@@ -163,11 +163,14 @@ local function rebuildTrainers()
 end
 
 -- Shipped + learned auctioneers, in the vendor record shape (no repair, no ammo), bucketed by continent.
+local auctionIds = {}
 local function rebuildAuctioneers()
     for k in pairs(auctionBuckets) do auctionBuckets[k] = nil end
+    auctionIds = {}
     for _, r in ipairs(ns.Discovery.Merge(ns.ShippedAuctioneers or {}, DB.auctioneers)) do
+        auctionIds[r[1]] = true
         local continent, wx, wy = A.toWorld(r[3], r[4], r[5])
-        if continent then
+        if continent and CHAR.standing[r[1]] ~= false then -- not one seen refusing this character
             local b = auctionBuckets[continent]
             if not b then b = {}; auctionBuckets[continent] = b end
             b[#b + 1] = { r[1], r[2], r[3], r[4], r[5], r[6], nil, 0, wx, wy }
@@ -195,16 +198,30 @@ end
 -- The hearthstone point, CHAR.hearth { name, continent, map, x, y }: the game gives only the name of
 -- the bind location, so when that name changes the player's position is taken as the point. The
 -- first name seen is kept without a position: that hearthstone was bound somewhere else, earlier.
+-- Where the player stood when an innkeeper asked to bind the hearthstone (CONFIRM_BINDER): the
+-- position of the new point once the bind name changes. A bind the addon did not see keeps the name
+-- with no position, never the place the player happens to be when it notices.
+local pendingBind
+local function noteBinder(area)
+    local continent, x, y, map = A.playerWorldPos()
+    pendingBind = continent and { area = area, continent = continent, map = map, x = x, y = y } or nil
+end
 local function learnHearth()
     local name = A.bindLocation()
     if not name then return end
     local h = CHAR.hearth
-    if not h then CHAR.hearth = { name = name } return end
-    if h.name == name or (A.instanceType() or "none") ~= "none" then return end
-    local continent, x, y, map = A.playerWorldPos()
-    if not continent then return end -- tried again at the next zone change
-    CHAR.hearth = { name = name, continent = continent, map = map, x = x, y = y }
-    log.Add("hearthstone point learned: " .. name)
+    if h and h.name == name then return end
+    local p = pendingBind
+    pendingBind = nil
+    -- The innkeeper names the place it binds to; a question declined there says nothing about this bind.
+    if p and type(p.area) == "string" and p.area ~= name then p = nil end
+    if h and p then
+        CHAR.hearth = { name = name, continent = p.continent, map = p.map, x = p.x, y = p.y }
+        log.Add("hearthstone point learned: " .. name)
+    else
+        CHAR.hearth = { name = name }
+        if h then log.Add("hearthstone point changed to " .. name .. "; its position is unknown until you bind at an innkeeper") end
+    end
 end
 
 -- A saved place for the controller: "hearth" or "last", nil while its position is not known.
@@ -229,18 +246,32 @@ end
 -- with this character, and search again when that changed.
 local function learnStanding(unit)
     local id = A.npc(unit)
-    if not id or not vendorIds[id] then return end
+    -- Vendors, trainers and auctioneers: a goblin auction house or a neutral trainer refuses a
+    -- character Unfriendly with its faction, like a vendor does.
+    local trainer, auctioneer = DB.trainers[id] ~= nil, auctionIds[id]
+    if not id or not (vendorIds[id] or trainer or auctioneer) then return end
     local can = A.canTrade(unit)
     if can == nil or CHAR.standing[id] == can then return end
     CHAR.standing[id] = can
     log.Add(("standing: npc %d %s"):format(id, can and "will trade" or "will not trade (Unfriendly or Hostile)"))
-    rebuildBuckets()
+    if vendorIds[id] then rebuildBuckets() end
+    if trainer then rebuildTrainers() end
+    if auctioneer then rebuildAuctioneers() end
 end
+-- A merchant list read before the game loaded every item is read again when item data arrives;
+-- until then it never replaces what is already known about that vendor.
+local relearnMerchant = false
 local function learnMerchant()
     local m = A.merchant()
     if not m then return end
     local changed = CHAR.standing[m.id] ~= true
     CHAR.standing[m.id] = true -- its window opened: it trades with this character
+    relearnMerchant = m.partial
+    if m.partial and vendorIds[m.id] then
+        log.Add("merchant list not fully loaded: kept what is known about " .. tostring(m.name))
+        if changed then rebuildBuckets() end
+        return
+    end
     local map, x, y = A.mapPosition()
     if not map then return end
     if ns.Discovery.Record(DB.learned, { m.id, m.name, map, x, y, m.faction, m.repair, m.ammo, m.reagents, m.supplies }) or changed then
@@ -255,8 +286,10 @@ local function learnTrainer()
     if not t then return end
     local set = {}
     for _, name in ipairs(t.trades) do CHAR.professions[name] = true; set[name] = true end
+    local changed = CHAR.standing[t.id] ~= true
+    CHAR.standing[t.id] = true -- its window opened: it trains this character
     local map, x, y = A.mapPosition()
-    if map and ns.Discovery.RecordTrainer(DB.trainers, { t.id, t.name, map, x, y, t.faction }, t.trades) then
+    if (map and ns.Discovery.RecordTrainer(DB.trainers, { t.id, t.name, map, x, y, t.faction }, t.trades)) or changed then
         rebuildTrainers()
     end
     return set
@@ -266,9 +299,10 @@ end
 local function learnAuctioneer()
     local a = A.auctioneer()
     if not a then return end
+    local changed = CHAR.standing[a.id] ~= true
+    CHAR.standing[a.id] = true -- its window opened: it trades with this character
     local map, x, y = A.mapPosition()
-    if not map then return end
-    if ns.Discovery.RecordAuctioneer(DB.auctioneers, { a.id, a.name, map, x, y, a.faction }) then
+    if (map and ns.Discovery.RecordAuctioneer(DB.auctioneers, { a.id, a.name, map, x, y, a.faction })) or changed then
         rebuildAuctioneers()
     end
 end
@@ -766,6 +800,7 @@ end
 ns.frame = CreateFrame("Frame")
 ns.frame:SetScript("OnEvent", function(_, event, arg1)
     -- Fires for every item the game loads, so it is handled before anything is logged.
+    if event == "GET_ITEM_INFO_RECEIVED" and relearnMerchant and DB then learnMerchant() end
     if event == "GET_ITEM_INFO_RECEIVED" then
         if #retryParts > 0 and retryItems[arg1] and retries < MAX_RETRIES and DB then
             retries = retries + 1
@@ -777,8 +812,16 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         end
         return
     end
+    if event == "CONFIRM_BINDER" then
+        if DB then noteBinder(arg1) end
+        return
+    end
+    if event == "HEARTHSTONE_BOUND" then
+        if DB then learnHearth() end
+        return
+    end
     if event == "MERCHANT_CLOSED" then
-        retryParts, retryItems = {}, {}
+        retryParts, retryItems, relearnMerchant = {}, {}, false
         A.hidePopup(POPUP_AMMO); A.hidePopup(POPUP_REAGENTS) -- a purchase question ends with its merchant
         return
     end
@@ -827,7 +870,10 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
             if event == "UNIT_SPELLCAST_SUCCEEDED" and controller then controller.OnCraft() end
         end
     else
-        if DB and (event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA") then learnHearth() end
+        if event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
+            if DB then learnHearth() end
+            if controller then controller.OnPlaceChange() end
+        end
         evaluate()
         touchWindow()
     end
@@ -842,6 +888,9 @@ end
 pcall(ns.frame.RegisterEvent, ns.frame, "AUCTION_HOUSE_SHOW")
 pcall(ns.frame.RegisterEvent, ns.frame, "GET_ITEM_INFO_RECEIVED")
 pcall(ns.frame.RegisterEvent, ns.frame, "MERCHANT_CLOSED")
+-- The innkeeper's bind question, and (newer clients) the bind itself: the hearthstone point's position.
+pcall(ns.frame.RegisterEvent, ns.frame, "CONFIRM_BINDER")
+pcall(ns.frame.RegisterEvent, ns.frame, "HEARTHSTONE_BOUND")
 -- Warnings wait while dead or a ghost; coming back to life checks again.
 pcall(ns.frame.RegisterEvent, ns.frame, "PLAYER_ALIVE")
 pcall(ns.frame.RegisterEvent, ns.frame, "PLAYER_UNGHOST")
