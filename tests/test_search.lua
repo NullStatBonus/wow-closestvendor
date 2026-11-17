@@ -3,6 +3,7 @@ local ns = {}
 require("harness").locale(ns)
 loadfile("ClosestVendor/Reagents.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Supplies.lua")("ClosestVendor", ns)
+loadfile("ClosestVendor/Professions.lua")("ClosestVendor", ns)
 loadfile("ClosestVendor/Search.lua")("ClosestVendor", ns)
 local S = ns.Search
 local bucket = dofile("tests/fixtures/vendors.lua")
@@ -79,6 +80,18 @@ eq(name(S.NearestTrainer(trainers, 0, 0, "Herbalism", ALLIANCE)), "Near Herb", "
 eq(name(S.NearestTrainer(trainers, 0, 0, "Mining", HORDE)), "Horde Mine", "horde trainer for horde")
 eq(name(S.NearestTrainer(trainers, 80, 0, "Mining", ALLIANCE)), "Far Mining", "closest changes with position")
 eq(name(S.NearestTrainer(trainers, 0, 0, "Engineering", ALLIANCE)), "Mid Mining", "a trainer teaching two professions")
+-- A tier to learn: a trainer known to teach less is skipped; one not known is trusted below Artisan.
+local tiered = {
+    { 6, "Journeyman Smith", 1, 0.1, 0.1, 0, { Blacksmithing = 1 }, 1, 0 },
+    { 7, "Unknown Smith",    1, 0.2, 0.1, 0, { Blacksmithing = true }, 2, 0 },
+    { 8, "Expert Smith",     1, 0.3, 0.1, 0, { Blacksmithing = 2 }, 3, 0 },
+    { 9, "Master Smith",     1, 0.9, 0.1, 0, { Blacksmithing = 4 }, 9, 0 },
+}
+eq(name(S.NearestTrainer(tiered, 0, 0, "Blacksmithing", ALLIANCE)), "Journeyman Smith", "no tier asked: the closest")
+eq(name(S.NearestTrainer(tiered, 0, 0, "Blacksmithing", ALLIANCE, nil, 2)), "Unknown Smith", "Journeyman: one that only teaches Apprentice is skipped")
+eq(name(S.NearestTrainer({ tiered[1], tiered[3] }, 0, 0, "Blacksmithing", ALLIANCE, nil, 2)), "Expert Smith", "an Expert title teaches Journeyman")
+eq(name(S.NearestTrainer(tiered, 0, 0, "Blacksmithing", ALLIANCE, nil, 4)), "Master Smith", "Artisan: only a trainer known to teach it")
+eq(S.NearestTrainer({ tiered[2], tiered[3] }, 0, 0, "Blacksmithing", ALLIANCE, nil, 4), nil, "Artisan: an unknown tier is never trusted")
 eq(S.NearestTrainer(trainers, 0, 0, "Alchemy", ALLIANCE), nil, "nobody teaches it")
 eq(S.NearestTrainer({}, 0, 0, "Mining", ALLIANCE), nil, "empty bucket")
 eq(name(S.NearestTrainer({ { 9, "Y Far", 1, 0, 0, 0, { Mining = true }, 0, 50 }, { 8, "X Near", 1, 0, 0, 0, { Mining = true }, 40, 0 } }, 0, 0, "Mining", ALLIANCE)), "X Near", "y distance counts")

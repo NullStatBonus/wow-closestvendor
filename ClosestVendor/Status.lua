@@ -131,7 +131,7 @@ function S.Snapshot(src, cfg, class)
         end
     end
     if S.Mode(cfg, "supplies") ~= "never" and src.supplies then snap.supplies = src.supplies() end
-    if next(snap.known) and S.Mode(cfg, "professions") ~= "never" then snap.skills = src.skills(); snap.level = src.level and src.level() end
+    if next(snap.known) and S.Mode(cfg, "professions") ~= "never" then snap.skills = src.skills(); snap.level = src.level and src.level(); snap.artisan = src.trainerTiers and src.trainerTiers() end
     return snap
 end
 
@@ -200,7 +200,7 @@ function S.Rows(snap, cfg, class)
     if type(snap.skills) == "table" then
         local near = {}
         if cfg.tradeEnabled then
-            for _, p in ipairs(ns.Professions.Within(snap.skills, snap.known or {}, cfg.tradeThreshold, snap.level)) do near[p.name] = true end
+            for _, p in ipairs(ns.Professions.Within(snap.skills, snap.known or {}, cfg.tradeThreshold, snap.level, snap.artisan)) do near[p.name] = true end
         end
         local profs = {}
         for _, s in ipairs(snap.skills) do
@@ -308,7 +308,7 @@ function S.Demo(roll, cfg)
     for i = 0, 1 do
         local name = DEMO_PROFESSIONS[(at + i - 1) % #DEMO_PROFESSIONS + 1]
         makers[#makers + 1] = function(low)
-            local max = 75 * roll(3)
+            local max = 75 * roll(2) -- Journeyman or Expert next: the tiers the addon routes for
             local left = low and upTo(cfg.tradeThreshold) or cfg.tradeThreshold + roll(20)
             snap.known[name] = true
             snap.skills[#snap.skills + 1] = { name = name, rank = math.max(1, max - left), max = max }

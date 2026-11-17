@@ -12,6 +12,8 @@ function O.Refresh()
     local reg = library("AceConfigRegistry-3.0")
     if reg then pcall(reg.NotifyChange, reg, O.APP) end
 end
+-- Pages listed under the Closest Vendor entry in the game's AddOns list, in tree order.
+O.SUBPAGES = { "restock", "navigation", "appearance", "advanced", "about" }
 function O.Register(cfg, defaults, onChange, class, pickColor, note)
     if O.tree then return O.APP end
     local reg, dialog = library("AceConfigRegistry-3.0"), library("AceConfigDialog-3.0")
@@ -97,7 +99,8 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note)
     cfg.reagentOff = cfg.reagentOff or {}
     for _, item in ipairs(items) do
         local id = item.id
-        add(reagents, "item" .. id, { type = "toggle", name = L["Reagent: %s"]:format(item.name),
+        -- The game's name for the item, in the player's language, once it has loaded; English until then.
+        add(reagents, "item" .. id, { type = "toggle", name = function() return L["Reagent: %s"]:format(O.itemName and O.itemName(id) or item.name) end,
             disabled = off("reagentsEnabled"), desc = L["Enable Reagents on Home to edit this value."],
             get = function() return not cfg.reagentOff[id] end,
             set = function(_, v) cfg.reagentOff[id] = not v or nil; onChange(); O.Refresh() end })
@@ -296,8 +299,15 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note)
     O.tree = tree
     -- Match KeepThat's initial size; Ace retains manual resizing between opens.
     if dialog.SetDefaultSize then pcall(dialog.SetDefaultSize, dialog, O.APP, 600, 460) end
-    -- Optional native registration must never prevent the standalone tree from opening.
-    local registered, why = pcall(dialog.AddToBlizOptions, dialog, O.APP, L["Closest Vendor"])
+    -- The game's AddOns list, as in KeepThat: the Closest Vendor entry shows Home and every other
+    -- top-level page is listed under it. Optional native registration must never prevent the
+    -- standalone tree from opening.
+    local registered, why = pcall(function()
+        dialog:AddToBlizOptions(O.APP, L["Closest Vendor"], nil, "home")
+        for _, key in ipairs(O.SUBPAGES) do
+            dialog:AddToBlizOptions(O.APP, pages[key].name, L["Closest Vendor"], key)
+        end
+    end)
     if note then note(registered and "AceConfig registered; standalone settings available" or "AceConfig standalone only: " .. tostring(why)) end
     return O.APP
 end

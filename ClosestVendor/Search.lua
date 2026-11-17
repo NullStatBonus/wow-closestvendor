@@ -51,15 +51,16 @@ function S.NearestFrom(buckets, at, need, playerFaction)
     return S.Nearest(buckets[at.continent] or {}, at.x, at.y, need, playerFaction, at.map)
 end
 
--- Trainer record: { npcId, name, uiMapID, mx, my, faction, trades (set of profession names), wx, wy }.
--- Returns the nearest trainer that teaches trade for the player's faction, or nil; with mapId,
--- also the nearest one on that map, as Nearest does.
-function S.NearestTrainer(bucket, px, py, trade, playerFaction, mapId)
+-- Trainer record: { npcId, name, uiMapID, mx, my, faction, trades, wx, wy }; trades maps a profession
+-- name to the highest tier taught (a number) or true when not known (see Professions.Teaches).
+-- Returns the nearest trainer that teaches trade, and tier need when given, for the player's faction,
+-- or nil; with mapId, also the nearest one on that map, as Nearest does.
+function S.NearestTrainer(bucket, px, py, trade, playerFaction, mapId, need)
     local best, bestD, onMap, onMapD
     for i = 1, #bucket do
         local v = bucket[i]
         local fac = v[6]
-        if (fac == 0 or fac == playerFaction) and v[7][trade] then
+        if (fac == 0 or fac == playerFaction) and ns.Professions.Teaches(v[7][trade], need) then
             local dx, dy = v[8] - px, v[9] - py
             local d = dx * dx + dy * dy
             if not bestD or d < bestD then best, bestD = v, d end

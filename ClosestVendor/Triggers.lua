@@ -86,6 +86,7 @@ function T.New(cfg)
     local reminded = {} -- reminder key -> true while its condition holds
     local handledReagent = {} -- item id -> true while that reagent stays low
     local active, activeReagent
+    local coveredSell = false -- the active repair or ammo request also marked a low-bag-space request handled
     local last, lastLow -- the conditions and the low reagents seen by the latest Update
     local self = {}
 
@@ -129,11 +130,12 @@ function T.New(cfg)
         -- Never replace an equal or higher priority request that is still open or active.
         if active and PRIORITY[want] <= PRIORITY[active] then return nil end
 
-        -- A reagent request that a higher one replaces is asked again once that one is done.
-        if active == "reagent" then handledReagent[activeReagent] = nil end
+        -- A request that a higher one replaces is asked again once that one is done.
+        if active == "reagent" then handledReagent[activeReagent] = nil elseif active then handled[active] = false end
         if want == "reagent" then handledReagent[wantId] = true else handled[want] = true end
         -- A repair or ammo trip also covers selling.
-        if want == "repair" or want == "ammo" then handled.sell = now.sell == true end
+        coveredSell = (want == "repair" or want == "ammo") and now.sell == true and not handled.sell
+        if coveredSell then handled.sell = true end
         active, activeReagent = want, wantId
         if want == "reagent" then return { "go", "reagent", wantId } end
         return { "go", want }
@@ -148,12 +150,12 @@ function T.New(cfg)
         if kind == "reagent" then
             if not lastLow[id] then return false end
             handledReagent[id] = true
-            active, activeReagent = kind, id
+            active, activeReagent, coveredSell = kind, id, false
             return true
         end
         if not last[kind] then return false end
         handled[kind] = true
-        active, activeReagent = kind, nil
+        active, activeReagent, coveredSell = kind, nil, false
         return true
     end
 
@@ -177,6 +179,21 @@ function T.New(cfg)
 
     -- The vendor request that is open or active ("sell"/"ammo"/"reagent"/"repair"/a supply), or nil.
     function self.Active() return active end
+
+    -- The request for trigger (and reagent id) ended without a trip: the player said No, or no
+    -- vendor serves it. It stays handled, so it is not asked again until its condition clears, and
+    -- the next need may be asked. Selling, which the trip would have covered, may be asked too.
+    -- again: the question was withdrawn unanswered (the player changed zone), so the request is asked
+    -- again at the next check where questions are allowed. Returns whether it was the active one.
+    function self.Release(trigger, id, again)
+        if not active or active ~= trigger or (trigger == "reagent" and activeReagent ~= id) then return false end
+        if coveredSell then handled.sell = false end
+        if again then
+            if trigger == "reagent" then handledReagent[id] = nil else handled[trigger] = false end
+        end
+        active, activeReagent, coveredSell = nil, nil, false
+        return true
+    end
 
     function self.OnMerchantShow()
         if active then

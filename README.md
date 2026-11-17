@@ -38,15 +38,20 @@ When a warning fires, the addon shows the closest vendor that fits.
   - A warlock who knows Create Healthstone and has no healthstone gets a reminder to make one.
   - The reminder shows once, until the cause is gone. It is a notification: it shows as a Toast or Warning, with the notification sound, if the on-screen notice is on.
   - The reminder waits while you are in combat or in an instance.
-- **Professions:** a profession is within the threshold (default **10**) points of its current skill limit. The addon shows the closest trainer for that profession that you opened before. It asks on every skill-up and every craft.
+- **Professions:** a profession is within the threshold (default **10**) points of its current skill limit. The addon shows the closest trainer for that profession that you opened before. It asks on every skill-up and every craft. At 225, Artisan comes next, and only a few trainers teach it. With the optional NorgannonDB addon installed, the addon knows which trainers teach which tier and routes every tier, Artisan included, only to a trainer who teaches it. Without NorgannonDB, it uses the closest trainer for Journeyman and Expert and does not route for Artisan (a click on that row says so in chat).
 
 If more than one warning is active, the addon asks one question at a time.
 The order is: repair, ammo, reagent, food, water, pet food, sell, trainer.
 A repair trip or an ammo trip also covers selling.
 A food, water or pet food trip does not cover selling.
-If no known vendor sells what you need, the addon prints one chat line and shows no question.
+If you answer No, that warning is not asked again until it clears, and the next warning is asked. A No to repair or ammo can still be followed by the sell question.
+If no known vendor sells what you need, the addon prints one chat line and shows no question, and moves on to the next warning.
+Questions wait while you are dead or a ghost, as in combat, and come once you are alive.
+A question still open when you change zone or enter an instance is withdrawn, because its vendor was chosen from where you were. It is asked again from your new place, or once you leave the instance. Combat leaves an open question alone: you can still answer and route.
 
 ### Buying
+
+A purchase question closes when you close the merchant window. Nothing is bought if the merchant changed before you answered.
 
 - **Ammo buying:** at any merchant, with a bow, crossbow or gun equipped, the addon buys ammo to fill your quiver or ammo pouch.
   - It does not ask by default.
@@ -164,7 +169,7 @@ When you leave, the question comes back.
 This way, a full-bags question in a battleground is not lost.
 
 - The addon remembers your last position outside.
-- The addon learns your hearthstone point from your bind location.
+- The addon learns your hearthstone point when you set it at an innkeeper. If you set it before installing the addon, or the addon misses it, the point is known by name only until you set it again; meanwhile the addon uses your last position outside.
 - If you click a row inside an instance, the addon searches near an anchor.
 - In a battleground, the anchor is your last position outside.
 - In a dungeon or raid, you choose the anchor:
@@ -195,7 +200,7 @@ The addon has one TOC file for each game:
 
 ## Settings page
 
-Type `/cvn settings` (also `/cvn config` or `/cvn options`) or click the HUD cog to open Home. Settings use the bundled AceConfig tree; no other addon is needed. An Options > AddOns entry is also registered where supported. The standalone tree remains available without native Settings registration.
+Type `/cvn settings` (also `/cvn config` or `/cvn options`) or click the HUD cog to open Home. Settings use the bundled AceConfig tree; no other addon is needed. Where supported, Options > AddOns also lists Closest Vendor: the entry opens Home, with Restock, Navigation, Appearance, Advanced and About under it. The standalone tree remains available without native Settings registration.
 
 Pages appear in this order: **Home, Restock (Ammo, Reagents, Supplies), Navigation, Appearance (Notifications, Status window, Sound), Advanced, About**. The window title is **Closest Vendor**; Advanced explains where settings are saved. The settings window starts at 600×460, matching KeepThat, and can be resized. Pages use readable rows, section headings and spacing, with compact dropdowns, sliders and buttons. Each page and Appearance tab explains its purpose; section notes explain the decisions and their consequences before the controls, including warning counts versus buying targets and purchases without confirmation. Commands and controls edit the same saved settings immediately. Existing settings and learned places retain their scopes.
 
@@ -483,6 +488,7 @@ It learns more as you play.
 
 - Each time you open a vendor window, the addon records that vendor.
 - It records the position, whether the vendor repairs, and which ammo, reagents, food and drink the vendor sells.
+- If the game has not loaded every item in the vendor's list yet, the addon keeps what it already knew about that vendor and reads the list again when the items arrive.
 - A learned vendor replaces a shipped vendor with the same NPC id.
 - The addon saves learned vendors between sessions.
 
@@ -491,14 +497,14 @@ Trainers work the same way, but the addon ships no trainers.
 - When you open a profession trainer window, the addon records where the trainer is.
 - It also records which professions the trainer teaches.
 - All your characters share the trainers.
-- All your characters also share the professions you saw at a trainer or in a crafting window.
+- Each character keeps its own list of the professions it saw at a trainer or in a crafting window.
 
 The vendors that you open in the new zones of WoW Forever cover those zones.
 The new zones are Mount Hyjal, Riverglades, Zephras Isle, Darkspear Islands and Shen'dralas.
 
 ### NorgannonDB (optional)
 
-If the NorgannonDB addon is installed, the addon also reads its vendors in the new zones of WoW Forever.
+If the NorgannonDB addon is installed, the addon also reads its vendors in the new zones of WoW Forever, and its profession trainers everywhere.
 
 - It is read when you log in, and again if NorgannonDB finishes loading later.
 - It adds vendors, with their position, faction, repair and what they sell. It adds nothing in other zones.
@@ -506,7 +512,8 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 - All vendors are one list, and the closest one wins.
 - For the same vendor, NorgannonDB's data comes before the shipped list. What you see when you open a vendor comes before both.
 - If you open a vendor that is more than 3% of the map away from NorgannonDB's position, your position is used.
-- `/cvn log` says whether NorgannonDB was found and how many vendors it added.
+- It adds profession trainers whose title tells which tier they teach, with their position and the professions of the recipes they teach, named in your game's language. A trainer you opened keeps its position, and gains the tier.
+- `/cvn log` says whether NorgannonDB was found, how many vendors it added and how many trainers with a tier.
 
 ## Limitations
 
@@ -523,7 +530,7 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 - Professions are matched by the name that the game shows.
 - After you change the game language, the addon learns trainers again.
 - The addon skips vendors of the other faction.
-- Reputation: each character remembers vendors it has seen as Unfriendly or Hostile (target, mouseover, nameplate) and never routes to them. A vendor of no side that another character taught you, such as a clan quartermaster, is used only after this character has seen it at Neutral or better or opened its window. The game does not say which reputation a vendor needs, so a shipped vendor you cannot trade with is skipped only after you have seen it.
+- Reputation: each character remembers vendors, profession trainers and auctioneers it has seen as Unfriendly or Hostile (target, mouseover, nameplate) and never routes to them. This covers the goblin auction houses in Booty Bay, Gadgetzan and Everlook when you are Unfriendly with their cartel. A vendor of no side that another character taught you, such as a clan quartermaster, is used only after this character has seen it at Neutral or better or opened its window. The game does not say which reputation a vendor needs, so a shipped vendor you cannot trade with is skipped only after you have seen it.
 - Neutral vendors count for everyone.
 
 ### Ammo
@@ -575,10 +582,12 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 
 - The addon takes the last skill tier to end at 300.
 - The addon never asks about a profession whose limit is already 300.
-- The addon does not ask about a profession while you are too low a level to learn its next tier from a trainer (level 10 for 75, 20 for 150, 35 for 225).
+- The addon does not ask about a profession while you are too low a level to learn its next tier from a trainer (level 10 for 75, 20 for 150).
+- Without NorgannonDB, Artisan (after 225) is never routed: few trainers teach it and the addon cannot tell which. Journeyman and Expert trainers usually stand side by side, so the closest trainer is used for those.
+- With NorgannonDB, a trainer's tier comes from its title: before patch 2.3 a trainer teaches the tiers below its title (a Journeyman Blacksmith teaches Apprentice, an Expert Journeyman, an Artisan Expert, a Master Artisan). Trainers with other titles, such as specialization masters or "Mining Trainer", have no known tier: they are used for Journeyman and Expert, never for Artisan.
 - It is not verified if WoW Forever has tiers above 300.
 - The addon does not check the level requirement of the trainer.
-- A character that is too low can be sent to a trainer who cannot teach the next tier yet.
+- The closest trainer is not checked for which tier it teaches; see issue #27.
 
 ### Distance and maps
 

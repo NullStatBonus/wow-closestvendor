@@ -551,6 +551,51 @@ Run on Classic Era and WoW Forever with only Closest Vendor installed, at matchi
 - [ ] On a character Unfriendly with that clan, target or mouse over the quartermaster. Expected: the debug log says it will not trade, and no later route goes to it. `/cvn log` shows the standing count.
 - [ ] Raise reputation to Neutral, target the quartermaster again. Expected: it can be offered again.
 
+## 22. AddOns list icon and pages
+
+- [ ] Open the game's AddOns list (Menu > AddOns) on Classic Era and WoW Forever. Expected: Closest Vendor shows its badge icon next to its name.
+- [ ] In the AddOns list, Closest Vendor has Restock, Navigation, Appearance, Advanced and About under it, like KeepThat and Don't Do That. Selecting Closest Vendor shows Home. Change a value on Restock > Ammo, then open `/cvn settings`: the same value shows.
+
+## 23. Safe questions
+
+- [ ] Ammo: turn on "ask first", open an ammo merchant, leave the question open and close the merchant. Expected: the question closes, nothing is bought. Repeat with reagents.
+- [ ] With the ammo question open, a route question shown at the same time does not replace it.
+- [ ] Gear worn below the threshold and bags full: answer **No** to the repair question. Expected: the sell question appears within a moment. Repair is not asked again until you repair.
+- [ ] Press Escape on a route question. Expected: same as No.
+- [ ] Need repair where no repairer is known on the continent, with bags full. Expected: the sell question is asked.
+- [ ] Die with gear just above the threshold so death drops it below. Expected: no question while dead or a ghost. After resurrecting (corpse or spirit healer), the repair question appears.
+- [ ] Same, but accept a resurrection from another player before releasing. Expected: the repair question appears once alive.
+- [ ] Bags full: the sell question shows; then gear drops below the threshold. Answer **No** to repair. Expected: the sell question is asked again.
+
+## 24. Zone changes, hearth, partial merchants and standing
+
+- [ ] With the sell question open, enter a dungeon. Expected: the question closes; nothing is asked inside; after leaving, the sell question is asked again.
+- [ ] With the repair question open, ride into the next zone. Expected: the question is asked again, naming the closest repairer from the new zone.
+- [ ] With a question open, start combat. Expected: the question stays; Yes still sets the waypoint.
+- [ ] Set your hearthstone at an innkeeper, then walk out of town into another zone. `/cvn log`: the hearthstone point is the inn, not where you crossed the zone line. In a dungeon with `/cvn anchor hearth`, a row click searches near that inn.
+- [ ] Talk to an innkeeper and decline the bind, then bind elsewhere without the addon seeing it (or reload between). Expected: the new point is known by name only; dungeon searches use your last position outside.
+- [ ] After a fresh login, open a known ammo vendor straight away (items may not be loaded). Expected: the vendor still counts as an ammo vendor, and the debug log may say the list was not fully loaded and kept what was known.
+- [ ] On a character Unfriendly with the Steamwheedle Cartel (Booty Bay), target the Booty Bay auctioneer, turn on auction routing and click a reagent row nearby. Expected: it does not route to that auctioneer.
+
+## 25. Translated labels and the trainer probe
+
+- [ ] Hunter with a pet in a non-English client (or a test translation): the pet food question names the diets in that language.
+- [ ] On the Reagents page in a non-English client, the reagent checkboxes show the game's item names.
+- [ ] `/cvn debug on`, then open a small-town profession trainer and a capital-city trainer for the same profession, ideally on a character below Expert. `/cvn log`: each shows "trainer services: N listed; filters ..." and one "service:" line per entry with level and skill requirements. Copy the report into the trainer-tier issue. The trainer window's filters are unchanged.
+
+## 26. Artisan without NorgannonDB
+
+- [ ] A profession at 215-225 of 225 (level 35 or more): no trainer question on skill-ups or crafts; the status window row is not red. Click the row: chat says Artisan is taught by only a few trainers and no waypoint is set.
+- [ ] A profession at 145 of 150 (level 20 or more): the trainer question still comes, as before.
+
+## 27. Trainer tiers with NorgannonDB
+
+- [ ] With NorgannonDB installed, `/cvn log`: the NorgannonDB line counts "trainers with a tier".
+- [ ] A profession at 145 of 150 (level 20+), near a Journeyman Blacksmith and further from an Expert or Artisan Blacksmith: the question names the Expert or Artisan Blacksmith, not the Journeyman one.
+- [ ] A profession at 220 of 225 (level 35+): the question names a Master trainer for it (for example Brikk Keencraft in Booty Bay for Blacksmithing); the status window row is red, and a row click routes there.
+- [ ] A non-English client: the trainer question uses the game's profession name and the trainer's localized name.
+- [ ] Disable NorgannonDB: section 26 behaviour returns.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

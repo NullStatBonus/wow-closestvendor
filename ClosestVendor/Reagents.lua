@@ -199,6 +199,12 @@ function R.OnMerchant(cfg, env)
     local list, coins = table.concat(parts, ", "), ns.Ammo.Coins(cost)
     local purchases = 0
     local function buy()
+        -- A question answered later: buy only if this merchant still offers every item at its slot.
+        if env.sells then
+            for _, l in ipairs(lines) do
+                if env.sells(l.offer.index) ~= l.offer.id then log("purchase dropped: the merchant window changed") return end
+            end
+        end
         for _, l in ipairs(lines) do
             local o = l.offer
             if o.batch == 1 and o.maxBuy and o.maxBuy > 1 then

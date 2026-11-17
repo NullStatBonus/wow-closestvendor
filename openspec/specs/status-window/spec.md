@@ -180,7 +180,7 @@ The background color SHALL be chosen with a swatch in the settings page that sho
 - **THEN** the debug log and the report say which of the color picker, the page layout, `layout.AddInitializer` or `CreateSettingsButtonInitializer` is missing, and the report says whether the picker and settings button exist
 
 ### Requirement: Demo
-The addon SHALL accept and document `/cvn demo` in help, About and README as the real routing tour defined in visual-preview. While it runs, the status window SHALL show representative made-up rows, including supplies and at least one low row; a click on one SHALL go nowhere. When the tour ends, current live rows SHALL return. Sample counts, modes and settings SHALL never persist. Legacy integration `test` commands SHALL retain their separate documented behavior.
+The addon SHALL accept and document `/cvn demo` in help, About and README as the real routing tour defined in visual-preview. While it runs, the status window SHALL show representative made-up rows, including supplies and at least one low row; a click on one SHALL stop the tour and route that row's kind for real, as in notification-presentation. When the tour ends, current live rows SHALL return. Sample counts, modes and settings SHALL never persist. Legacy integration `test` commands SHALL retain their separate documented behavior.
 
 #### Scenario: Demo shows and restores
 - **WHEN** `/cvn demo` runs

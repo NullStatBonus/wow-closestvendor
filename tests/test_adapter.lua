@@ -9,7 +9,7 @@ local function boot(game)
     local env = setmetatable(game or {}, { __index = _G })
     local ns = {}
     require("harness").locale(ns)
-    for _, f in ipairs({ "Triggers", "Ammo", "Reagents", "Supplies", "Adapter" }) do
+    for _, f in ipairs({ "Triggers", "Ammo", "Reagents", "Supplies", "Professions", "Adapter" }) do
         local chunk = assert(loadfile("ClosestVendor/" .. f .. ".lua"))
         setfenv(chunk, env)
         chunk("ClosestVendor", ns)
@@ -678,6 +678,40 @@ eq(xby[10][9], 0, "no reagents")
 eq(xby[14], nil, "a vendor on another map is not read")
 eq(xby[15], nil, "a sub-zone vendor is not read")
 eq(xby[18], nil, "not in the vendor list: not read")
+-- Trainers: those in NorgannonDB's trainer list whose title gives a tier, with the professions of
+-- the recipes they teach, named in the player's language; any map.
+do
+    local tnpcs = {
+        [30] = { name = "Smith", subName = "Expert Blacksmith", reaction = "A", spawns = { [1429] = { { 40, 60 } } } },
+        [31] = { name = "Master", subName = "Master Blacksmith", reaction = "AH", spawns = { [616] = { { 10, 20 } } } },
+        [32] = { name = "Gnome", subName = "Master Gnome Engineer", reaction = "A", spawns = { [1429] = { { 5, 5 } } } },
+        [33] = { name = "Nowhere", subName = "Artisan Tailor", reaction = "H", spawns = { [9999] = { { 5, 5 } } } },
+        [34] = { name = "Not Listed", subName = "Expert Tailor", reaction = "H", spawns = { [1429] = { { 5, 5 } } } },
+    }
+    local ng = fakeNG({
+        categories = { vendor = { npcs = {} }, trainer = { npcs = { [30] = "A", [31] = "AH", [32] = "A", [33] = "H" } } },
+        recipes = { [1] = { skill = 164, trainers = { [30] = 10, [31] = 10 } }, [2] = { skill = 202, trainers = { [32] = 10 } },
+                    [3] = { skill = 197, trainers = { [33] = 10, [34] = 10 } } },
+        Peek = function(_, kind, id) return kind == "npcs" and tnpcs[id] or nil end,
+        L = function(_, kind, id, field)
+            if kind == "professions" then return ({ [164] = "Schmiedekunst", [202] = "Ingenieurskunst", [197] = "Schneiderei" })[id] end
+            if kind == "npcs" then return id == 30 and "Schmied" or nil end
+        end,
+    })
+    local tl = boot(extGame(ng)).externalTrainers()
+    local tby = {}
+    for _, t in ipairs(tl) do tby[t[1]] = t end
+    eq(tby[30] and tby[30][7]["Schmiedekunst"], 2, "Expert Blacksmith teaches up to Journeyman, under the localized profession name")
+    eq(tby[30][2] .. ":" .. tby[30][3] .. ":" .. tby[30][4] .. ":" .. tby[30][6], "Schmied:1429:0.4:1", "localized name, map, position, faction")
+    eq(tby[31] and tby[31][7]["Schmiedekunst"], 4, "Master Blacksmith teaches Artisan")
+    eq(tby[31][6], 0, "both factions")
+    eq(tby[32], nil, "a specialization master has no tier: left out")
+    eq(tby[33], nil, "no usable map position: left out")
+    eq(tby[34], nil, "not in the trainer list: left out")
+    eq(boot(extGame(fakeNG())).externalTrainers(), nil, "no trainer data: nil")
+    eq(boot({}).externalTrainers(), nil, "addon missing: nil")
+end
+
 -- Unavailable or unreadable: nil, never an error.
 eq(boot({}).externalVendors(five), nil, "addon missing: nil")
 A, errs = boot({})

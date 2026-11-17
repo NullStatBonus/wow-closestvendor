@@ -93,6 +93,29 @@ ns.Options.Open(p);eq(r.page,"home","default Home")
 ns.Options.Open(p,"appearance");eq(r.page,"appearance","explicit page")
 ns.Options.Open(p,"ammo");eq(r.page,"restock/ammo","a Restock page opens by its own name")
 ns.Options.Open(p,"sound");eq(r.page,"appearance/sound","the Sound tab opens by name")
+-- The game's AddOns list: Closest Vendor opens Home, with each other top-level page under it.
+do
+    local e = r.entries or {}
+    eq(#e, 6, "one entry and five pages in the AddOns list")
+    eq(e[1] and (e[1].name .. "|" .. tostring(e[1].parent) .. "|" .. e[1].path), "Closest Vendor|nil|home", "the entry opens Home")
+    local seen = {}
+    for i = 2, #e do
+        eq(e[i].parent, "Closest Vendor", e[i].path .. " sits under Closest Vendor")
+        eq(e[i].name, r.tree.args[e[i].path].name, e[i].path .. " uses its page name")
+        seen[#seen + 1] = e[i].path
+    end
+    eq(table.concat(seen, ","), "restock,navigation,appearance,advanced,about", "pages in tree order")
+end
+-- Reagent toggles name the item in the player's language when the game has it, English before.
+do
+    local args = r.tree.args.restock.args.reagents.args
+    local t = args.item17020
+    eq(type(t.name), "function", "reagent label is computed when shown")
+    eq(t.name(), "Reagent: Arcane Powder", "English until the game has the name")
+    ns.Options.itemName = function(id) return id == 17020 and "Arkanpulver" or nil end
+    eq(t.name(), "Reagent: Arkanpulver", "the game's name once loaded")
+    ns.Options.itemName = nil
+end
 ns,r=boot({noNative=true});eq(ns.Options.Open(ns.Options.APP),true,"standalone without native API")
 ns,r,c,p=boot({missing=true});eq(p,nil,"missing libraries tolerated");eq(ns.Options.Open(p),false,"missing libraries fail clearly")
 ns,r,c,p=boot({failRegister=true});eq(p,nil,"failed registration tolerated")

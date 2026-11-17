@@ -38,7 +38,7 @@ Closest Vendor tells you when it is a good time to repair, restock or make bag s
 - Your ammo is running low: it offers the closest vendor that sells it.
 - A class reagent is running low: it offers the closest vendor that sells it.
 - Food, water or pet food is running low: it offers the closest vendor that sells it. Mages and warlocks who can make their own get a reminder with a sound instead.
-- A profession is near its skill limit and you are high enough level to learn the next tier: it offers the closest trainer you have visited.
+- A profession is near its skill limit and you are high enough level to learn the next tier: it offers the closest trainer you have visited. With NorgannonDB installed, it offers only trainers who teach that tier, Artisan included; without it, Artisan is left to you.
 
 **Restock without the trip planning.** At any merchant, it can fill your quiver or ammo pouch. It can also top up your class reagents (off by default). It buys only what you can afford and tells you in chat.
 
@@ -51,9 +51,11 @@ Closest Vendor tells you when it is a good time to repair, restock or make bag s
 - It ships with about 900 vendors and learns the ones you open.
 - TomTom and WaypointUI are optional. Classic Era needs TomTom to show an arrow. Choose the waypoint method with `/cvn nav` (for example, the game's own waypoint even when TomTom is installed).
 - Settings are saved per character. The vendors, trainers and auctioneers the addon learns are shared by the whole account.
+- One question at a time, and No means no: it moves on to your next need and does not ask again until things change. It waits while you are dead or in combat, and drops a question when you change zone or enter a dungeon.
+- Vendors, trainers and auction houses that will not deal with you (Unfriendly or Hostile) are skipped once you have seen them.
 - Pet food works for hunters with a pet out, in every game language.
 - Open a vendor or trainer once so the addon learns it. This matters most in WoW Forever's new zones.
-- If the NorgannonDB addon is installed, its vendors in WoW Forever's new zones are used too. Nothing is copied from it.
+- If the NorgannonDB addon is installed, its vendors in WoW Forever's new zones and its profession trainers (with the tier each teaches) are used too. Nothing is copied from it.
 - Problems? Type `/cvn debug on`, repeat the problem, then type `/cvn log` and post the report.
 
 ---

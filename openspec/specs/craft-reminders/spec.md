@@ -101,7 +101,7 @@ A reminder SHALL play the notification sound, once for a batch of reminders show
 - **THEN** the chat line prints and no sound plays
 
 ### Requirement: The reminder sound is a choice
-The notification sound SHALL be one choice for every notification. The choices SHALL be the whisper ping, the minimap ping, the group invite, the ready check and none; none is silent. The choice SHALL be the Notification sound dropdown on the Sound settings page, below Appearance, for every class, and settable with `/cvn sound <name>`. No other settings page SHALL have a sound control. Choosing one SHALL play it.
+The notification sound SHALL be one choice for every notification. The choices SHALL be the whisper ping, the minimap ping, the group invite, the ready check and none; none is silent. The choice SHALL be the Notification sound dropdown on the Appearance Sound tab, for every class, and settable with `/cvn sound <name>`. No other settings page SHALL have a sound control. Choosing one SHALL play it.
 
 #### Scenario: Choosing previews
 - **WHEN** the player runs `/cvn sound ping`

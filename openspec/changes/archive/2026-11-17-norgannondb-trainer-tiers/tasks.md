@@ -1,0 +1,7 @@
+- [x] 1.1 `Professions.TitleTier`, `NeedTier`, `Teaches`; `Within(..., artisan)` with `need`
+- [x] 1.2 `Search.NearestTrainer(..., need)`
+- [x] 1.3 `Adapter.externalTrainers` (trainer list, recipes, titles, localized names)
+- [x] 1.4 Core merge into trainer buckets, `trainerTiers` for controller and status window, report count, late load
+- [x] 1.5 Tests (professions, search, adapter, controller, status, core), mutation-checked
+- [x] 1.6 README, listing, CHANGELOG 1.7.0, test plan section 27
+- [ ] 1.7 In-game verification

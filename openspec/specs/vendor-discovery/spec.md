@@ -6,7 +6,7 @@ Learn vendors that the shipped data lacks or has wrong, by recording merchants t
 ## Requirements
 
 ### Requirement: Record opened merchants
-When a merchant window opens, the addon SHALL record that merchant's NPC id, name, repair capability, faction group, and the player's map position, keyed by NPC id, in saved variables.
+When a merchant window opens, the addon SHALL record that merchant's NPC id, name, repair capability, faction group, and the player's map position, keyed by NPC id, in saved variables. When the merchant list is only partly readable (an item link the game has not loaded), the addon SHALL NOT replace a known vendor's record, and SHALL read the list again when item data arrives while the window is open; a vendor not known yet SHALL be recorded from what could be read.
 
 #### Scenario: New vendor
 - **WHEN** the player opens a merchant that is not yet known
@@ -15,6 +15,10 @@ When a merchant window opens, the addon SHALL record that merchant's NPC id, nam
 #### Scenario: Repair vendor
 - **WHEN** the merchant can repair
 - **THEN** it is stored as repair-capable
+
+#### Scenario: Items not loaded yet
+- **WHEN** the player opens a known ammo vendor before the game has loaded its items
+- **THEN** the vendor still counts as selling ammo, and the record is updated once the items load
 
 ### Requirement: Record ammo sold
 When a merchant window opens, the addon SHALL also record whether the merchant sells arrows, bullets, both or neither, from the items it offers.
@@ -113,7 +117,7 @@ When a merchant window opens, the addon SHALL also record whether the merchant o
 - **THEN** the stored record is updated
 
 ### Requirement: Vendors this character cannot trade with are skipped
-Each character SHALL remember whether each known vendor trades with it: yes at Neutral or better or when its merchant window opens, no at Unfriendly or Hostile, as seen on target, mouseover or nameplate. The search SHALL skip vendors seen as no. A learned vendor of no side that is not shipped or external SHALL be used only after this character has seen it trade.
+Each character SHALL remember whether each known vendor, profession trainer and auctioneer trades with it: yes at Neutral or better or when its merchant, trainer or auction window opens, no at Unfriendly or Hostile, as seen on target, mouseover or nameplate. The search SHALL skip vendors, trainers and auctioneers seen as no. A learned vendor of no side that is not shipped or external SHALL be used only after this character has seen it trade.
 
 #### Scenario: Taught by another character
 - **WHEN** a clan quartermaster of no side was learned by another character and this character has never seen it
@@ -134,3 +138,7 @@ Each character SHALL remember whether each known vendor trades with it: yes at N
 #### Scenario: No reaction
 - **WHEN** the game reports no reaction for a seen vendor
 - **THEN** nothing changes
+
+#### Scenario: Goblin auction house while Unfriendly
+- **WHEN** this character, Unfriendly with the Steamwheedle Cartel, targets the Booty Bay auctioneer
+- **THEN** a row click never routes to that auctioneer until it is seen at Neutral or better

@@ -14,6 +14,9 @@ S.DIETS = { "Meat", "Fish", "Bread", "Cheese", "Fruit", "Fungus" }
 local DIET_BIT = {}
 for i, d in ipairs(S.DIETS) do DIET_BIT[d] = 2 ^ (i + 1) end
 S.DIET_BIT = DIET_BIT
+-- What a diet is called in a question, in the player's language. The keys above stay English: they are
+-- internal names, matched by pet family id, never by text from the game.
+S.DIET_LABEL = { Meat = L["Meat"], Fish = L["Fish"], Bread = L["Bread"], Cheese = L["Cheese"], Fruit = L["Fruit"], Fungus = L["Fungus"] }
 
 -- The sounds a reminder can play: { saved key, game sound id, label }. The setting saves the key, never
 -- the id; "none" is silent. Ids are the game's own sound ids (PlaySound).

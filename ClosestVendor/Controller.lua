@@ -231,11 +231,32 @@ function C.New(env)
         notice(text)
     end
 
+    local function dead() return env.dead and env.dead() or false end
+    -- Trainer tiers are known (NorgannonDB), so Artisan is routed too, to trainers that teach it.
+    local function tiers() return env.trainerTiers and env.trainerTiers() or false end
+
+    -- The trigger a question's kind answers: ammo for arrows and bullets, the supply key for supplies.
+    local function triggerOf(kind, id)
+        if kind == "arrow" or kind == "bullet" then return "ammo" end
+        if kind == "supply" then return id end
+        return kind
+    end
+
+    local asking -- { kind, id, prompt }: the question a warning asked, while it may still be open
+
+    -- The request for kind ended without a trip (No, or no vendor): the next need may be asked.
+    local function release(kind, id)
+        if triggers.Release(triggerOf(kind, id), id) then
+            log("request released: " .. kind)
+            if env.after then env.after(0.1, function() self.Evaluate() end) end
+        end
+    end
+
     -- Ask about the nearest target v (and, when v is on another map, the nearest on the player's
     -- map), navigating only on a choice. trade is set for trainers, count is the ammo or reagent left
     -- or the points left to the cap. name is the reagent's name and id its item id for a reagent.
-    -- pinned (optional) is called after an answer set the waypoint.
-    local function ask(kind, v, onMap, x, y, count, trade, name, id, pinned)
+    -- pinned (optional) is called after an answer set the waypoint; declined (optional) after No.
+    local function ask(kind, v, onMap, x, y, count, trade, name, id, pinned, declined)
         local cfg = env.cfg
         local mapFirst = cfg.vendorPrefer ~= "distance"
         local i = kind == "trainer" and 8 or 9
@@ -258,22 +279,29 @@ function C.New(env)
                 if pinned then pinned() end
             end
         end
+        local function decline()
+            if mine ~= promptId then return end
+            log("question declined: " .. kind)
+            if declined then declined() end
+        end
         local two = second and { other = second, acceptOther = answer(second), mapFirst = mapFirst,
             dist = yards(first, i, x, y), otherDist = yards(second, i, x, y) }
-        env.confirm(kind, first, answer(first), count, trade or name, two)
+        env.confirm(kind, first, answer(first), count, trade or name, two, decline)
     end
 
     -- Offer a target: in "auto" mode pin without asking, otherwise ask (see ask for the arguments).
-    local function offer(kind, v, onMap, x, y, count, trade, name, id)
+    -- yields: a warning asked this, so No ends that request (a test command's question does not).
+    local function offer(kind, v, onMap, x, y, count, trade, name, id, yields)
         if env.cfg.vendorMode == "auto" then return autoPin(kind, v, onMap, x, y, trade, name, id) end
-        ask(kind, v, onMap, x, y, count, trade, name, id)
+        ask(kind, v, onMap, x, y, count, trade, name, id, nil, yields and function() release(kind, id) end or nil)
+        asking = yields and { kind = kind, id = id, prompt = promptId } or nil
     end
 
     -- skills: the player's skill list. Asks about the profession nearest its cap that has a
     -- known trainer. Runs on every skill change and craft: there is deliberately no latch.
     local function checkTrade(skills)
         if not env.cfg.tradeEnabled then return end
-        local within = ns.Professions.Within(skills, env.known or {}, env.cfg.tradeThreshold, env.level and env.level())
+        local within = ns.Professions.Within(skills, env.known or {}, env.cfg.tradeThreshold, env.level and env.level(), tiers())
         -- A trainer waypoint ends once its profession is no longer near the cap.
         if pinTrade then
             local still = false
@@ -281,14 +309,14 @@ function C.New(env)
             if not still then log("trainer waypoint cleared: " .. pinTrade .. " is no longer near its cap") clearNav() end
         end
         if #within == 0 then return end
-        if env.inCombat() then log("profession check skipped: in combat") return end
+        if env.inCombat() or dead() then log("profession check skipped: in combat or dead") return end
         if instance() then log("profession check skipped: in an instance") return end
         -- Lowest priority: never over an open question, an open or active vendor request, or a trainer trip.
         if pinTrade or questionOpen() or triggers.Active() then return end
         local continent, x, y, map = env.playerPos()
         if not continent then log("profession check: no map position") return end
         for _, p in ipairs(within) do
-            local v, onMap = ns.Search.NearestTrainer((env.trainerBuckets or {})[continent] or {}, x, y, p.name, env.playerFaction, map)
+            local v, onMap = ns.Search.NearestTrainer((env.trainerBuckets or {})[continent] or {}, x, y, p.name, env.playerFaction, map, p.need)
             if v then
                 if onMap == v then onMap = nil end
                 return offer("trainer", v, onMap, x, y, p.remaining, p.name)
@@ -304,7 +332,7 @@ function C.New(env)
     -- "Meat, Fish" for a pet's diet set, in the table's order.
     local function dietList(diets)
         local out = {}
-        for _, d in ipairs(ns.Supplies.DIETS) do if diets and diets[d] then out[#out + 1] = d end end
+        for _, d in ipairs(ns.Supplies.DIETS) do if diets and diets[d] then out[#out + 1] = ns.Supplies.DIET_LABEL[d] end end
         return table.concat(out, ", ")
     end
 
@@ -340,10 +368,11 @@ function C.New(env)
             log("no map position yet: " .. key .. " request kept for a retry")
         elseif v then
             self.pending, self.pendingId = nil, nil
-            offer("supply", v, onMap, x, y, s.count, nil, s.name, key)
+            offer("supply", v, onMap, x, y, s.count, nil, s.name, key, true)
         else
             self.pending, self.pendingId = nil, nil
             log("no known vendor for " .. key .. " on this continent")
+            release("supply", key)
             if not noticedSupply[s.noticeKey] then
                 noticedSupply[s.noticeKey] = true
                 if key == "pet" then
@@ -369,10 +398,11 @@ function C.New(env)
             log("no map position yet: " .. trigger .. " request kept for a retry")
         elseif v then
             self.pending, self.pendingId = nil, nil
-            offer(kind, v, onMap, x, y, trigger == "ammo" and ammoCount or (r and r.count) or nil, nil, r and r.name, id)
+            offer(kind, v, onMap, x, y, trigger == "ammo" and ammoCount or (r and r.count) or nil, nil, r and r.name, id, true)
         else
             self.pending, self.pendingId = nil, nil
             log("no known vendor for " .. kind .. " on this continent")
+            release(kind, id)
             if r and not noticedReagent[id] then
                 noticedReagent[id] = true
                 say(L["No known vendor sells %s on this continent yet. Open a vendor that sells it once and the addon will remember it."]:format(r.name))
@@ -382,7 +412,8 @@ function C.New(env)
 
     function self.Evaluate()
         ammoKind, ammoCount = env.ammo()
-        local free, dur, combat, inside = env.freeSlots(), env.lowestDurability(), env.inCombat(), instance()
+        -- Dead or a ghost is held like combat: the game would hide the question and use it up.
+        local free, dur, combat, inside = env.freeSlots(), env.lowestDurability(), env.inCombat() or dead(), instance()
         -- Reagents.Low is the one "is it low" test for reagents; the status window uses it too.
         local items, watched = {}, {}
         for _, r in ipairs(env.reagents and env.reagents() or {}) do
@@ -559,7 +590,7 @@ function C.New(env)
     -- (nothing is said for a row that cannot be routed to).
     local function direct(kind, id, demo)
         log(("direct pin: %s%s"):format(tostring(kind), id and (" " .. tostring(id)) or ""))
-        local find, name, trade, supplyBits = kind, nil, nil, nil -- find: what to search for
+        local find, name, trade, supplyBits, need = kind, nil, nil, nil, nil -- find: what to search for; need: a trainer tier
         local item
         if kind == "ammo" then
             ammoKind, ammoCount = env.ammo()
@@ -582,10 +613,18 @@ function C.New(env)
         elseif kind == "trainer" then
             -- Only while the profession is near its cap: otherwise the next skill check would clear the pin.
             local near = false
-            for _, p in ipairs(ns.Professions.Within(env.skills and env.skills(), env.known or {}, env.cfg.tradeThreshold, env.level and env.level())) do
-                if p.name == id then near = true end
+            for _, p in ipairs(ns.Professions.Within(env.skills and env.skills(), env.known or {}, env.cfg.tradeThreshold, env.level and env.level(), tiers())) do
+                if p.name == id then near, need = true, p.need end
             end
-            if not near then log("direct pin: profession is not near its cap") return false end
+            if not near then
+                for _, s in ipairs(env.skills and env.skills() or {}) do
+                    if s.name == id and s.max == ns.Professions.NO_ROUTE_CAP then
+                        say(L["Artisan %s is taught by only a few trainers, so the addon does not route to one."]:format(id))
+                        return false
+                    end
+                end
+                log("direct pin: profession is not near its cap") return false
+            end
             trade = id
         elseif kind ~= "sell" and kind ~= "repair" then
             return false
@@ -605,7 +644,7 @@ function C.New(env)
 
         local v, onMap
         if trade then
-            v, onMap = ns.Search.NearestTrainer((env.trainerBuckets or {})[at.continent] or {}, at.x, at.y, trade, env.playerFaction, at.map)
+            v, onMap = ns.Search.NearestTrainer((env.trainerBuckets or {})[at.continent] or {}, at.x, at.y, trade, env.playerFaction, at.map, need)
             if not v then
                 say(L["No known trainer for %s on this continent yet. Open a %s trainer window once and the addon will remember where it is."]:format(trade, trade))
                 return false
@@ -652,6 +691,18 @@ function C.New(env)
     end
 
     function self.Go(kind, id) return direct(kind, id) end
+
+    -- The player changed zone or entered an instance: a warning's open question names a vendor
+    -- chosen from where they were, so it is withdrawn and the warning is asked again at the next
+    -- check outside an instance. Combat withdraws nothing: the player may still answer and route.
+    function self.OnPlaceChange()
+        local a = asking
+        asking = nil
+        if not (a and a.prompt == promptId and env.questionOpen and env.questionOpen()) then return end
+        log("question withdrawn: the player changed zone")
+        cancelPrompt()
+        triggers.Release(triggerOf(a.kind, a.id), a.id, true)
+    end
 
     -- /cvn demo: a tour of real outcomes through the usual code. Each step searches the real vendor
     -- data, sets a real waypoint or asks a real question, and shows the real notification in the

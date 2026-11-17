@@ -35,6 +35,11 @@ function A.isAddOnLoaded(name)
     return call("IsAddOnLoaded", f, name) and true or false
 end
 
+-- Dead or a ghost: the game shows no questions then (whileDead = false).
+function A.isDead()
+    return call("UnitIsDeadOrGhost", UnitIsDeadOrGhost, "player") and true or false
+end
+
 function A.inCombat()
     return call("InCombatLockdown", InCombatLockdown) and true or false
 end
@@ -344,6 +349,25 @@ function A.trainer()
     return { id = id, name = name, faction = A.factionId("npc"), trades = trades }
 end
 
+-- What the open trainer window lists, as its filters show it, for the debug log: a list of
+-- { skill, name, sub, kind, level, reqSkill, reqRank }, and the filter states { available, unavailable,
+-- used }. Read only: the player's filters are never changed. Any value the client lacks is nil.
+function A.trainerServices()
+    local out = {}
+    local count = call("GetNumTrainerServices", GetNumTrainerServices) or 0
+    for i = 1, count do
+        local name, sub, kind = call("GetTrainerServiceInfo", GetTrainerServiceInfo, i)
+        local reqSkill, reqRank = call("GetTrainerServiceSkillReq", GetTrainerServiceSkillReq, i)
+        out[#out + 1] = { skill = call("GetTrainerServiceSkillLine", GetTrainerServiceSkillLine, i), name = name, sub = sub,
+            kind = kind, level = call("GetTrainerServiceLevelReq", GetTrainerServiceLevelReq, i), reqSkill = reqSkill, reqRank = reqRank }
+    end
+    local filters = {}
+    for _, f in ipairs({ "available", "unavailable", "used" }) do
+        filters[f] = call("GetTrainerServiceTypeFilter", GetTrainerServiceTypeFilter, f)
+    end
+    return out, filters
+end
+
 -- Units and merchants ----------------------------------------------------------------------------
 
 -- 1 Alliance, 2 Horde, 0 neutral or unknown.
@@ -374,11 +398,13 @@ function A.auctioneer()
 end
 
 -- What the open merchant window sells: an ammo code (0 none, 1 arrows, 2 bullets, 3 both), a
--- reagent mask (bits of the Reagents table) and a supply mask (bits 0-7 of Supplies.lua). One pass
--- over the offered items.
+-- reagent mask (bits of the Reagents table) and a supply mask (bits 0-7 of Supplies.lua), and
+-- whether the list was only partly readable (the game had not loaded every item yet). One pass over
+-- the offered items.
 local function merchantScan()
-    local arrows, bullets, reagents, supplies = 0, 0, {}, {}
-    local count = call("GetMerchantNumItems", GetMerchantNumItems) or 0
+    local arrows, bullets, reagents, supplies, partial = 0, 0, {}, {}, false
+    local count = call("GetMerchantNumItems", GetMerchantNumItems)
+    if type(count) ~= "number" then count, partial = 0, true end
     for i = 1, count do
         local link = call("GetMerchantItemLink", GetMerchantItemLink, i)
         local id = type(link) == "string" and tonumber(link:match("item:(%d+)"))
@@ -387,9 +413,11 @@ local function merchantScan()
             if ns.Supplies.ItemMask(id) ~= 0 then supplies[id] = true end
             local c, sc = A.itemClass(id)
             if c == 6 and sc == 2 then arrows = 1 elseif c == 6 and sc == 3 then bullets = 2 end
+        else
+            partial = true
         end
     end
-    return arrows + bullets, ns.Reagents.Mask(reagents), ns.Supplies.VendorMask(supplies)
+    return arrows + bullets, ns.Reagents.Mask(reagents), ns.Supplies.VendorMask(supplies), partial
 end
 
 -- Vendors from the NorgannonDB addon (optional) on the maps in `mapIds` (a set of UiMap ids), in the
@@ -455,6 +483,56 @@ function A.externalVendors(mapIds)
     return list, skipped, v and (tostring(v.major) .. "." .. tostring(v.minor)) or "?"
 end
 
+-- Profession trainers from NorgannonDB (optional) whose title tells the highest tier they teach
+-- (Professions.TitleTier). Their professions come from the recipes each one teaches (skill line ids),
+-- named with NorgannonDB's profession names in the player's language. A list of trainer records
+-- { id, name, uiMapID, x, y, faction, trades = { [profession] = tier } }, or nil when NorgannonDB is
+-- missing, too old or unreadable. Reads with Peek and keeps nothing of NorgannonDB's own tables.
+local function scanTrainers(DB)
+    local trainers = type(DB.categories) == "table" and type(DB.categories.trainer) == "table" and DB.categories.trainer.npcs
+    if type(trainers) ~= "table" or type(DB.recipes) ~= "table" then return end
+    local skills = {}
+    for _, r in pairs(DB.recipes) do
+        if type(r) == "table" and type(r.trainers) == "table" and type(r.skill) == "number" then
+            for npc in pairs(r.trainers) do
+                if trainers[npc] then skills[npc] = skills[npc] or {}; skills[npc][r.skill] = true end
+            end
+        end
+    end
+    local list = {}
+    for id, set in pairs(skills) do
+        local r = DB:Peek("npcs", id)
+        local tier = type(r) == "table" and ns.Professions.TitleTier(r.subName)
+        if tier and type(r.spawns) == "table" then
+            for area, spots in pairs(r.spawns) do
+                local zone = type(DB.zones) == "table" and DB.zones[area]
+                local map = type(zone) == "table" and zone.uiMapId
+                local s = type(spots) == "table" and spots[1]
+                local x, y = type(s) == "table" and s[1], type(s) == "table" and s[2]
+                if map and type(x) == "number" and type(y) == "number" and x > 0 and y > 0 and x <= 100 and y <= 100 then
+                    local trades = {}
+                    for skill in pairs(set) do
+                        local name = DB:L("professions", skill)
+                        if type(name) == "string" then trades[name] = tier end
+                    end
+                    local name = DB:L("npcs", id, "name")
+                    list[#list + 1] = { id, type(name) == "string" and name or r.name, map, x / 100, y / 100, REACTION_FACTION[r.reaction] or 0, trades }
+                    break
+                end
+            end
+        end
+    end
+    return list
+end
+
+function A.externalTrainers()
+    local DB = NorgannonDB
+    if type(DB) ~= "table" or type(DB.RequireSchema) ~= "function" or type(DB.L) ~= "function" then return end
+    if not call("NorgannonDB.RequireSchema", DB.RequireSchema, DB, 1, 4) then return end
+    local ok, list = pcall(scanTrainers, DB)
+    return ok and list or nil
+end
+
 -- Whether the player can trade with unit: true at Neutral or better, false at Unfriendly or Hostile,
 -- nil when the game does not say.
 function A.canTrade(unit)
@@ -463,15 +541,15 @@ function A.canTrade(unit)
     return reaction >= 4
 end
 
--- The merchant window that just opened: { id, name, faction, repair, ammo, reagents, supplies }, or nil if
+-- The merchant window that just opened: { id, name, faction, repair, ammo, reagents, supplies, partial }, or nil if
 -- the merchant cannot be identified as a creature.
 function A.merchant()
     local id, name = A.npc()
     if not id then return end
-    local ammo, reagents, supplies = merchantScan()
+    local ammo, reagents, supplies, partial = merchantScan()
     return { id = id, name = name, faction = A.factionId("npc"),
              repair = call("CanMerchantRepair", CanMerchantRepair) and true or false, ammo = ammo, reagents = reagents,
-             supplies = supplies }
+             supplies = supplies, partial = partial }
 end
 
 -- Class reagents -------------------------------------------------------------------------------
@@ -586,6 +664,12 @@ function A.ammoSpace(id, kind)
 end
 
 -- Buy one purchase (one batch) of merchant item `index`, or `quantity` single items of it.
+-- The item id at a slot of the open merchant window, or nil (no merchant open, or no data).
+function A.merchantItemId(index)
+    local link = call("GetMerchantItemLink", GetMerchantItemLink, index)
+    return type(link) == "string" and tonumber(link:match("item:(%d+)")) or nil
+end
+
 function A.buyMerchantItem(index, quantity)
     if quantity then call("BuyMerchantItem", BuyMerchantItem, index, quantity)
     else call("BuyMerchantItem", BuyMerchantItem, index) end

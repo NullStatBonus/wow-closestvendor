@@ -74,7 +74,7 @@ The addon SHALL embed the required AceConfig, AceConfigDialog, AceGUI, LibStub a
 - **THEN** the original color is restored and disabled controls retain values and explain prerequisites using supported Ace controls
 
 ### Requirement: Consistent and spacious settings layout
-Settings SHALL start at 600×460 like KeepThat and remain resizable. Pages SHALL use compact standard controls, readable headings and section gaps. Dropdowns SHALL fit their labels and choices. Appearance SHALL have Notices and previews, Status window and Toast tabs. About SHALL match KeepThat's hierarchy: large name, muted version, purpose sentence and command rows with muted explanations.
+Settings SHALL start at 600×460 like KeepThat and remain resizable. Pages SHALL use compact standard controls, readable headings and section gaps. Dropdowns SHALL fit their labels and choices. Appearance SHALL have Notifications, Status window and Sound tabs. About SHALL match KeepThat's hierarchy: large name, muted version, purpose sentence and command rows with muted explanations.
 
 #### Scenario: Scan and resize
 - **WHEN** any settings page is opened or resized
@@ -97,3 +97,21 @@ The debug report SHALL use the standard AceGUI Frame and MultiLineEditBox presen
 #### Scenario: Copy and reopen
 - **WHEN** the report is opened, edited accidentally, closed and opened again
 - **THEN** its text remains unchanged and copyable, and reopening shows current diagnostics without leaving duplicate windows
+
+### Requirement: AddOns list icon
+Both TOC files SHALL name the same Closest Vendor icon with `## IconTexture:`, and the named file SHALL ship inside the addon folder as a square, power-of-two TGA with an alpha channel.
+
+#### Scenario: Icon in the AddOns list
+- **WHEN** the player opens the game's AddOns list on Classic Era or WoW Forever
+- **THEN** Closest Vendor shows its badge icon next to its name
+
+### Requirement: AddOns list pages
+Where the game supports addon settings categories, the Closest Vendor entry in Options > AddOns SHALL open Home, and Restock, Navigation, Appearance, Advanced and About SHALL be listed under it in tree order, each opening that page of the same settings tree. A failure to register these entries SHALL leave the standalone settings window working.
+
+#### Scenario: Pages under the entry
+- **WHEN** the player opens Options > AddOns
+- **THEN** Closest Vendor shows its pages under its name, like KeepThat and Don't Do That, and selecting the entry shows Home
+
+#### Scenario: Same values in both places
+- **WHEN** the player changes a setting on a page in the AddOns list and then opens `/cvn settings`
+- **THEN** the standalone window shows the same value

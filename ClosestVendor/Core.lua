@@ -22,17 +22,25 @@ local POLL_SECONDS = 5
 local WINDOW_DELAY = 0.25 -- one redraw of the status window this long after the first change
 
 local POPUP = "CLOSESTVENDOR_CONFIRM"
--- The reagent purchase question has a dialog of its own, so it can show beside an ammo purchase
--- question at the same merchant instead of replacing it.
-local POPUP_REAGENTS = "CLOSESTVENDOR_CONFIRM_REAGENTS"
+-- The ammo and reagent purchase questions have dialogs of their own, so they show side by side at
+-- the same merchant, never replace a route question, and close with the merchant window.
+local POPUP_AMMO, POPUP_REAGENTS = "CLOSESTVENDOR_CONFIRM_AMMO", "CLOSESTVENDOR_CONFIRM_REAGENTS"
 -- The question text is passed whole as the first argument, so "%" in vendor names is safe.
 if StaticPopupDialogs then
-    for _, which in ipairs({ POPUP, POPUP_REAGENTS, "CLOSESTVENDOR_SAMPLE", "CLOSESTVENDOR_CLEAR_LOG" }) do
+    for _, which in ipairs({ POPUP, POPUP_AMMO, POPUP_REAGENTS, "CLOSESTVENDOR_SAMPLE", "CLOSESTVENDOR_CLEAR_LOG" }) do
         StaticPopupDialogs[which] = {
             text = "%s",
             button1 = YES or "Yes",
             button2 = NO or "No",
-            OnAccept = function(_, accept) if accept then accept() end end,
+            -- data is the Yes function, or { accept, decline } for a route question.
+            OnAccept = function(_, data)
+                local accept = type(data) == "table" and data.accept or data
+                if type(accept) == "function" then accept() end
+            end,
+            -- No or Escape (not a question replaced or withdrawn) is an answer.
+            OnCancel = function(_, data, reason)
+                if reason == "clicked" and type(data) == "table" and data.decline then data.decline() end
+            end,
             timeout = which == "CLOSESTVENDOR_SAMPLE" and 10 or 0,
             whileDead = false,
             hideOnEscape = true,
@@ -53,6 +61,9 @@ if StaticPopupDialogs then
             button2 = CANCEL or "Cancel",
             OnAccept = function(_, data) if data and data.accept then data.accept() end end,
             OnAlt = function(_, data) if data and data.alt then data.alt() end end,
+            OnCancel = function(_, data, reason)
+                if reason == "clicked" and data and data.decline then data.decline() end
+            end,
             timeout = 0,
             whileDead = false,
             hideOnEscape = true,
@@ -96,7 +107,8 @@ local AMMO_ENV = {
     buy = function(...) merchantActed = true; return A.buyMerchantItem(...) end,
     say = say,
     log = function(text) if log then log.Add(text) end end,
-    confirm = function(text, accept) merchantActed = true; A.showPopup(POPUP, text, accept) end,
+    confirm = function(text, accept) merchantActed = true; A.showPopup(POPUP_AMMO, text, accept) end,
+    sells = A.merchantItemId,
 }
 
 -- Failures of guarded game calls go to the debug log (once per kind of failure).
@@ -104,17 +116,22 @@ A.onError = function(name, err)
     if log then log.Add("game call failed: " .. name .. ": " .. err) end
 end
 
--- The optional NorgannonDB addon, read for the maps that are only in WoW Forever (Mount Hyjal,
--- Riverglades, Shen'dralas, Zephras Isle and the Darkspear Islands). Read after login, and again if
+-- The optional NorgannonDB addon, read for vendors on the maps that are only in WoW Forever (Mount
+-- Hyjal, Riverglades, Shen'dralas, Zephras Isle and the Darkspear Islands), and for profession
+-- trainers whose title tells which tier they teach, on every map. Read after login, and again if
 -- NorgannonDB finishes loading later; never on bag, merchant or movement events.
 local EXTERNAL_MAPS = { [2482] = true, [2548] = true, [2652] = true, [2521] = true, [2665] = true, [2524] = true }
-local external = { list = {}, skipped = 0 }
+local external = { list = {}, skipped = 0, trainers = {} }
 local started = false
 
 local function readExternal()
     local list, skipped, schema = A.externalVendors(EXTERNAL_MAPS)
-    external = { list = list or {}, skipped = list and skipped or 0, schema = schema, unsupported = skipped == "unsupported" }
+    external = { list = list or {}, skipped = list and skipped or 0, schema = schema, unsupported = skipped == "unsupported",
+                 trainers = list and A.externalTrainers() or {} }
 end
+
+-- Trainer tiers are known (NorgannonDB gave trainers with titles), so Artisan is routed too.
+local function trainerTiers() return #external.trainers > 0 end
 
 -- Shipped, NorgannonDB and learned vendors, converted to world coordinates once and bucketed by continent.
 local vendorIds = {} -- every npc id in the search pool, before the trade filter
@@ -138,11 +155,27 @@ local function rebuildBuckets()
 end
 
 -- Learned profession trainers, converted to world coordinates and bucketed by continent.
+-- Learned trainers (where the player stood, each profession's tier not known) and NorgannonDB's
+-- (with the tier its title gives). For a trainer in both, the learned position and professions are
+-- kept and NorgannonDB's tiers fill them in.
 local function rebuildTrainers()
     for k in pairs(trainerBuckets) do trainerBuckets[k] = nil end
-    for _, t in pairs(DB.trainers) do
+    local all = {}
+    for id, t in pairs(DB.trainers) do all[id] = t end
+    for _, e in ipairs(external.trainers) do
+        local t = all[e[1]]
+        if t then
+            local trades = {}
+            for name, v in pairs(t[7]) do trades[name] = v end
+            for name, tier in pairs(e[7]) do trades[name] = tier end
+            all[e[1]] = { t[1], t[2], t[3], t[4], t[5], t[6], trades }
+        else
+            all[e[1]] = e
+        end
+    end
+    for _, t in pairs(all) do
         local continent, wx, wy = A.toWorld(t[3], t[4], t[5])
-        if continent then
+        if continent and CHAR.standing[t[1]] ~= false then -- not one seen refusing this character
             local b = trainerBuckets[continent]
             if not b then b = {}; trainerBuckets[continent] = b end
             b[#b + 1] = { t[1], t[2], t[3], t[4], t[5], t[6], t[7], wx, wy }
@@ -151,11 +184,14 @@ local function rebuildTrainers()
 end
 
 -- Shipped + learned auctioneers, in the vendor record shape (no repair, no ammo), bucketed by continent.
+local auctionIds = {}
 local function rebuildAuctioneers()
     for k in pairs(auctionBuckets) do auctionBuckets[k] = nil end
+    auctionIds = {}
     for _, r in ipairs(ns.Discovery.Merge(ns.ShippedAuctioneers or {}, DB.auctioneers)) do
+        auctionIds[r[1]] = true
         local continent, wx, wy = A.toWorld(r[3], r[4], r[5])
-        if continent then
+        if continent and CHAR.standing[r[1]] ~= false then -- not one seen refusing this character
             local b = auctionBuckets[continent]
             if not b then b = {}; auctionBuckets[continent] = b end
             b[#b + 1] = { r[1], r[2], r[3], r[4], r[5], r[6], nil, 0, wx, wy }
@@ -183,16 +219,30 @@ end
 -- The hearthstone point, CHAR.hearth { name, continent, map, x, y }: the game gives only the name of
 -- the bind location, so when that name changes the player's position is taken as the point. The
 -- first name seen is kept without a position: that hearthstone was bound somewhere else, earlier.
+-- Where the player stood when an innkeeper asked to bind the hearthstone (CONFIRM_BINDER): the
+-- position of the new point once the bind name changes. A bind the addon did not see keeps the name
+-- with no position, never the place the player happens to be when it notices.
+local pendingBind
+local function noteBinder(area)
+    local continent, x, y, map = A.playerWorldPos()
+    pendingBind = continent and { area = area, continent = continent, map = map, x = x, y = y } or nil
+end
 local function learnHearth()
     local name = A.bindLocation()
     if not name then return end
     local h = CHAR.hearth
-    if not h then CHAR.hearth = { name = name } return end
-    if h.name == name or (A.instanceType() or "none") ~= "none" then return end
-    local continent, x, y, map = A.playerWorldPos()
-    if not continent then return end -- tried again at the next zone change
-    CHAR.hearth = { name = name, continent = continent, map = map, x = x, y = y }
-    log.Add("hearthstone point learned: " .. name)
+    if h and h.name == name then return end
+    local p = pendingBind
+    pendingBind = nil
+    -- The innkeeper names the place it binds to; a question declined there says nothing about this bind.
+    if p and type(p.area) == "string" and p.area ~= name then p = nil end
+    if h and p then
+        CHAR.hearth = { name = name, continent = p.continent, map = p.map, x = p.x, y = p.y }
+        log.Add("hearthstone point learned: " .. name)
+    else
+        CHAR.hearth = { name = name }
+        if h then log.Add("hearthstone point changed to " .. name .. "; its position is unknown until you bind at an innkeeper") end
+    end
 end
 
 -- A saved place for the controller: "hearth" or "last", nil while its position is not known.
@@ -217,18 +267,32 @@ end
 -- with this character, and search again when that changed.
 local function learnStanding(unit)
     local id = A.npc(unit)
-    if not id or not vendorIds[id] then return end
+    -- Vendors, trainers and auctioneers: a goblin auction house or a neutral trainer refuses a
+    -- character Unfriendly with its faction, like a vendor does.
+    local trainer, auctioneer = DB.trainers[id] ~= nil, auctionIds[id]
+    if not id or not (vendorIds[id] or trainer or auctioneer) then return end
     local can = A.canTrade(unit)
     if can == nil or CHAR.standing[id] == can then return end
     CHAR.standing[id] = can
     log.Add(("standing: npc %d %s"):format(id, can and "will trade" or "will not trade (Unfriendly or Hostile)"))
-    rebuildBuckets()
+    if vendorIds[id] then rebuildBuckets() end
+    if trainer then rebuildTrainers() end
+    if auctioneer then rebuildAuctioneers() end
 end
+-- A merchant list read before the game loaded every item is read again when item data arrives;
+-- until then it never replaces what is already known about that vendor.
+local relearnMerchant = false
 local function learnMerchant()
     local m = A.merchant()
     if not m then return end
     local changed = CHAR.standing[m.id] ~= true
     CHAR.standing[m.id] = true -- its window opened: it trades with this character
+    relearnMerchant = m.partial
+    if m.partial and vendorIds[m.id] then
+        log.Add("merchant list not fully loaded: kept what is known about " .. tostring(m.name))
+        if changed then rebuildBuckets() end
+        return
+    end
     local map, x, y = A.mapPosition()
     if not map then return end
     if ns.Discovery.Record(DB.learned, { m.id, m.name, map, x, y, m.faction, m.repair, m.ammo, m.reagents, m.supplies }) or changed then
@@ -243,8 +307,10 @@ local function learnTrainer()
     if not t then return end
     local set = {}
     for _, name in ipairs(t.trades) do CHAR.professions[name] = true; set[name] = true end
+    local changed = CHAR.standing[t.id] ~= true
+    CHAR.standing[t.id] = true -- its window opened: it trains this character
     local map, x, y = A.mapPosition()
-    if map and ns.Discovery.RecordTrainer(DB.trainers, { t.id, t.name, map, x, y, t.faction }, t.trades) then
+    if (map and ns.Discovery.RecordTrainer(DB.trainers, { t.id, t.name, map, x, y, t.faction }, t.trades)) or changed then
         rebuildTrainers()
     end
     return set
@@ -254,9 +320,10 @@ end
 local function learnAuctioneer()
     local a = A.auctioneer()
     if not a then return end
+    local changed = CHAR.standing[a.id] ~= true
+    CHAR.standing[a.id] = true -- its window opened: it trades with this character
     local map, x, y = A.mapPosition()
-    if not map then return end
-    if ns.Discovery.RecordAuctioneer(DB.auctioneers, { a.id, a.name, map, x, y, a.faction }) then
+    if (map and ns.Discovery.RecordAuctioneer(DB.auctioneers, { a.id, a.name, map, x, y, a.faction })) or changed then
         rebuildAuctioneers()
     end
 end
@@ -360,6 +427,7 @@ local REAGENT_ENV = {
     say = say,
     log = function(text) if log then log.Add(text) end end,
     confirm = function(text, accept) merchantActed = true; A.showPopup(POPUP_REAGENTS, text, accept) end,
+    sells = A.merchantItemId,
 }
 
 -- Status window ---------------------------------------------------------------------------------
@@ -369,6 +437,7 @@ local STATUS_SRC = {
     freeSlots = A.freeSlots, lowestDurability = A.lowestDurability, ammo = A.ammoStatus,
     knows = A.knowsSpell, itemCount = A.itemCount, itemName = A.itemName,
     supplies = supplyState,
+    trainerTiers = function() return trainerTiers() end,
     level = A.level,
     skills = function()
         if not skillCache then skillCache = A.skills() end
@@ -505,7 +574,7 @@ local function reportText()
             for _, v in pairs(CHAR.standing or {}) do if v then yes = yes + 1 else no = no + 1 end end
             return ("standing (this character): %d vendors trade, %d will not (Unfriendly or Hostile)"):format(yes, no)
         end)(),
-        external.schema and ("NorgannonDB: found, schema %s, %d vendors added, %d skipped"):format(external.schema, #external.list, external.skipped)
+        external.schema and ("NorgannonDB: found, schema %s, %d vendors added, %d skipped, %d trainers with a tier"):format(external.schema, #external.list, external.skipped, #external.trainers)
             or (external.unsupported and "NorgannonDB: installed, but its data is not a supported schema" or "NorgannonDB: not found"),
         ("settings: bags %s/%d, durability %s/%d, ammo %s/%d, professions %s/%d"):format(c.bagEnabled and "on" or "off", c.bagThreshold,
             c.durEnabled and "on" or "off", c.durThreshold, c.ammoEnabled and "on" or "off", c.ammoThreshold,
@@ -553,6 +622,7 @@ local function start()
         freeSlots = A.freeSlots,
         lowestDurability = A.lowestDurability,
         inCombat = A.inCombat,
+        dead = A.isDead,
         playerPos = A.playerWorldPos,
         playerFaction = A.factionId("player"),
         buckets = buckets,
@@ -560,14 +630,14 @@ local function start()
         ammo = A.ammoStatus,
         reagents = reagentList,
         supplies = supplyState,
-        confirm = function(kind, v, accept, count, trade, two)
+        confirm = function(kind, v, accept, count, trade, two, decline)
             closeQuestions() -- one question is open at a time, whichever kind it is
             if not two then
-                A.showPopup(POPUP, ns.Controller.PromptText(kind, v, A.mapName(v[3]), count, trade), accept)
+                A.showPopup(POPUP, ns.Controller.PromptText(kind, v, A.mapName(v[3]), count, trade), { accept = accept, decline = decline })
                 return
             end
             local text = ns.Controller.PromptText(kind, v, A.mapName(v[3]), count, trade, two, A.mapName(two.other[3]))
-            A.showPopup(two.mapFirst and POPUP_MAP or POPUP_DIST, text, { accept = accept, alt = two.acceptOther })
+            A.showPopup(two.mapFirst and POPUP_MAP or POPUP_DIST, text, { accept = accept, alt = two.acceptOther, decline = decline })
         end,
         cancelConfirm = closeQuestions,
         questionOpen = function() return A.popupShown(POPUP) or A.popupShown(POPUP_MAP) or A.popupShown(POPUP_DIST) end,
@@ -575,6 +645,7 @@ local function start()
         level = A.level,
         known = CHAR.professions,
         trainerBuckets = trainerBuckets,
+        trainerTiers = trainerTiers,
         auctionBuckets = auctionBuckets,
         say = say,
         notify = function(text)
@@ -606,6 +677,7 @@ local function start()
     ns.Options.Run = function(cmd) SlashCmdList["CLOSESTVENDOR"](cmd) end
     ns.Options.DebugEnabled = log.Enabled
     ns.Options.Version = function() return A.clientInfo().addon end
+    ns.Options.itemName = A.itemName -- reagent labels in the player's language
     ns.Options.Move = function(kind)
         sampleToken = sampleToken + 1; sampleKind = nil
         if A.hideSamples then A.hideSamples() end
@@ -752,6 +824,7 @@ end
 ns.frame = CreateFrame("Frame")
 ns.frame:SetScript("OnEvent", function(_, event, arg1)
     -- Fires for every item the game loads, so it is handled before anything is logged.
+    if event == "GET_ITEM_INFO_RECEIVED" and relearnMerchant and DB then learnMerchant() end
     if event == "GET_ITEM_INFO_RECEIVED" then
         if #retryParts > 0 and retryItems[arg1] and retries < MAX_RETRIES and DB then
             retries = retries + 1
@@ -763,7 +836,19 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         end
         return
     end
-    if event == "MERCHANT_CLOSED" then retryParts, retryItems = {}, {} return end
+    if event == "CONFIRM_BINDER" then
+        if DB then noteBinder(arg1) end
+        return
+    end
+    if event == "HEARTHSTONE_BOUND" then
+        if DB then learnHearth() end
+        return
+    end
+    if event == "MERCHANT_CLOSED" then
+        retryParts, retryItems, relearnMerchant = {}, {}, false
+        A.hidePopup(POPUP_AMMO); A.hidePopup(POPUP_REAGENTS) -- a purchase question ends with its merchant
+        return
+    end
     if event == "PLAYER_TARGET_CHANGED" or event == "UPDATE_MOUSEOVER_UNIT" or event == "NAME_PLATE_UNIT_ADDED" then
         local unit = event == "PLAYER_TARGET_CHANGED" and "target" or event == "UPDATE_MOUSEOVER_UNIT" and "mouseover" or arg1
         if DB and type(unit) == "string" then learnStanding(unit) end
@@ -780,6 +865,7 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         elseif arg1 == "NorgannonDB" and started then
             readExternal()
             rebuildBuckets()
+            rebuildTrainers()
             evaluate()
             touchWindow()
         end
@@ -794,6 +880,17 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         end
     elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
         local trades = DB and learnTrainer()
+        -- Probe for trainer tiers (which trainer teaches which rank): with debugging on, log every
+        -- service the window lists, with its level and skill requirements and the filter states.
+        if trades and event == "TRAINER_SHOW" and log and log.Enabled() then
+            local services, filters = A.trainerServices()
+            log.Add(("trainer services: %d listed; filters available=%s unavailable=%s used=%s"):format(#services,
+                tostring(filters.available), tostring(filters.unavailable), tostring(filters.used)))
+            for _, s in ipairs(services) do
+                log.Add(("  service: %s | %s | %s | %s | level %s | needs %s %s"):format(tostring(s.skill), tostring(s.name),
+                    tostring(s.sub), tostring(s.kind), tostring(s.level), tostring(s.reqSkill), tostring(s.reqRank)))
+            end
+        end
         if trades and controller then controller.OnTrainerShow(trades) end
     elseif event == "AUCTION_HOUSE_SHOW" then
         if DB then learnAuctioneer() end
@@ -809,7 +906,10 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
             if event == "UNIT_SPELLCAST_SUCCEEDED" and controller then controller.OnCraft() end
         end
     else
-        if DB and (event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA") then learnHearth() end
+        if event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
+            if DB then learnHearth() end
+            if controller then controller.OnPlaceChange() end
+        end
         evaluate()
         touchWindow()
     end
@@ -824,6 +924,12 @@ end
 pcall(ns.frame.RegisterEvent, ns.frame, "AUCTION_HOUSE_SHOW")
 pcall(ns.frame.RegisterEvent, ns.frame, "GET_ITEM_INFO_RECEIVED")
 pcall(ns.frame.RegisterEvent, ns.frame, "MERCHANT_CLOSED")
+-- The innkeeper's bind question, and (newer clients) the bind itself: the hearthstone point's position.
+pcall(ns.frame.RegisterEvent, ns.frame, "CONFIRM_BINDER")
+pcall(ns.frame.RegisterEvent, ns.frame, "HEARTHSTONE_BOUND")
+-- Warnings wait while dead or a ghost; coming back to life checks again.
+pcall(ns.frame.RegisterEvent, ns.frame, "PLAYER_ALIVE")
+pcall(ns.frame.RegisterEvent, ns.frame, "PLAYER_UNGHOST")
 -- Seeing an NPC tells whether it will trade with this character (reputation).
 for _, e in ipairs({ "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT", "NAME_PLATE_UNIT_ADDED" }) do
     pcall(ns.frame.RegisterEvent, ns.frame, e)

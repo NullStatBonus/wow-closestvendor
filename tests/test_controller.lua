@@ -31,6 +31,7 @@ local function world(over)
         known = w.known,
         level = w.level and function() return w.level end,
         trainerBuckets = w.trainers or {},
+        trainerTiers = function() return w.tiers or false end,
         auctionBuckets = w.auction,
         say = function(t) w.says[#w.says + 1] = t end,
         notify = (not w.noNotify) and function(t) w.notes[#w.notes + 1] = t end or nil,
@@ -39,6 +40,7 @@ local function world(over)
         freeSlots = function() return w.free end,
         lowestDurability = function() return w.dur end,
         inCombat = function() return w.combat end,
+        dead = function() return w.dead end,
         instanceType = function() return w.instance end,
         anchor = function(which) return w.anchors and w.anchors[which] end,
         after = (not w.noAfter) and function(s, fn)
@@ -52,8 +54,8 @@ local function world(over)
         buckets = w.buckets or { [1] = VENDORS },
         log = (not w.noLog) and function(m) w.logs[#w.logs + 1] = m end or nil,
         ammo = function() return w.ammoKind, w.ammoCount end,
-        confirm = function(kind, v, accept, count, trade, two)
-            w.prompts[#w.prompts + 1] = { kind = kind, vendor = v, accept = accept, count = count, trade = trade, two = two }
+        confirm = function(kind, v, accept, count, trade, two, decline)
+            w.prompts[#w.prompts + 1] = { kind = kind, vendor = v, accept = accept, count = count, trade = trade, two = two, decline = decline }
             if w.autoAccept ~= false then (w.pickOther and two and two.acceptOther or accept)() else w.open = true end -- tests say autoAccept = false to hold the question open
         end,
         cancelConfirm = function() w.cancelCount = w.cancelCount + 1; w.open = false end,
@@ -1127,6 +1129,28 @@ eq(w.setCount + #w.says, 0, "silently")
 w = trade({ trainers = {} })
 eq(w.c.Go("trainer", "Mining"), false, "no trainer known")
 eq(w.says[1]:find("No known trainer for Mining", 1, true) ~= nil, true, "chat says so")
+w = trade({ skills = { { name = "Mining", rank = 220, max = 225 } } })
+eq(w.c.Go("trainer", "Mining"), false, "Artisan next: not routed")
+eq(w.setCount, 0, "no pin")
+eq(w.says[1], "Artisan Mining is taught by only a few trainers, so the addon does not route to one.", "chat says why")
+-- With trainer tiers known (NorgannonDB), each tier goes only to a trainer that teaches it, Artisan included.
+local TIERED = {
+    { 30, "Journeyman Miner", 100, 0.1, 0.1, 0, { Mining = 1 }, 5, 0 },
+    { 31, "Expert Miner",     100, 0.2, 0.1, 0, { Mining = 2 }, 20, 0 },
+    { 32, "Unknown Miner",    100, 0.3, 0.1, 0, { Mining = true }, 30, 0 },
+    { 33, "Master Miner",     100, 0.9, 0.1, 0, { Mining = 4 }, 90, 0 },
+}
+w = trade({ tiers = true, trainers = { [1] = TIERED }, autoAccept = false })
+w.c.OnCraft()
+eq(w.prompts[1] and w.prompts[1].vendor[2], "Expert Miner", "Journeyman next: the closest one that teaches it")
+w = trade({ tiers = true, trainers = { [1] = TIERED }, skills = { { name = "Mining", rank = 220, max = 225 } }, level = 40, autoAccept = false })
+w.c.OnCraft()
+eq(w.prompts[1] and w.prompts[1].vendor[2], "Master Miner", "Artisan next: only a trainer known to teach it")
+eq(w.c.Go("trainer", "Mining"), true, "a row click routes for Artisan too")
+eq(w.last[2], "Master Miner", "to that trainer")
+w = trade({ tiers = true, trainers = { [1] = { TIERED[1], TIERED[3] } }, skills = { { name = "Mining", rank = 220, max = 225 } }, level = 40 })
+eq(w.c.Go("trainer", "Mining"), false, "no trainer known to teach Artisan")
+eq(w.says[1]:find("No known trainer for Mining", 1, true) ~= nil, true, "chat says so")
 
 -- Direct pin inside an instance: the search starts from an anchor, and chat says which.
 local HEARTH, LAST = { continent = 1, x = 95, y = 0, map = 100 }, { continent = 1, x = 48, y = 0, map = 100 }
@@ -1268,6 +1292,14 @@ w = supply("HUNTER", { food = 30, water = 30, healthstone = 0, pet = 1 }, { Brea
 w.c.Evaluate()
 eq(w.prompts[1].trade, "pet food (Bread, Cheese)", "several diets in table order")
 eq(w.prompts[1].vendor[2], "Baker", "any of the diets")
+do -- the diet names in the question are the translated labels
+    local saved = ns.Supplies.DIET_LABEL.Bread
+    ns.Supplies.DIET_LABEL.Bread = "Brot"
+    w = supply("HUNTER", { food = 30, water = 30, healthstone = 0, pet = 1 }, { Bread = true, Cheese = true })
+    w.c.Evaluate()
+    eq(w.prompts[1].trade, "pet food (Brot, Cheese)", "diet names use the translated labels")
+    ns.Supplies.DIET_LABEL.Bread = saved
+end
 
 -- No known seller: one chat line, no question; once per supply.
 w = supply("HUNTER", { food = 30, water = 30, healthstone = 0, pet = 1 }, { Fruit = true })
@@ -1435,5 +1467,88 @@ eq(w.says[1], "This is a test reminder. Only mages and warlocks get real ones.",
 eq(world({ buckets = { [1] = { SV[3] } }, supplies = { class = "WARRIOR", totals = { food = 1 }, knows = function() return false end } }).c.Test("food"),
     "No known vendor selling food on this continent for your faction.", "test food with no seller")
 eq(world().c.Test("food"), "Your bags cannot be read right now.", "no supply source")
+
+-- No to a question ends that request: the next need is asked, the declined one is not asked again.
+w = world({ dur = 10, free = 1, autoAccept = false })
+w.c.Evaluate()
+eq(#w.prompts .. ":" .. w.prompts[1].kind, "1:repair", "repair asked first")
+w.c.Evaluate()
+eq(#w.prompts, 1, "nothing else while repair is open")
+w.prompts[1].decline()
+eq(w.timers and #w.timers, 1, "No checks again shortly")
+w.timers[1].fn()
+eq(#w.prompts .. ":" .. w.prompts[2].kind, "2:sell", "No to repair: selling is asked next")
+w.c.Evaluate()
+eq(#w.prompts, 2, "repair is not asked again")
+eq(w.setCount, 0, "No sets no waypoint")
+w = world({ dur = 10, free = 1, autoAccept = false })
+w.c.Evaluate()
+local stale = w.prompts[1].decline
+w.dur = 100; w.c.Evaluate() -- the repair question is withdrawn
+w.dur = 10; w.c.Evaluate() -- and a new one asked
+eq(#w.prompts .. ":" .. w.prompts[2].kind, "2:repair", "a new repair question")
+stale()
+eq(w.timers == nil or #w.timers == 0, true, "No to the withdrawn question does nothing")
+w.c.Evaluate()
+eq(#w.prompts, 2, "the new repair request is still the active one: selling waits")
+
+-- No to a test command's question leaves the real request alone.
+w = world({ dur = 10 })
+w.c.Evaluate()
+eq(w.setCount, 1, "real repair request accepted")
+w.autoAccept = false
+w.c.Test("repair")
+w.prompts[#w.prompts].decline()
+eq(w.timers == nil or #w.timers == 0, true, "No to /cvn test releases nothing")
+local cleared = w.clearCount
+w.dur = 100; w.c.Evaluate()
+eq(w.clearCount > cleared, true, "repairing still clears the real waypoint")
+
+-- No vendor for the need: it ends too, so it does not hold back the next one.
+w = world({ dur = 10, free = 1, autoAccept = false, buckets = { [1] = { VENDORS[1] } } })
+w.c.Evaluate()
+eq(#w.prompts, 0, "no repairer: no question")
+w.timers[1].fn()
+eq(#w.prompts .. ":" .. w.prompts[1].kind, "1:sell", "no repairer: selling is asked")
+
+-- Dead or a ghost: the game would hide the question, so nothing is asked or used up until alive.
+w = world({ dur = 10, dead = true, autoAccept = false })
+w.c.Evaluate()
+eq(#w.prompts, 0, "dead: no question")
+w.dead = false
+w.c.Evaluate()
+eq(#w.prompts .. ":" .. w.prompts[1].kind, "1:repair", "alive again: repair asked")
+w = world({ free = 1, dead = true, cfg = { vendorMode = "auto" } })
+w.c.Evaluate()
+eq(w.setCount, 0, "dead: auto mode sets no waypoint either")
+
+-- Changing zone or entering an instance withdraws a warning's open question; it is asked again
+-- from the new place, or once outside the instance. Combat withdraws nothing.
+w = world({ free = 1, autoAccept = false })
+w.c.Evaluate()
+eq(#w.prompts, 1, "sell asked")
+local cancels = w.cancelCount
+w.combat = true; w.c.Evaluate(); w.combat = false
+eq(w.cancelCount .. "/" .. #w.prompts, cancels .. "/1", "combat leaves the question open")
+w.instance = "party"
+w.c.OnPlaceChange()
+eq(w.cancelCount, cancels + 1, "entering an instance withdraws the question")
+w.c.Evaluate()
+eq(#w.prompts, 1, "not asked inside")
+w.instance = nil
+w.c.Evaluate()
+eq(#w.prompts .. ":" .. w.prompts[2].kind, "2:sell", "asked again outside")
+w.c.OnPlaceChange()
+w.c.Evaluate()
+eq(#w.prompts, 3, "a zone change asks again from the new place")
+w.prompts[3].accept(); w.open = false
+cancels = w.cancelCount
+w.c.OnPlaceChange()
+eq(w.cancelCount, cancels, "an answered question is not withdrawn")
+w = world({ free = 1, autoAccept = false })
+w.c.Test("sell")
+cancels = w.cancelCount
+w.c.OnPlaceChange()
+eq(w.cancelCount, cancels, "a test command's question is not withdrawn")
 
 H.done()
