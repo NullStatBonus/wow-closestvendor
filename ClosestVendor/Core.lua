@@ -678,6 +678,7 @@ local function start()
     ns.Options.DebugEnabled = log.Enabled
     ns.Options.Version = function() return A.clientInfo().addon end
     ns.Options.itemName = A.itemName -- reagent labels in the player's language
+    ns.Supplies.media = { list = A.mediaSounds, fetch = A.mediaSound } -- sound-pack sounds, when shared
     ns.Options.Move = function(kind)
         sampleToken = sampleToken + 1; sampleKind = nil
         if A.hideSamples then A.hideSamples() end

@@ -463,6 +463,35 @@ do
     c.playSound(3081)
     eq(#ce, 1, "a throwing PlaySound is reported and skipped")
 end
+-- playSound with a file: PlaySoundFile for a path or file id; nothing else.
+do
+    local files = {}
+    local a, ae = boot({ PlaySoundFile = function(f) files[#files + 1] = tostring(f) end, PlaySound = function() files[#files + 1] = "kit" end })
+    a.playSound("Sound\\horn.ogg", true)
+    a.playSound(12345, true)
+    a.playSound(nil, true)
+    a.playSound({}, true)
+    eq(table.concat(files, ","), "Sound\\horn.ogg,12345", "a file plays with PlaySoundFile, never PlaySound")
+    local b, be = boot({})
+    b.playSound("x.ogg", true)
+    eq(#be, 1, "a missing PlaySoundFile is reported and skipped")
+end
+-- LibSharedMedia: read only when another addon provides it.
+do
+    local hash = { ["Bell"] = "b.ogg", ["air horn"] = "h.ogg", None = "none.ogg", [7] = "odd" }
+    local lsm = { HashTable = function(self, kind) return kind == "sound" and hash or nil end,
+        Fetch = function(self, kind, name, quiet) return kind == "sound" and quiet == true and hash[name] or nil end }
+    local stub = function(major, silent) if major == "LibSharedMedia-3.0" and silent then return lsm end end
+    local a = boot({ LibStub = stub })
+    eq(table.concat(a.mediaSounds(), ","), "air horn,Bell", "sorted ignoring case, None and odd keys left out")
+    eq(a.mediaSound("Bell") .. "/" .. tostring((a.mediaSound("Gone"))), "b.ogg/nil", "a shared file by name; nil when not shared")
+    local none = boot({ LibStub = function() return nil end })
+    eq(tostring((none.mediaSounds())) .. "/" .. tostring((none.mediaSound("bell"))), "nil/nil", "library missing")
+    local nostub = boot({ LibStub = false })
+    eq(tostring((nostub.mediaSounds())), "nil", "LibStub missing")
+    local bad = boot({ LibStub = function() return { HashTable = function() error("x") end, Fetch = function() error("x") end } end })
+    eq(tostring((bad.mediaSounds())) .. "/" .. tostring((bad.mediaSound("bell"))), "nil/nil", "a throwing library gives nothing")
+end
 local pd, pe = boot({})
 pd.petDiet()
 eq(#pe, 1, "a missing call is reported once")

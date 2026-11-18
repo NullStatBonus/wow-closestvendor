@@ -494,6 +494,19 @@ do
     eq(has(M.Run(cs, "status"), "Notification sound: None"), true, "/cvn reports it")
 end
 
+-- /cvn sound with sound-pack sounds: picked by name in any case; the list gives a count, not every name.
+do
+    local cs = fresh()
+    ns.Supplies.media = { list = function() return { "Air Horn", "Bell" } end, fetch = function() end }
+    local out, act2 = M.Run(cs, "sound air horn")
+    eq(cs.remindSound .. "/" .. tostring(act2 and act2[1]), "lsm:Air Horn/sound", "a sound-pack name picks it and plays it")
+    eq(has(out, "Notification sound: Air Horn (sound pack)"), true, "confirmed by label")
+    out = M.Run(cs, "sound banana")
+    eq(has(out, "Choose a sound: whisper, ping, invite, ready, none, or one of 2 sound-pack sounds by name."), true, "choices name the built-ins and count the rest")
+    ns.Supplies.media = nil
+    eq(has(M.Run(cs, "sound"), "Notification sound: Air Horn (sound pack)"), true, "a saved sound-pack choice keeps its name while the pack is gone")
+end
+
 -- /cvn nav: show, pick, refuse a name that is not a choice.
 do
     local cn = fresh()

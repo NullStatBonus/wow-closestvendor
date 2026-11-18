@@ -79,6 +79,16 @@ eq(toast.remindSound,nil,"no sound control on Appearance")
 pages.sound.args.remindSound.set(nil,"none");eq(c.remindSound,"none","one notification sound, on the Sound page")
 eq(pages.supplies.args.remindSound,nil,"no second sound control on Supplies")
 eq(runs[#runs],"sound none","choosing a sound plays it")
+do
+    local v = pages.sound.args.remindSound.values
+    eq(type(v),"function","sound choices are read when the dropdown opens")
+    eq(v().whisper..","..tostring(v()["lsm:Bell"]),"Whisper ping,nil","built-ins only without sound packs")
+    ns.Supplies.media={list=function() return {"Bell"} end}
+    eq(v()["lsm:Bell"],"Bell (sound pack)","a pack that loads later is listed")
+    ns.Supplies.media=nil; c.remindSound="lsm:Gone"
+    eq(v()["lsm:Gone"],"Gone (sound pack)","a saved but missing sound still shows by name")
+    c.remindSound="none"
+end
 c.notificationStyle="toast";eq(toast["appearance.toast.scale"].hidden(),false,"Toast look shown for Toast")
 eq(toast.warningLook.hidden(),true,"no Warning note for Toast")
 c.notificationStyle="warning";eq(toast["appearance.toast.scale"].hidden(),true,"Toast look hidden for Warning")
