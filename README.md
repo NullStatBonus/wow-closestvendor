@@ -242,7 +242,7 @@ Move shows a placeholder with **Done** and **Cancel**: only Done saves; Cancel o
 
 ### Sound
 
-The Sound tab has one choice, **Notification sound**. It plays with every notification: Whisper ping (default), Minimap ping, Group invite, Ready check or None. Choosing one plays it. `/cvn sound <name>` sets the same choice. No sound plays while On-screen notice is off, and questions play no notification sound.
+The Sound tab has one choice, **Notification sound**. It plays with every notification: Whisper ping (default), Minimap ping, Group invite, Ready check or None. If another addon shares sounds through LibSharedMedia (a SharedMedia pack, DBM, BigWigs or WeakAuras), they follow, marked "(sound pack)". Closest Vendor does not ship that library. Choosing one plays it. `/cvn sound <name>` sets the same choice. No sound plays while On-screen notice is off, and questions play no notification sound.
 
 ### Advanced and About
 
@@ -417,7 +417,7 @@ These values are per character. Prior saved values override defaults. Commands a
 - `/cvn petfood <count>` sets the pet food threshold (1 to 40).
 - `/cvn food on`, `/cvn water on` and `/cvn petfood on` turn that warning on. Use `off` to turn it off.
 - The healthstone reminder has a switch on the Supplies page only.
-- `/cvn sound` shows the notification sound. `/cvn sound <name>` picks whisper, ping, invite, ready or none, and plays it.
+- `/cvn sound` shows the notification sound. `/cvn sound <name>` picks whisper, ping, invite, ready, none or a sound-pack sound by its name (any letter case), and plays it.
 
 ### Navigation
 
@@ -612,6 +612,7 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 
 - The status window can lag a moment behind changes to bags, ammo and skills.
 - A saved window position can end up off screen after a UI scale change. Type `/cvn hud reset` to recover it.
+- A sound-pack sound needs the addon that shares it. While that addon is off, the whisper ping plays instead, and your choice stays saved.
 - The text of the addon is English only. You can add other languages. See [docs/localization.md](docs/localization.md).
 - The addon was written and tested against fake game APIs. See the status of in-game checks in `docs/test-plan.md`.
 

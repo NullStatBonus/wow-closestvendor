@@ -13,4 +13,6 @@ L["Your bags are almost full.\n\nNavigate to the closest vendor, %s?"] = "[xx] Y
 L["You are low on arrows (%d left).\n\nNavigate to the closest vendor that sells arrows, %s?"] = "[xx] You are low on arrows (%d left).\n\nNavigate to the closest vendor that sells arrows, %s?"
 L["Closest vendor: %s in %s (%.1f, %.1f)"] = "[xx] Closest vendor: %s in %s (%.1f, %.1f)"
 L["Bag space"] = "[xx] Bag space"
+L["%s (sound pack)"] = "[xx] %s (sound pack)"
+L["%s, or one of %d sound-pack sounds by name"] = "[xx] %s, or one of %d sound-pack sounds by name"
 L["Opening the settings page..."] = "[xx] Opening the settings page..."

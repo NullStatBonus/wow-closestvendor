@@ -1989,6 +1989,24 @@ do
     g.env.SlashCmdList.CLOSESTVENDOR("sound ping")
     eq(g.env.ClosestVendorCharDB.cfg.remindSound, "ping", "a client without PlaySound: still saved, no error")
 end
+-- A sound-pack sound, end to end: Core wires LibSharedMedia into the choices and plays its file.
+do
+    local gg = supplyGame("MAGE", { { 117, 1 }, { 159, 30 } }, { spells = { [587] = true } })
+    local files, kits = {}, {}
+    local shared = { Bell = "Sound\\bell.ogg" }
+    local lsm = { HashTable = function() return shared end, Fetch = function(_, _, name) return shared[name] end }
+    gg.env.LibStub = function(major) if major == "LibSharedMedia-3.0" then return lsm end end
+    gg.env.PlaySoundFile = function(f) files[#files + 1] = f end
+    gg.env.PlaySound = function(id) kits[#kits + 1] = id end
+    gg.env.SlashCmdList.CLOSESTVENDOR("sound bell")
+    eq(gg.env.ClosestVendorCharDB.cfg.remindSound .. "|" .. table.concat(files, ","), "lsm:Bell|Sound\\bell.ogg", "/cvn sound picks a sound-pack sound and plays its file")
+    gg.onEvent("BAG_UPDATE_DELAYED")
+    eq(#files .. "/" .. #kits, "2/0", "a reminder plays the sound-pack file")
+    shared.Bell = nil
+    gg.bag = { { 117, 1 }, { 159, 30 } }
+    gg.env.SlashCmdList.CLOSESTVENDOR("test remind")
+    eq(table.concat(kits, ",") .. "|" .. gg.env.ClosestVendorCharDB.cfg.remindSound, "3081|lsm:Bell", "pack gone: the whisper ping plays and the choice stays saved")
+end
 
 -- Status window: the Supplies rows follow the bags and the pet.
 do

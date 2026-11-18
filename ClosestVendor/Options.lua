@@ -118,7 +118,11 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note)
     if ns.Supplies.UsesMana(class) then supply("water", L["Water"]) end
     if class == "HUNTER" then supply("petFood", L["Pet food"]) end
     if class == "WARLOCK" then toggle(supplies, "healthstoneRemind", L["Healthstone reminder"], off("suppliesEnabled")) end
-    local sounds = {}; for _, s in ipairs(ns.Supplies.SOUNDS) do sounds[s[1]] = s[3] end
+    -- Built on each open: sound-pack sounds can appear later, and a saved but missing one keeps its name.
+    local function sounds()
+        local t = {}; for _, s in ipairs(ns.Supplies.SoundList(cfg.remindSound)) do t[s[1]] = s[2] end
+        return t
+    end
     select(home, "vendorMode", L["Destination on another map"], { ask = L["Ask which one"], auto = L["Navigate without asking"] })
     select(home, "vendorPrefer", L["Preferred target"], { map = L["On your map"], distance = L["Closest"] })
     local providers = {}; for _, p in ipairs(ns.Nav.PROVIDERS) do providers[p[1]] = p[2] end

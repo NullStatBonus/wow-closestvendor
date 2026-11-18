@@ -733,9 +733,41 @@ function A.petDiet()
     return ns.Supplies.FamilyDiets(id)
 end
 
--- Play a game sound by id (PlaySound). A missing or failing call is reported once and skipped.
-function A.playSound(id)
-    if type(id) == "number" then call("PlaySound", PlaySound, id) end
+-- Play a game sound by id (PlaySound), or, when file is true, a sound file by path or file id
+-- (PlaySoundFile). A missing or failing call is reported once and skipped.
+function A.playSound(id, file)
+    if file then
+        if type(id) == "string" or type(id) == "number" then call("PlaySoundFile", PlaySoundFile, id) end
+    elseif type(id) == "number" then call("PlaySound", PlaySound, id) end
+end
+
+-- LibSharedMedia-3.0 when another addon provides it (Closest Vendor does not ship it), else nil.
+local function sharedMedia()
+    if LibStub == nil then return end
+    local ok, lib = pcall(LibStub, "LibSharedMedia-3.0", true)
+    if ok and type(lib) == "table" then return lib end
+end
+
+-- Sorted names of the sounds other addons share (case ignored, "None" left out), or nil.
+function A.mediaSounds()
+    local lib = sharedMedia()
+    if not lib then return end
+    local ok, hash = pcall(lib.HashTable, lib, "sound")
+    if not ok or type(hash) ~= "table" then return end
+    local names = {}
+    for name in pairs(hash) do
+        if type(name) == "string" and name ~= "None" then names[#names + 1] = name end
+    end
+    table.sort(names, function(a, b) return a:lower() < b:lower() end)
+    return names
+end
+
+-- The file of a shared sound by name, or nil when it is not shared now.
+function A.mediaSound(name)
+    local lib = sharedMedia()
+    if not lib then return end
+    local ok, path = pcall(lib.Fetch, lib, "sound", name, true)
+    if ok and (type(path) == "string" or type(path) == "number") then return path end
 end
 
 -- How many of each supply item (food, drink, healthstone, pet food) the general bags hold:

@@ -596,6 +596,16 @@ Run on Classic Era and WoW Forever with only Closest Vendor installed, at matchi
 - [ ] A non-English client: the trainer question uses the game's profession name and the trainer's localized name.
 - [ ] Disable NorgannonDB: section 26 behaviour returns.
 
+## 28. Sound-pack sounds
+
+Needs any addon that shares sounds, for example a SharedMedia pack (free, no gold or level needed).
+
+- [ ] Without such an addon, Appearance > Sound lists only Whisper ping, Minimap ping, Group invite, Ready check and None.
+- [ ] With it, the same list shows its sounds after those, each marked "(sound pack)". Choosing one plays it.
+- [ ] `/cvn sound <name>` with a sound-pack name in lower case picks it and plays it. `/cvn sound banana` lists the choices with a count of sound-pack sounds.
+- [ ] `/cvn test remind` plays the chosen sound-pack sound.
+- [ ] Disable the pack and reload. `/cvn test remind` plays the whisper ping, and the Sound tab still shows the chosen sound by name. Enable the pack and reload: the chosen sound plays again.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

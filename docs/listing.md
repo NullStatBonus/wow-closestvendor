@@ -79,6 +79,6 @@ Both IDs are in both TOC files (`## X-Curse-Project-ID`, `## X-Wago-ID`). With t
 
 ### Appearance and safe previews
 
-Every route message and reminder is a notification: a compact Toast (default) or a Warning, with one sound you choose. Toasts wrap long routes and offer their own position, scale and dimming. Low status window rows are red with a visible Low label. `/cvn settings` opens the bundled settings tree with Home, feature pages, Appearance, Advanced and About. Settings remain per character.
+Every route message and reminder is a notification: a compact Toast (default) or a Warning, with one sound you choose, including sounds from any SharedMedia pack you have. Toasts wrap long routes and offer their own position, scale and dimming. Low status window rows are red with a visible Low label. `/cvn settings` opens the bundled settings tree with Home, feature pages, Appearance, Advanced and About. Settings remain per character.
 
 Use `/cvn demo` for a tour of real routes, questions and notifications that puts your waypoint back at the end, or `/cvn preview notice/hud/prompt` for one safe sample. Samples cannot buy or navigate. Move uses Done to save and Cancel/Escape to restore; lock blocks moving. `/cvn help appearance` lists typed settings commands. Clearing the debug report requires confirmation and keeps learned places and settings.

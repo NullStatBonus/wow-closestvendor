@@ -87,10 +87,7 @@ local function navName(key)
 end
 
 -- The name of a saved notification sound key, for chat.
-local function soundName(key)
-    for _, s in ipairs(ns.Supplies.SOUNDS) do if s[1] == key then return s[3] end end
-    return ns.Supplies.SOUNDS[1][3]
-end
+local function soundName(key) return ns.Supplies.SoundLabel(key) end
 
 local function status(cfg)
     local lines = {
@@ -243,10 +240,14 @@ local function reagentList(cfg, class)
     return lines
 end
 
+-- The built-in names, plus a count of shared sound-pack sounds (a pack can share hundreds).
 local function soundChoices()
     local names = {}
     for _, s in ipairs(ns.Supplies.SOUNDS) do names[#names + 1] = s[1] end
-    return table.concat(names, ", ")
+    local list = table.concat(names, ", ")
+    local packs = #ns.Supplies.SoundList() - #ns.Supplies.SOUNDS
+    if packs > 0 then return L["%s, or one of %d sound-pack sounds by name"]:format(list, packs) end
+    return list
 end
 
 -- /cvn sound [name]: show the choices, or pick one (it plays as a preview; "none" is silent).

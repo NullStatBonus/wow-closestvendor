@@ -119,4 +119,35 @@ do
     eq(S.FindSound(""), nil, "empty")
 end
 
+-- Sound-pack sounds shared through LibSharedMedia (S.media, set by Core).
+do
+    local shared, files = { "Air Horn", "Bell" }, { ["Air Horn"] = "Sound\\horn.ogg", Bell = 12345 }
+    S.media = { list = function() return shared end, fetch = function(name) return files[name] end }
+    local keys = {}
+    for _, s in ipairs(S.SoundList()) do keys[#keys + 1] = s[1] .. "=" .. s[2] end
+    eq(table.concat(keys, ","), "whisper=Whisper ping,ping=Minimap ping,invite=Group invite,ready=Ready check,none=None,lsm:Air Horn=Air Horn (sound pack),lsm:Bell=Bell (sound pack)", "built-ins first, then sound-pack sounds")
+    local id, file = S.SoundId("lsm:Air Horn")
+    eq(tostring(id) .. "/" .. tostring(file), "Sound\\horn.ogg/true", "a shared sound plays its file")
+    id, file = S.SoundId("lsm:Bell")
+    eq(tostring(id) .. "/" .. tostring(file), "12345/true", "a file id is a file too")
+    id, file = S.SoundId("whisper")
+    eq(tostring(id) .. "/" .. tostring(file), "3081/nil", "a built-in is a game sound id")
+    id, file = S.SoundId("lsm:Gone")
+    eq(tostring(id) .. "/" .. tostring(file), "3081/nil", "a shared sound that is missing plays the default")
+    eq(S.FindSound("air HORN") .. "|" .. S.FindSound("bell (sound pack)") .. "|" .. S.FindSound("lsm:bell"), "lsm:Air Horn|lsm:Bell|lsm:Bell", "name, label or key, case ignored")
+    eq(S.SoundLabel("lsm:Gone"), "Gone (sound pack)", "a missing saved sound keeps its name")
+    eq(#S.SoundList("lsm:Gone"), 8, "and is listed once while it is saved")
+    eq(#S.SoundList("lsm:Bell"), 7, "a listed saved sound is not added twice")
+    eq(S.SoundLabel("banana"), "Whisper ping", "an unknown key reads as the default")
+    shared[#shared + 1] = "Ping"
+    eq(S.FindSound("ping"), "ping", "a built-in wins over a shared sound with the same name")
+    eq(S.FindSound("ping (sound pack)"), "lsm:Ping", "the shared one is still reachable by its label")
+    shared = nil
+    eq(#S.SoundList(), 5, "a library that shares nothing lists only the built-ins")
+    S.media = nil
+    eq(#S.SoundList(), 5, "no library: only the built-ins")
+    eq(S.SoundId("lsm:Bell"), 3081, "no library: a saved shared sound plays the default")
+    eq(S.FindSound("bell"), nil, "no library: not a choice")
+end
+
 H.done()

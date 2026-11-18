@@ -29,17 +29,57 @@ S.SOUNDS = {
 }
 S.DEFAULT_SOUND = "whisper"
 
--- The sound id for a saved key; an unknown key gets the default, "none" gets nothing.
+-- Sounds shared by other addons through LibSharedMedia-3.0. Core sets S.media to
+-- { list = function() -> sorted names or nil, fetch = function(name) -> file path or nil };
+-- without it only the built-in sounds exist. A shared sound is saved as "lsm:<name>".
+S.media = nil
+local PACK = "lsm:"
+
+local function packName(key)
+    if type(key) == "string" and key:sub(1, #PACK) == PACK then return key:sub(#PACK + 1) end
+end
+
+local function packLabel(name) return L["%s (sound pack)"]:format(name) end
+
+-- Every choice in order, { key, label }: the built-in sounds, then the shared ones. Read on each call,
+-- so a library that loads late is seen. saved, when it is a shared sound no longer listed, is added
+-- so the saved choice still shows by name.
+function S.SoundList(saved)
+    local out, seen = {}, {}
+    for _, s in ipairs(S.SOUNDS) do out[#out + 1] = { s[1], s[3] } end
+    local names = S.media and S.media.list and S.media.list()
+    for _, name in ipairs(type(names) == "table" and names or {}) do
+        out[#out + 1] = { PACK .. name, packLabel(name) }; seen[name] = true
+    end
+    local missing = packName(saved)
+    if missing and not seen[missing] then out[#out + 1] = { saved, packLabel(missing) } end
+    return out
+end
+
+-- What to play for a saved key: a game sound id, or a shared sound's file (path or file id) and true;
+-- nil for none. An unknown key, or a shared sound that cannot be found now, gets the default (the key
+-- stays saved, so the choice comes back with its pack).
 function S.SoundId(key)
     for _, s in ipairs(S.SOUNDS) do if s[1] == key then return s[2] end end
+    local name = packName(key)
+    local path = name and S.media and S.media.fetch and S.media.fetch(name)
+    if type(path) == "string" or type(path) == "number" then return path, true end
     return S.SoundId(S.DEFAULT_SOUND)
 end
 
+-- The chat label of a saved key; an unknown key reads as the default.
+function S.SoundLabel(key)
+    for _, s in ipairs(S.SoundList(key)) do if s[1] == key then return s[2] end end
+    return S.SOUNDS[1][3]
+end
+
 -- The saved key a player means by text (the key or the label, case ignored); nil if none.
+-- Built-in sounds win over a shared sound with the same name.
 function S.FindSound(text)
     local want = tostring(text or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
-    for _, s in ipairs(S.SOUNDS) do
-        if s[1] == want or s[3]:lower() == want then return s[1] end
+    for _, s in ipairs(S.SoundList()) do
+        local name = packName(s[1])
+        if s[1]:lower() == want or s[2]:lower() == want or (name and name:lower() == want) then return s[1] end
     end
 end
 

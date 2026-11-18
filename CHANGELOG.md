@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.0
+
+- **New: The notification sound can come from a sound pack.** If another addon shares sounds through LibSharedMedia, they show after the built-in sounds. `/cvn sound <name>` accepts their names.
+- Changed: When the sound pack is not available, the whisper ping plays. Your choice stays saved.
+
 ## 1.7.0
 
 - New: The AddOns list shows the Closest Vendor icon and its settings pages.
