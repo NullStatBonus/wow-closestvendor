@@ -122,6 +122,15 @@ It lists what the addon tracks, one row for each item.
 - A profession row works only while the profession is within its threshold.
 - For a profession row, the addon must already know a trainer.
 
+### Other sellers
+
+- A row with more than one known seller has a small arrow at its right end.
+- Hover the arrow to see what it does, for example "Other repair vendors".
+- Click the arrow to see a list: the seller a row click would choose (marked), then up to three others, nearest first.
+- Each entry shows the name, the zone and the distance. Pick one to set the waypoint there.
+- Press Escape or click elsewhere to close the list without a change.
+- With auction house routing on, the list can include the closest auctioneer.
+
 ### Move and lock
 
 - Drag the title to move the window.
@@ -246,7 +255,7 @@ The Sound tab has one choice, **Notification sound**. It plays with every notifi
 
 ### Advanced and About
 
-Advanced explains character settings and account-wide learned places, with Record debug information, Show debug report and confirmed diagnostic clearing. The report uses the same standard AceGUI window and scrollable, read-only text box as KeepThat, with copy instructions and a normal close button. About follows KeepThat’s layout: addon name, muted installed version, one-sentence purpose, then individual command rows with muted explanations.
+Advanced explains character settings and account-wide learned places, with Record debug information, Show debug report and confirmed diagnostic clearing. The report uses the same standard AceGUI window and scrollable, read-only text box as KeepThat, with copy instructions and a normal close button. About shows the addon name, the installed version and a one-sentence purpose. `/cvn help` lists the commands.
 
 ### Ammo
 
@@ -596,6 +605,7 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 - "Your map" means the exact map that you stand in.
 - A city is its own map, separate from the zone around it. In a city, "your map" is that city.
 - Auction house routing also uses straight-line distance to an auctioneer.
+- The list of other sellers is ordered by straight-line distance and shows only sellers the addon knows.
 - It uses auctioneers that are shipped or learned.
 - It does not check prices.
 - It does not check if you can sell an item there.

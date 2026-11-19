@@ -167,13 +167,17 @@ function C.New(env)
     -- Nearest eligible vendor for kind, or nil plus "nopos" / "novendor". A third value is the nearest
     -- one on the player's map when the overall nearest is on another map, else nil; then x, y. With
     -- at ({ continent, x, y, map }, an anchor) the search starts there instead of at the player.
+    -- The Search need for kind (as findVendor takes it).
+    local function needFor(kind, reagent, supplyBits)
+        if kind == "reagent" then return { reagent = reagent } end
+        if kind == "supply" then return { supply = supplyBits } end
+        return (kind == "repair" or kind == "arrow" or kind == "bullet") and kind or nil
+    end
+
     local function findVendor(kind, reagent, at, supplyBits)
         at = at or here()
         if not at then return nil, "nopos" end
-        local need = (kind == "repair" or kind == "arrow" or kind == "bullet") and kind or nil
-        if kind == "reagent" then need = { reagent = reagent } end
-        if kind == "supply" then need = { supply = supplyBits } end
-        local v, onMap = ns.Search.NearestFrom(env.buckets, at, need, env.playerFaction)
+        local v, onMap = ns.Search.NearestFrom(env.buckets, at, needFor(kind, reagent, supplyBits), env.playerFaction)
         if not v then return nil, "novendor" end
         if onMap == v then onMap = nil end
         return v, nil, onMap, at.x, at.y
@@ -582,105 +586,119 @@ function C.New(env)
         return nil, "none"
     end
 
-    -- A direct pin (a click on a status window row): pin the nearest target for kind at once. No
-    -- question, whatever vendorMode is, and combat does not hold it back: the player asked for it.
-    -- kind is "sell", "repair", "ammo", "reagent" (id: the item id), "supply" (id: food, water or pet) or "trainer" (id: the profession
-    -- name). An open question is closed, and a condition that is low counts as handled, as if the
-    -- player had answered Yes. Returns true when a target was pinned; otherwise chat says why not
-    -- (nothing is said for a row that cannot be routed to).
-    local function direct(kind, id, demo)
-        log(("direct pin: %s%s"):format(tostring(kind), id and (" " .. tostring(id)) or ""))
-        local find, name, trade, supplyBits, need = kind, nil, nil, nil, nil -- find: what to search for; need: a trainer tier
-        local item
+    -- What a direct pin or the seller choice looks for and where it searches from. kind and id as for
+    -- direct. Returns a query { kind, id, find, item, name, trade, need, supplyBits, ammoCount, at,
+    -- which, inside, ahOk } or nil when there is nothing to route. find is what to search for (the ammo
+    -- type for ammo), need a trainer tier, at the search start and which the anchor used ("hearth",
+    -- "last" or nil). ahOk: an auctioneer may compete. Unless quiet, chat and the debug log say why
+    -- nothing can be routed, and the ammo seen is remembered as Evaluate does; quiet changes and
+    -- prints nothing, so the status window can ask on every refresh.
+    local function resolve(kind, id, quiet)
+        local speak = quiet and function() end or say
+        local note = quiet and function() end or log
+        local q = { kind = kind, id = id, find = kind }
         if kind == "ammo" then
-            ammoKind, ammoCount = env.ammo()
-            if not ammoKind then log("direct pin: no ranged weapon that uses ammo") return false end
-            find = ammoKind
+            local ak, ac = env.ammo()
+            if not quiet then ammoKind, ammoCount = ak, ac end
+            if not ak then note("direct pin: no ranged weapon that uses ammo") return nil end
+            q.find, q.ammoCount = ak, ac
         elseif kind == "reagent" then
-            item = ns.Reagents.ById(id)
+            local item = ns.Reagents.ById(id)
             -- An item no vendor sells (display-only) cannot be routed to.
-            if not item or item.vendor == false then log("direct pin: not an item a vendor sells") return false end
-            name = item.name
+            if not item or item.vendor == false then note("direct pin: not an item a vendor sells") return nil end
+            q.item, q.name = item, item.name
             for _, r in ipairs(env.reagents and env.reagents() or {}) do
-                if r.item.id == id then name = r.name end
+                if r.item.id == id then q.name = r.name end
             end
         elseif kind == "supply" then
             -- id is "food", "water" or "pet"; a pet needs a pet out and a known diet.
             local s = env.supplies and env.supplies()
-            supplyBits = s and ns.Supplies.Want(id, s.diets)
-            if not supplyBits then log("direct pin: nothing to look for") return false end
-            name = supplyName(id, s.diets)
+            q.supplyBits = s and ns.Supplies.Want(id, s.diets)
+            if not q.supplyBits then note("direct pin: nothing to look for") return nil end
+            q.name = supplyName(id, s.diets)
         elseif kind == "trainer" then
             -- Only while the profession is near its cap: otherwise the next skill check would clear the pin.
             local near = false
             for _, p in ipairs(ns.Professions.Within(env.skills and env.skills(), env.known or {}, env.cfg.tradeThreshold, env.level and env.level(), tiers())) do
-                if p.name == id then near, need = true, p.need end
+                if p.name == id then near, q.need = true, p.need end
             end
             if not near then
                 for _, s in ipairs(env.skills and env.skills() or {}) do
                     if s.name == id and s.max == ns.Professions.NO_ROUTE_CAP then
-                        say(L["Artisan %s is taught by only a few trainers, so the addon does not route to one."]:format(id))
-                        return false
+                        speak(L["Artisan %s is taught by only a few trainers, so the addon does not route to one."]:format(id))
+                        return nil
                     end
                 end
-                log("direct pin: profession is not near its cap") return false
+                note("direct pin: profession is not near its cap") return nil
             end
-            trade = id
+            q.trade = id
         elseif kind ~= "sell" and kind ~= "repair" then
-            return false
+            return nil
         end
 
-        local inside = instance()
-        local at, which = anchorFor(inside)
+        q.inside = instance()
+        local at, which = anchorFor(q.inside)
         if which == "none" then
-            say(L["No target is known yet: the addon has not seen your hearthstone point or a position outside an instance."])
-            return false
+            speak(L["No target is known yet: the addon has not seen your hearthstone point or a position outside an instance."])
+            return nil
         end
         at = at or here()
         if not at then
-            say(L["No map position here (dungeons and some areas have none). Try again outside."])
-            return false
+            speak(L["No map position here (dungeons and some areas have none). Try again outside."])
+            return nil
         end
+        q.at, q.which = at, which
+        -- Only a click, never an automatic trigger, may route to an auctioneer: for something that
+        -- is bought (ammo, a reagent) that is not soulbound, with the setting on, outside instances.
+        q.ahOk = (env.cfg.ahEnabled and not q.inside and (kind == "ammo" or kind == "reagent")
+            and not (q.item and q.item.soulbound)) and true or false
+        return q
+    end
 
-        local v, onMap
-        if trade then
-            v, onMap = ns.Search.NearestTrainer((env.trainerBuckets or {})[at.continent] or {}, at.x, at.y, trade, env.playerFaction, at.map, need)
-            if not v then
-                say(L["No known trainer for %s on this continent yet. Open a %s trainer window once and the addon will remember where it is."]:format(trade, trade))
-                return false
-            end
+    -- The search for a query: the nearest target, the nearest on the start's map when that is another
+    -- one (else nil), and the nearest auctioneer when one may compete (else nil).
+    local function search(q)
+        local at = q.at
+        if q.trade then
+            local v, onMap = ns.Search.NearestTrainer((env.trainerBuckets or {})[at.continent] or {}, at.x, at.y, q.trade, env.playerFaction, at.map, q.need)
             if onMap == v then onMap = nil end
-        else
-            local _
-            v, _, onMap = findVendor(find, item, at, supplyBits)
-            -- Only a click, never an automatic trigger, may route to an auctioneer: for something that
-            -- is bought (ammo, a reagent) that is not soulbound, with the setting on, outside instances.
-            local ah
-            if env.cfg.ahEnabled and not inside and (kind == "ammo" or kind == "reagent") and not (item and item.soulbound) then
-                ah = ns.Search.NearestFrom(env.auctionBuckets or {}, at, "auction", env.playerFaction)
-            end
-            if ah and (not v or yards(ah, 9, at.x, at.y) < yards(v, 9, at.x, at.y)) then
-                cancelPrompt()
-                log(("direct pin: auctioneer %s (npc %s) is closer"):format(ah[2], tostring(ah[1])))
-                lastKind, lastTrade = kind, nil
-                pin(ah, nil, kind, item and id or nil)
-                local where = target(ah, env.zoneName and env.zoneName(ah[3]), yards(ah, 9, at.x, at.y))
-                local text
-                if name then text = L["Navigating to %s to buy %s at the auction house."]:format(where, name)
-                else text = L["Navigating to %s to buy ammo at the auction house."]:format(where) end
-                say(text)
-                notice(text)
-                if not demo and triggers.Take(kind, id) then self.pending, self.pendingId = nil, nil end
-                return true
-            end
-            if not v then say(noVendorText(find, name)) return false end
+            return v, onMap, nil
         end
+        local v, _, onMap = findVendor(q.find, q.item, at, q.supplyBits)
+        local ah = q.ahOk and ns.Search.NearestFrom(env.auctionBuckets or {}, at, "auction", env.playerFaction) or nil
+        return v, onMap, ah
+    end
 
+    -- True when the auctioneer ah is the one to route to instead of the vendor v (which may be nil).
+    local function auctionWins(q, v, ah)
+        return ah and (not v or yards(ah, 9, q.at.x, q.at.y) < yards(v, 9, q.at.x, q.at.y)) or false
+    end
+
+    -- Pin the auctioneer ah for a query and say so; the warning counts as handled (not in a demo).
+    local function pinAuction(q, ah, demo)
+        local kind, id = q.kind, q.id
+        cancelPrompt()
+        lastKind, lastTrade = kind, nil
+        pin(ah, nil, kind, q.item and id or nil)
+        local where = target(ah, env.zoneName and env.zoneName(ah[3]), yards(ah, 9, q.at.x, q.at.y))
+        local text
+        if q.name then text = L["Navigating to %s to buy %s at the auction house."]:format(where, q.name)
+        else text = L["Navigating to %s to buy ammo at the auction house."]:format(where) end
+        say(text)
+        notice(text)
+        if not demo and triggers.Take(kind, id) then self.pending, self.pendingId = nil, nil end
+        return true
+    end
+
+    -- Pin the vendor or trainer v for a query (onMap as for autoPin) and say why and from where; the
+    -- warning counts as handled (not in a demo, never for a trainer).
+    local function pinTarget(q, v, onMap, demo)
+        local kind, id, trade = q.kind, q.id, q.trade
         cancelPrompt() -- a question about something else is answered by this choice
-        autoPin(trade and "trainer" or find, v, onMap, at.x, at.y, trade, name, (item or kind == "supply") and id or nil)
-        if which == "hearth" then
+        autoPin(trade and "trainer" or q.find, v, onMap, q.at.x, q.at.y, trade, q.name, (q.item or kind == "supply") and id or nil)
+        if q.which == "hearth" then
             say(L["You are in an instance, so the search started from your hearthstone point."])
-        elseif which == "last" then
+        elseif q.which == "last" then
             say(L["You are in an instance, so the search started from your last position outside."])
         end
         -- A low condition is now handled and active, so it ends the usual way and is not asked about.
@@ -690,7 +708,106 @@ function C.New(env)
         return true
     end
 
+    -- A direct pin (a click on a status window row): pin the nearest target for kind at once. No
+    -- question, whatever vendorMode is, and combat does not hold it back: the player asked for it.
+    -- kind is "sell", "repair", "ammo", "reagent" (id: the item id), "supply" (id: food, water or pet) or "trainer" (id: the profession
+    -- name). An open question is closed, and a condition that is low counts as handled, as if the
+    -- player had answered Yes. Returns true when a target was pinned; otherwise chat says why not
+    -- (nothing is said for a row that cannot be routed to).
+    local function direct(kind, id, demo)
+        log(("direct pin: %s%s"):format(tostring(kind), id and (" " .. tostring(id)) or ""))
+        local q = resolve(kind, id)
+        if not q then return false end
+        local v, onMap, ah = search(q)
+        if q.trade then
+            if not v then
+                say(L["No known trainer for %s on this continent yet. Open a %s trainer window once and the addon will remember where it is."]:format(q.trade, q.trade))
+                return false
+            end
+        else
+            if auctionWins(q, v, ah) then
+                log(("direct pin: auctioneer %s (npc %s) is closer"):format(ah[2], tostring(ah[1])))
+                return pinAuction(q, ah, demo)
+            end
+            if not v then say(noVendorText(q.find, q.name)) return false end
+        end
+        return pinTarget(q, v, onMap, demo)
+    end
+
     function self.Go(kind, id) return direct(kind, id) end
+
+    -- The menu title for a kind's other sellers (supply: id is food, water or pet).
+    local function choiceTitle(q)
+        local kind = q.kind
+        if kind == "repair" then return L["Other repair vendors"] end
+        if kind == "ammo" then return L["Other ammo vendors"] end
+        if kind == "sell" then return L["Other vendors to sell to"] end
+        if kind == "reagent" then return L["Other sellers of %s"]:format(q.name) end
+        if kind == "trainer" then return L["Other %s trainers"]:format(q.trade) end
+        if q.id == "water" then return L["Other water vendors"] end
+        if q.id == "pet" then return L["Other pet food vendors"] end
+        return L["Other food vendors"]
+    end
+
+    -- How many other sellers the choice offers besides the default one.
+    local CHOICE_OTHERS = 3
+
+    -- The sellers a status row can route to: nil when the row cannot be routed to, else { title,
+    -- entries = { { v = record, label = "Name (Zone, N yards)", default, auction } } }. entries[1] is
+    -- what a row click pins (default = true), then up to CHOICE_OTHERS others by straight-line
+    -- distance from the search start, one per NPC. Prints and logs nothing.
+    function self.Choices(kind, id)
+        local q = resolve(kind, id, true)
+        if not q then return nil end
+        local v, onMap, ah = search(q)
+        local at, i = q.at, q.trade and 8 or 9
+        local entries, seen = {}, {}
+        local function add(r, auction, default)
+            seen[r[1]] = true
+            entries[#entries + 1] = { v = r, label = target(r, env.zoneName and env.zoneName(r[3]), yards(r, i, at.x, at.y)),
+                default = default, auction = auction }
+        end
+        local ahFirst = auctionWins(q, v, ah)
+        if ahFirst then add(ah, true, true)
+        elseif v then add((onMap and env.cfg.vendorPrefer ~= "distance") and onMap or v, false, true)
+        else return nil end
+        local list
+        if q.trade then
+            list = ns.Search.SeveralTrainers((env.trainerBuckets or {})[at.continent] or {}, at.x, at.y, q.trade, env.playerFaction, CHOICE_OTHERS + 1, q.need)
+        else
+            list = ns.Search.Several((env.buckets or {})[at.continent] or {}, at.x, at.y, needFor(q.find, q.item, q.supplyBits),
+                env.playerFaction, CHOICE_OTHERS + 1)
+        end
+        local others = {}
+        for _, r in ipairs(list) do others[#others + 1] = { r = r, d = yards(r, i, at.x, at.y), n = #others } end
+        if ah and not ahFirst then others[#others + 1] = { r = ah, d = yards(ah, 9, at.x, at.y), n = #others, auction = true } end
+        table.sort(others, function(a, b) if a.d ~= b.d then return a.d < b.d end return a.n < b.n end)
+        for _, o in ipairs(others) do
+            if #entries > CHOICE_OTHERS then break end
+            if not seen[o.r[1]] then add(o.r, o.auction or false, false) end
+        end
+        return { title = choiceTitle(q), entries = entries }
+    end
+
+    -- The menu title when a row has another seller to choose, else nil.
+    function self.ChoiceTitle(kind, id)
+        local c = self.Choices(kind, id)
+        if c and #c.entries > 1 then return c.title end
+    end
+
+    -- Pin entry (one of Choices(kind, id).entries) as a row click pins its default: waypoint, chat,
+    -- notification, and the warning counts as handled. Returns true when pinned.
+    function self.Pick(kind, id, entry)
+        log(("chosen pin: %s%s, %s"):format(tostring(kind), id and (" " .. tostring(id)) or "", entry and entry.v and tostring(entry.v[2]) or "nothing"))
+        if not (entry and entry.v) then return false end
+        local q = resolve(kind, id)
+        if not q then return false end
+        if entry.auction then
+            if not q.ahOk then log("chosen pin: an auctioneer is not allowed here now") return false end
+            return pinAuction(q, entry.v)
+        end
+        return pinTarget(q, entry.v, nil)
+    end
 
     -- The player changed zone or entered an instance: a warning's open question names a vendor
     -- chosen from where they were, so it is withdrawn and the warning is asked again at the next

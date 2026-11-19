@@ -1551,4 +1551,130 @@ cancels = w.cancelCount
 w.c.OnPlaceChange()
 eq(w.cancelCount, cancels, "a test command's question is not withdrawn")
 
+-- Seller choice (the status window's chevron) ---------------------------------------------------------------
+-- One seller on the player's map (100), farther than four on another map (200).
+local CV = {
+    { 41, "Map Far",   100, 0.6, 0.1, 0, false, 0, 60, 0 },
+    { 42, "Off Near",  200, 0.1, 0.1, 0, false, 0, 10, 0 },
+    { 42, "Off Near",  200, 0.1, 0.1, 0, false, 0, 12, 0 },
+    { 43, "Off Two",   200, 0.2, 0.1, 0, false, 0, 20, 0 },
+    { 44, "Off Three", 200, 0.3, 0.1, 0, false, 0, 30, 0 },
+    { 45, "Off Four",  200, 0.4, 0.1, 0, false, 0, 40, 0 },
+}
+local function names(c)
+    local out = {}
+    for _, e in ipairs(c and c.entries or {}) do out[#out + 1] = e.v[2] .. (e.default and "*" or "") .. (e.auction and "@" or "") end
+    return table.concat(out, ", ")
+end
+local function chooser(over)
+    local o = { buckets = { [1] = CV }, pos = { 1, 0, 0, 100 } }
+    for k, v in pairs(over or {}) do o[k] = v end
+    return world(o)
+end
+w = chooser()
+local c = w.c.Choices("sell")
+eq(names(c), "Map Far*, Off Near, Off Two, Off Three", "map preference: the map seller first, then three others by distance")
+eq(c.title, "Other vendors to sell to", "title")
+eq(c.entries[1].label, "Map Far (60 yards)", "label: name and distance")
+eq(c.entries[2].default, false, "only the first is the default")
+eq(c.entries[2].auction, false, "not an auctioneer")
+eq(w.c.ChoiceTitle("sell"), "Other vendors to sell to", "a title while there is another seller")
+eq(#w.says + #w.logs + #w.notes + w.setCount + w.cancelCount, 0, "asking prints, logs and pins nothing")
+w = chooser({ cfg = { vendorPrefer = "distance" } })
+eq(names(w.c.Choices("sell")), "Off Near*, Off Two, Off Three, Off Four", "distance preference: the nearest first, listed once")
+w = chooser({ zones = { [200] = "Elsewhere" } })
+eq(w.c.Choices("sell").entries[2].label, "Off Near (Elsewhere, 10 yards)", "label names the zone when known")
+eq(w.c.Choices("repair"), nil, "no repair vendor known: nothing")
+eq(w.c.ChoiceTitle("repair"), nil, "and no title")
+w = world()
+eq(names(w.c.Choices("repair")), "Far Repairer*", "one seller only")
+eq(w.c.ChoiceTitle("repair"), nil, "one seller: no title")
+eq(w.c.Choices("repair").title, "Other repair vendors", "repair title")
+w = world({ ammoKind = "arrow", ammoCount = 50 })
+eq(w.c.Choices("ammo").title, "Other ammo vendors", "ammo title")
+eq(names(w.c.Choices("ammo")), "Arrow Man*", "arrows: only arrow sellers")
+eq(world().c.Choices("ammo"), nil, "no ranged weapon: nothing")
+eq(world().c.Choices("nonsense"), nil, "unknown kind: nothing")
+
+-- Quiet: a row that cannot be routed says and logs nothing.
+w = trade({ skills = { { name = "Mining", rank = 220, max = 225 } } })
+eq(w.c.Choices("trainer", "Mining"), nil, "Artisan: nothing")
+local w2 = world({ instance = "party", anchors = {} })
+eq(w2.c.Choices("sell"), nil, "no anchor: nothing")
+local w3 = world({ pos = false })
+eq(w3.c.Choices("sell"), nil, "no position: nothing")
+eq(#w.says + #w.logs + #w2.says + #w2.logs + #w3.says + #w3.logs, 0, "and nothing said or logged")
+w = reagent()
+ns.Reagents.ById = function(id) if id == 6265 then return shard end return realById(id) end
+eq(w.c.Choices("reagent", 6265), nil, "display-only reagent: nothing")
+ns.Reagents.ById = realById
+
+-- Titles for reagents, supplies and trainers; the trainer tier rule holds.
+eq(reagent().c.Choices("reagent", 17020).title, "Other sellers of Arcane Powder", "reagent title")
+eq(supply("WARRIOR", { food = 3, water = 0, healthstone = 0 }).c.Choices("supply", "food").title, "Other food vendors", "food title")
+eq(names(supply("WARRIOR", { food = 3, water = 0, healthstone = 0 }).c.Choices("supply", "food")), "Baker*, Butcher", "food sellers only")
+eq(supply("PRIEST", { food = 30, water = 3, healthstone = 0 }).c.Choices("supply", "water").title, "Other water vendors", "water title")
+eq(supply("HUNTER", { food = 30, water = 30, pet = 2, healthstone = 0 }, { Meat = true }).c.Choices("supply", "pet").title,
+    "Other pet food vendors", "pet food title")
+w = trade({ tiers = true, trainers = { [1] = TIERED } })
+c = w.c.Choices("trainer", "Mining")
+eq(names(c), "Expert Miner*, Unknown Miner, Master Miner", "trainers that teach the next tier only")
+eq(c.title, "Other Mining trainers", "trainer title")
+eq(c.entries[1].label, "Expert Miner (20 yards)", "trainer distance")
+
+-- Inside an instance the distances are from the anchor.
+w = world({ instance = "party", pos = false, anchors = { hearth = HEARTH, last = LAST } })
+c = w.c.Choices("sell")
+eq(names(c), "Far Repairer*, Gun Shop, Arrow Man, Near Seller", "ordered from the hearthstone point")
+eq(c.entries[1].label .. " / " .. c.entries[2].label, "Far Repairer (5 yards) / Gun Shop (25 yards)", "distances from the anchor")
+eq(#w.says, 0, "the anchor line is not printed")
+
+-- The auctioneer: once, only with the setting on, outside, for a tradeable item.
+eq(names(auction().c.Choices("reagent", 17020)), "Auctioneer Near*@, Powder Seller", "the closer auctioneer is the default, listed once")
+eq(names(auction({ pos = { 1, 28, 0 } }).c.Choices("reagent", 17020)), "Powder Seller*, Auctioneer Near@", "a farther auctioneer is another choice")
+eq(names(auction({ cfg = { ahEnabled = false } }).c.Choices("reagent", 17020)), "Powder Seller*", "setting off: no auctioneer")
+eq(names(auction({ instance = "party", anchors = { last = { continent = 1, x = 0, y = 0 } } }).c.Choices("reagent", 17020)),
+    "Powder Seller*", "in an instance: no auctioneer")
+POWDER.soulbound = true
+eq(names(auction().c.Choices("reagent", 17020)), "Powder Seller*", "soulbound: no auctioneer")
+POWDER.soulbound = nil
+eq(names(auction({ buckets = { [1] = VENDORS } }).c.Choices("repair")), "Far Repairer*", "repair: never an auctioneer")
+eq(names(auction({ buckets = { [1] = {} } }).c.Choices("reagent", 17020)), "Auctioneer Near*@", "no vendor known: the auctioneer alone")
+
+-- Pick pins the chosen seller like a row click: waypoint, chat, notice, and the warning is handled.
+w = chooser({ free = 1, combat = true, autoAccept = false })
+w.c.Evaluate()
+c = w.c.Choices("sell")
+eq(w.c.Pick("sell", nil, c.entries[3]), true, "pinned")
+eq(w.last[2], "Off Two", "the chosen seller")
+eq(w.says[1], "Navigating to Off Two (20 yards) to sell items and free bag space.", "chat names it, with no other choice")
+eq(w.notes[1], w.says[1], "the notification too")
+eq(w.c.PinKind(), "sell", "a sell pin")
+w.combat = false
+w.c.Evaluate()
+eq(#w.prompts, 0, "picked while low: not asked about afterwards")
+w.free = 20
+w.c.Evaluate()
+eq(w.clearCount, 1, "resolved: the picked pin is cleared")
+w = auction({ pos = { 1, 28, 0 } })
+c = w.c.Choices("reagent", 17020)
+eq(w.c.Pick("reagent", 17020, c.entries[2]), true, "auctioneer pinned")
+eq(w.last[2], "Auctioneer Near", "the auctioneer")
+eq(w.says[1], "Navigating to Auctioneer Near (8 yards) to buy Arcane Powder at the auction house.", "the auction house text")
+eq(w.c.PinKind(), "reagent", "still a reagent pin")
+w = auction({ pos = { 1, 28, 0 } })
+c = w.c.Choices("reagent", 17020)
+w.instance, w.anchors = "party", { last = { continent = 1, x = 28, y = 0 } }
+eq(w.c.Pick("reagent", 17020, c.entries[2]), false, "entered an instance since: the auctioneer is not pinned")
+eq(w.setCount, 0, "no waypoint")
+w = trade({ tiers = true, trainers = { [1] = TIERED } })
+eq(w.c.Pick("trainer", "Mining", w.c.Choices("trainer", "Mining").entries[3]), true, "trainer pinned")
+eq(w.last[2], "Master Miner", "the chosen trainer")
+w = world({ instance = "party", pos = false, anchors = { hearth = HEARTH } })
+w.c.Pick("sell", nil, w.c.Choices("sell").entries[2])
+eq(w.says[2], "You are in an instance, so the search started from your hearthstone point.", "chat names the anchor")
+w = world({ instance = "party", anchors = {} })
+eq(w.c.Pick("sell", nil, { v = VENDORS[1] }), false, "nothing to route now: not pinned")
+eq(w.setCount, 0, "no waypoint")
+
 H.done()

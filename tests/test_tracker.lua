@@ -40,8 +40,14 @@ local function boot(opts)
         function f:GetStringWidth() return opts.textWidth end
         return setmetatable(f, { __index = function(_, k) if k:match("^%u") then return function() end end end })
     end
+    g.tip = { text = nil, owner = nil, shown = false }
+    local tip = {}
+    function tip:SetOwner(o) g.tip.owner = o end
+    function tip:SetText(t) g.tip.text = t end
+    function tip:Show() g.tip.shown = true end
+    function tip:Hide() g.tip.shown = false end
     local env = setmetatable({
-        UIParent = {},
+        UIParent = {}, GameTooltip = tip,
         CreateFrame = function(kind, name)
             if opts.frameThrows then error("no frames today", 0) end
             local f = newFrame(kind, name)
@@ -59,6 +65,8 @@ local function boot(opts)
     g.ns = ns
     g.new = function()
         return ns.Tracker.New({ cfg = g.cfg, pos = g.pos,
+            choiceTitle = (not opts.noChoice) and function(row) return g.titles and g.titles[row.key] end or nil,
+            choose = function(row, anchor) g.chosen = { row = row, anchor = anchor } end,
             go = function(row) g.went[#g.went + 1] = row.key end,
             openSettings = function() g.opened = g.opened + 1 end,
             shiftDown = function() return g.shift end })
@@ -246,6 +254,64 @@ td.Demo({ ROWS[1] })
 eq(td.frame.shown, true, "a demo shows the window even when the real one is hidden")
 td.Demo(nil)
 eq(td.frame.shown, false, "and it is hidden again afterwards")
+
+-- Chevron: shown only on a routable row with alternatives, never during a demo.
+local gc = boot({ textWidth = 200 })
+local tc = gc.new()
+gc.titles = { ammo = "Other repair vendors" }
+tc.Show(ROWS)
+local bc = tc.Buttons()
+eq(bc[1].more.shown, true, "chevron shown when choiceTitle gives a title")
+eq(tostring(bc[2].more.shown) .. "/" .. tostring(bc[3].more.shown), "false/false", "no chevron when choiceTitle is nil or the row is not routable")
+gc.titles["reagent:6265"] = "Other vendors"
+tc.Show(ROWS)
+eq(bc[3].more.shown, false, "a non-routable row never gets a chevron")
+gc.titles["reagent:6265"] = nil
+local withChev = tc.frame.w
+tc.Show({ ROWS[2] })
+eq(withChev - tc.frame.w, 14, "the window is wider by the chevron width when one shows")
+eq(bc[1].more.shown, false, "hidden once the row has no alternatives")
+tc.Show(ROWS)
+eq(bc[1].more.opacity == nil or bc[1].more.opacity == 1, true, "chevron is a child of the row (dims with it)")
+eq(#bc[1].more.textures, 1, "chevron has only its arrow texture: no fill")
+eq(bc[1].more.drag, nil, "chevron is not draggable")
+eq(bc[1].more.text, nil, "arrow texture loads: no text mark")
+local nc = boot({ noCog = true }); nc.titles = { ammo = "T" }
+local tn = nc.new(); tn.Show(ROWS)
+eq(tn.Buttons()[1].more.text.textValue, ">", "no texture: a > mark instead")
+local nochoice = boot({ noChoice = true }); nochoice.titles = { ammo = "T" }
+local tnc = nochoice.new(); tnc.Show(ROWS)
+eq(tnc.Buttons()[1].more.shown, false, "no env.choiceTitle: no chevrons")
+tc.Demo({ ROWS[1] })
+eq(bc[1].more.shown, false, "no chevron while demo rows are drawn")
+tc.Demo(nil)
+eq(bc[1].more.shown, true, "and it is back after the demo")
+-- Tooltip.
+bc[1].more.scripts.OnEnter()
+eq(gc.tip.text .. "/" .. tostring(gc.tip.owner == bc[1].more) .. "/" .. tostring(gc.tip.shown), "Other repair vendors/true/true", "tooltip shows the title, owned by the chevron")
+bc[1].more.scripts.OnLeave()
+eq(gc.tip.shown, false, "leaving hides the tooltip")
+-- Click.
+gc.cfg.hudLocked = true
+bc[1].more.scripts.OnClick()
+eq(gc.chosen.row == ROWS[1] and gc.chosen.anchor == bc[1].more, true, "click calls choose with the row and the chevron")
+eq(#gc.went, 0, "and does not go to the vendor")
+gc.chosen = nil
+gc.cfg.hudLocked = false; gc.shift = true
+bc[1].more.scripts.OnClick()
+eq(gc.chosen, nil, "Shift on an unlocked window is the move gesture: nothing")
+gc.shift = false
+gc.shift = true; bc[1].scripts.OnDragStart(); gc.shift = false
+bc[1].more.scripts.OnClick()
+eq(gc.chosen, nil, "while moving: nothing")
+bc[1].scripts.OnDragStop()
+bc[1].more.scripts.OnClick()
+eq(gc.chosen ~= nil, true, "after the move ends, it works again")
+gc.chosen = nil
+tc.Move.Begin()
+bc[1].more.scripts.OnClick()
+eq(gc.chosen, nil, "during a Move transaction: nothing")
+tc.Move.Cancel()
 
 -- No frames on this client: New fails cleanly for the caller's pcall.
 local broken = boot({ frameThrows = true })

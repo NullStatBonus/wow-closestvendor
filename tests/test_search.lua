@@ -166,4 +166,52 @@ eq(name(S.Nearest(AUC, 0, 0, "auction", ALLIANCE)), "Near AH", "nearest auctione
 eq(name(S.NearestFrom({ [1] = AUC }, { continent = 1, x = 95, y = 0 }, "auction", ALLIANCE)), "Far AH", "from an anchor")
 eq(S.Nearest({}, 0, 0, "auction", ALLIANCE), nil, "none known")
 
+-- Several: up to n nearest, one per npc.
+local function names(list)
+    local t = {}
+    for i = 1, #list do t[i] = list[i][2] end
+    return table.concat(t, ",")
+end
+local sev = {
+    { 1, "A30",    1, 0, 0, 0, true,  0, 30, 0 },
+    { 2, "B10",    1, 0, 0, 0, false, 0, 10, 0 },
+    { 3, "C20",    1, 0, 0, 0, true,  0, 0, 20 },
+    { 4, "Horde5", 1, 0, 0, 2, true,  0, 5, 0 },
+    { 5, "D40",    1, 0, 0, 0, true,  0, 40, 0 },
+}
+eq(names(S.Several(sev, 0, 0, nil, ALLIANCE, 10)), "B10,C20,A30,D40", "several: nearest first, hostile skipped")
+eq(names(S.Several(sev, 0, 0, nil, HORDE, 2)), "Horde5,B10", "several: horde sees its own")
+eq(names(S.Several(sev, 0, 0, nil, ALLIANCE, 2)), "B10,C20", "several: capped at n")
+eq(names(S.Several(sev, 0, 0, "repair", ALLIANCE, 10)), "C20,A30,D40", "several: need filter")
+eq(names(S.Several(sev, 28, 0, nil, ALLIANCE, 3)), "A30,D40,B10", "several: position matters")
+eq(#S.Several(sev, 0, 0, nil, ALLIANCE, 0), 0, "several: n of 0 is empty")
+eq(#S.Several({}, 0, 0, nil, ALLIANCE, 3), 0, "several: empty bucket")
+eq(#S.Several(sev, 0, 0, "arrow", ALLIANCE, 3), 0, "several: nothing eligible")
+local dup = {
+    { 1, "Dup far",  1, 0, 0, 0, false, 0, 50, 0 },
+    { 2, "Other",    1, 0, 0, 0, false, 0, 20, 0 },
+    { 1, "Dup near", 1, 0, 0, 0, false, 0, 10, 0 },
+    { 3, "Third",    1, 0, 0, 0, false, 0, 30, 0 },
+    { 3, "Third far", 1, 0, 0, 0, false, 0, 90, 0 },
+}
+eq(names(S.Several(dup, 0, 0, nil, ALLIANCE, 10)), "Dup near,Other,Third", "several: one record per npc, the nearest, even when it comes later")
+eq(names(S.Several({ dup[3], dup[1] }, 0, 0, nil, ALLIANCE, 10)), "Dup near", "several: a far duplicate after the near one is ignored")
+eq(names(S.Several(dup, 0, 0, nil, ALLIANCE, 2)), "Dup near,Other", "several: a duplicate takes one slot")
+eq(names(S.Several(dup, 0, 0, nil, ALLIANCE, 3)), "Dup near,Other,Third", "several: duplicates leave room for others")
+
+-- SeveralTrainers: same rules; the tier rule applies.
+eq(names(S.SeveralTrainers(trainers, 0, 0, "Mining", ALLIANCE, 10)), "Close Ally,Mid Mining,Far Mining", "several trainers: nearest first, hostile skipped")
+eq(names(S.SeveralTrainers(trainers, 0, 0, "Mining", ALLIANCE, 2)), "Close Ally,Mid Mining", "several trainers: capped at n")
+eq(names(S.SeveralTrainers(tiered, 0, 0, "Blacksmithing", ALLIANCE, 10, 2)), "Unknown Smith,Expert Smith,Master Smith", "several trainers: tier rule skips lower tiers")
+eq(names(S.SeveralTrainers(tiered, 0, 0, "Blacksmithing", ALLIANCE, 10, 4)), "Master Smith", "several trainers: Artisan needs a known tier")
+eq(#S.SeveralTrainers(trainers, 0, 0, "Alchemy", ALLIANCE, 3), 0, "several trainers: nobody teaches it")
+eq(#S.SeveralTrainers({}, 0, 0, "Mining", ALLIANCE, 3), 0, "several trainers: empty bucket")
+local tdup = {
+    { 1, "Mine far",  1, 0, 0, 0, { Mining = true }, 50, 0 },
+    { 2, "Other",     1, 0, 0, 0, { Mining = true }, 20, 0 },
+    { 1, "Mine near", 1, 0, 0, 0, { Mining = true }, 0, 10 },
+}
+eq(names(S.SeveralTrainers(tdup, 0, 0, "Mining", ALLIANCE, 10)), "Mine near,Other", "several trainers: one per npc, the nearest")
+eq(names(S.SeveralTrainers(tdup, 0, 0, "Mining", ALLIANCE, 1)), "Mine near", "several trainers: a duplicate takes one slot")
+
 H.done()

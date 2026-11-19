@@ -69,3 +69,55 @@ function S.NearestTrainer(bucket, px, py, trade, playerFaction, mapId, need)
     end
     return best, onMap
 end
+
+-- Keep the n nearest records in list (nearest first, with their squared distances in ds), one per
+-- npcId (v[1]): a record already listed is replaced only by a closer one. Insertion into a list of
+-- size n, so the whole bucket is never sorted.
+local function keepNearest(list, ds, v, d, n)
+    local id = v[1]
+    for i = 1, #list do
+        if list[i][1] == id then
+            if d >= ds[i] then return end
+            table.remove(list, i)
+            table.remove(ds, i)
+            break
+        end
+    end
+    if #list >= n and d >= ds[#list] then return end
+    local at = #list + 1
+    while at > 1 and ds[at - 1] > d do at = at - 1 end
+    table.insert(list, at, v)
+    table.insert(ds, at, d)
+    if #list > n then list[#list], ds[#ds] = nil, nil end
+end
+
+-- Up to n eligible records (as Nearest), nearest first, at most one per npc (its nearest place).
+-- Used to offer alternate sellers.
+function S.Several(bucket, px, py, need, playerFaction, n)
+    local list, ds = {}, {}
+    if n < 1 then return list end
+    for i = 1, #bucket do
+        local v = bucket[i]
+        local fac = v[6]
+        if (fac == 0 or fac == playerFaction) and eligible(v, need) then
+            local dx, dy = v[9] - px, v[10] - py
+            keepNearest(list, ds, v, dx * dx + dy * dy, n)
+        end
+    end
+    return list
+end
+
+-- The same for trainers (as NearestTrainer, without the map result): up to n, nearest first, one per npc.
+function S.SeveralTrainers(bucket, px, py, trade, playerFaction, n, need)
+    local list, ds = {}, {}
+    if n < 1 then return list end
+    for i = 1, #bucket do
+        local v = bucket[i]
+        local fac = v[6]
+        if (fac == 0 or fac == playerFaction) and ns.Professions.Teaches(v[7][trade], need) then
+            local dx, dy = v[8] - px, v[9] - py
+            keepNearest(list, ds, v, dx * dx + dy * dy, n)
+        end
+    end
+    return list
+end

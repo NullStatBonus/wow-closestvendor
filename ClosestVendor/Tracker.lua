@@ -12,6 +12,8 @@
 --   env.go(row)         a routable row was clicked
 --   env.openSettings()  the cog was clicked
 --   env.shiftDown()     true while Shift is held
+--   env.choiceTitle(row)  tooltip title when a routable row has other sellers to pick from, else nil;
+--                       env.choose(row, anchor) opens the menu. Without them there are no chevrons.
 -- Tracker.New(env) returns { Show(rows), Demo(rows), Apply(), Reset(), frame }.
 local _, ns = ...
 
@@ -21,7 +23,7 @@ local T = {}
 ns.Tracker = T
 
 local NAME = "ClosestVendorTracker"
-local PAD, TITLE_H, ROW_H, MIN_W, COG = 8, 16, 16, 130, 16
+local PAD, TITLE_H, ROW_H, MIN_W, COG, CHEV = 8, 16, 16, 130, 16, 14
 local DEFAULT = { point = "LEFT", x = 60, y = 60 }
 
 function T.New(env)
@@ -110,6 +112,34 @@ function T.New(env)
             -- A demo or preview row stands for a real row kind: the click ends the demo and routes it.
             if b.row and b.row.routable then env.go(b.row) end -- a display-only row does nothing
         end)
+        -- The chevron: opens the seller list. Not draggable; it dims with the row (its child).
+        local more = CreateFrame("Button", nil, b)
+        more:SetSize(CHEV, ROW_H)
+        more:SetPoint("RIGHT", b, "RIGHT", 0, 0)
+        more:EnableMouse(true)
+        local arrow = more:CreateTexture(nil, "ARTWORK")
+        arrow:SetAllPoints()
+        arrow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
+        if not arrow:GetTexture() then -- no such texture on this client: a plain mark instead
+            more.text = ns.Presentation.Font(more, "GameFontNormal")
+            more.text:SetPoint("CENTER")
+            more.text:SetText(">")
+        end
+        more:SetScript("OnEnter", function()
+            if GameTooltip and more.title then
+                GameTooltip:SetOwner(more, "ANCHOR_RIGHT")
+                GameTooltip:SetText(more.title)
+                GameTooltip:Show()
+            end
+        end)
+        more:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+        more:SetScript("OnClick", function()
+            if moving or (transaction and transaction.active) then return end
+            if not cfg.hudLocked and env.shiftDown() == true then return end
+            if b.row and env.choose then env.choose(b.row, more) end
+        end)
+        more:Hide()
+        b.more = more
         buttons[i] = b
         return b
     end
@@ -159,6 +189,9 @@ function T.New(env)
             b.text:SetText(row.low and L["Low: %s"]:format(row.text) or row.text)
             if row.low then b.text:SetTextColor(1, 0.25, 0.25) else b.text:SetTextColor(0.867, 0.867, 0.867) end
             if row.low then b.cue:Show() else b.cue:Hide() end
+            local title = (not demo) and row.routable and env.choiceTitle and env.choiceTitle(row) or nil
+            b.more.title = title
+            if title then b.more:Show() else b.more:Hide() end
             local textWidth = math.min(520, b.text:GetStringWidth() or MIN_W)
             b.text:SetWidth(textWidth)
             local rowHeight = math.max(ROW_H, (b.text:GetStringHeight() or ROW_H) + 4)
@@ -167,10 +200,10 @@ function T.New(env)
             b:SetPoint("TOPRIGHT", -PAD, -(height - PAD))
             b:SetHeight(rowHeight)
             b:Show()
-            width = math.max(width, textWidth + 12 + 2 * PAD)
+            width = math.max(width, textWidth + 12 + (title and CHEV or 0) + 2 * PAD)
             height = height + rowHeight
         end
-        for i = #rows + 1, #buttons do buttons[i].row = nil; buttons[i]:Hide() end
+        for i = #rows + 1, #buttons do buttons[i].row = nil; buttons[i].more.title = nil; buttons[i]:Hide() end
         f:SetSize(width, height)
         f:Show()
     end
