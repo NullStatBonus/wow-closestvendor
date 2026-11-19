@@ -42,7 +42,7 @@ Closest Vendor tells you when it is a good time to repair, restock or make bag s
 
 **Restock without the trip planning.** At any merchant, it can fill your quiver or ammo pouch. It can also top up your class reagents (off by default). It buys only what you can afford and tells you in chat.
 
-**See it at a glance.** An optional status window shows what is low. Click a row to set a waypoint. You can make the background see-through, and the window is gentle on OLED screens.
+**See it at a glance.** An optional status window shows what is low. Click a row to set a waypoint, or click its arrow to pick another seller. You can make the background see-through, and the window is gentle on OLED screens.
 
 **Get started.** Install it and type `/cvn`. Every threshold is a setting under Options, AddOns, **Closest Vendor**. The full command list is in the README.
 

@@ -767,4 +767,60 @@ eq(select(2, boot({}).externalVendors(five)), nil, "missing: no reason")
 local none = boot(extGame(fakeNG())).externalVendors({})
 eq(#none, 0, "no maps asked for: no vendors")
 
+-- Choice menu: MenuUtil, dropdown fallback, MenuUtil error, neither.
+do
+    local items, picked = {}, {}
+    for i, n in ipairs({ "Alpha", "Beta" }) do
+        items[i] = { text = n, checked = i == 2, func = function() picked[#picked + 1] = n end }
+    end
+    local rec = {}
+    local root = {
+        CreateTitle = function(_, t) rec.title = t end,
+        CreateRadio = function(_, t, isSel, set) rec[#rec + 1] = { t, isSel(), set } end,
+    }
+    local A1 = boot({ MenuUtil = { CreateContextMenu = function(a, gen) rec.anchor = a; gen(a, root) end } })
+    eq(A1.hasMenu(), true, "MenuUtil: hasMenu")
+    eq(A1.menu("anc", "Pick", items), true, "MenuUtil: shown")
+    eq(rec.title, "Pick", "MenuUtil: title")
+    eq(rec.anchor, "anc", "MenuUtil: anchor")
+    eq(rec[1][2], false, "MenuUtil: first unchecked")
+    eq(rec[2][2], true, "MenuUtil: second checked")
+    rec[2][3]()
+    eq(picked[1], "Beta", "MenuUtil: func called on choose")
+
+    local function dropGame(extra)
+        local d = { entries = {} }
+        local g = {
+            UIParent = {},
+            CreateFrame = function(_, name) d.name = name; return {} end,
+            UIDropDownMenu_Initialize = function(_, init, mode) d.mode = mode; d.init = init end,
+            UIDropDownMenu_CreateInfo = function() return {} end,
+            UIDropDownMenu_AddButton = function(info) d.entries[#d.entries + 1] = info end,
+            ToggleDropDownMenu = function(_, _, _, a) d.anchor = a; d.init(nil, 1) end,
+        }
+        for k, v in pairs(extra or {}) do g[k] = v end
+        return g, d
+    end
+    local g, d = dropGame()
+    local A2 = boot(g)
+    eq(A2.hasMenu(), true, "dropdown: hasMenu")
+    eq(A2.menu("anc", "Pick", items), true, "dropdown: shown")
+    eq(d.name, "ClosestVendorChoiceMenu", "dropdown: named frame")
+    eq(d.mode, "MENU", "dropdown: MENU mode")
+    eq(d.anchor, "anc", "dropdown: toggled at anchor")
+    eq(d.entries[1].isTitle, true, "dropdown: title entry")
+    eq(d.entries[1].text, "Pick", "dropdown: title text")
+    eq(d.entries[3].checked, true, "dropdown: checked item")
+    d.entries[2].func()
+    eq(picked[2], "Alpha", "dropdown: func called")
+
+    g, d = dropGame({ MenuUtil = { CreateContextMenu = boom } })
+    eq(boot(g).menu("anc", "Pick", items), true, "MenuUtil throws: dropdown shown")
+    eq(#d.entries, 3, "MenuUtil throws: dropdown filled")
+
+    local A4 = boot({})
+    eq(A4.hasMenu(), false, "neither: hasMenu false")
+    eq(A4.menu("anc", "Pick", items), false, "neither: menu false")
+end
+
 H.done()

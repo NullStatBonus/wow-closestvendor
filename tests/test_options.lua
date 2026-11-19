@@ -30,7 +30,10 @@ eq(pages.appearance.args.notices.order..","..pages.appearance.args.hud.order,"1,
 eq(pages.appearance.args.toast,nil,"no separate Toast tab")
 eq(pages.about.args.title.fontSize,"large","About matches KT title hierarchy")
 eq(pages.about.args.version.fontSize,"small","About version is secondary")
-eq(pages.about.args.cmd_demo.name:find("/cvn demo",1,true)~=nil,true,"About has a dedicated demo command row")
+do
+    local keys={}; for k in pairs(pages.about.args) do keys[#keys+1]=k end; table.sort(keys)
+    eq(table.concat(keys,","),"gap0,purpose,title,version","About shows only name, version and purpose")
+end
 local function checkWidths(args)
     for _,opt in pairs(args) do
         if opt.type=="select" then

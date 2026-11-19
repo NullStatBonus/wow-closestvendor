@@ -519,6 +519,25 @@ local function buildWindow()
             if controller and not controller.Go(row.kind, row.id) then log.Add("row click: nothing pinned") end
             touchWindow()
         end,
+        -- The row's arrow: shown with this tooltip title when there is another seller to choose.
+        choiceTitle = function(row)
+            if not (controller and A.hasMenu()) then return nil end
+            return controller.ChoiceTitle(row.kind, row.id)
+        end,
+        choose = function(row, anchor)
+            local c = controller and controller.Choices(row.kind, row.id)
+            if not c then return end
+            local items = {}
+            for i, e in ipairs(c.entries) do
+                items[i] = { text = e.label, checked = e.default, func = function()
+                    log.Add("choice: " .. row.key .. " -> " .. tostring(e.v[2]))
+                    endShows()
+                    if not controller.Pick(row.kind, row.id, e) then log.Add("choice: nothing pinned") end
+                    touchWindow()
+                end }
+            end
+            if not A.menu(anchor, c.title, items) then log.Add("choice: no menu control") end
+        end,
         openSettings = function()
             if not openSettings() then say(L["The settings page is not available here: %s. Use /cvn help."]:format(ns.Options.failure or colorNote)) end
         end,

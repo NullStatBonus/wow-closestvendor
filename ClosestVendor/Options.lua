@@ -271,23 +271,6 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note)
     body(about, "version", function() return grey(L["Version %s"]:format(tostring(O.Version and O.Version() or "?"))) end, "small")
     body(about, "gap0", " ", "small")
     body(about, "purpose", L["Finds nearby vendors, trainers and supplies when you need them."])
-    body(about, "gap1", " ", "small")
-    add(about, "commandsHeading", { type = "header", name = L["Commands"] })
-    for _, command in ipairs({
-        { "settings", "/cvn", L["Open these settings."] },
-        { "help", "/cvn help", L["Show addon information and commands."] },
-        { "status", "/cvn status", L["Show current settings and feature availability."] },
-        { "demo", "/cvn demo", L["Run a tour of real routes, questions and notifications. Your waypoint comes back at the end."] },
-        { "sound", "/cvn sound <name>", L["Choose and play the notification sound."] },
-        { "debug", "/cvn debug on", L["Record diagnostics while you repeat a problem."] },
-        { "log", "/cvn log", L["Copy the debug report to share it."] },
-    }) do
-        body(about, "cmd_" .. command[1], L["|cffdddddd%s|r  %s"]:format(command[2], grey(command[3])))
-    end
-    about.commandsHelp = { type = "description", fontSize = "small", width = "full", name = grey(L["Type these commands in chat. Start with settings for changes, help for usage, or the demo to see the addon in action."]), order = about.commandsHeading.order + .1 }
-    body(about, "gap2", " ", "small")
-    body(about, "common", L["Use /cvn settings [page], /cvn help [topic], /cvn get <key>, /cvn set <key> <value>, /cvn preview [kind] and /cvn log clear."])
-    body(about, "tests", grey(L["Legacy /cvn test commands are live integration tests and may set a real waypoint."]), "small")
     local function ink(args)
         for _, opt in pairs(args) do
             if opt.type == "description" then

@@ -833,6 +833,45 @@ function A.navApi(print)
     }
 end
 
+-- Choice menu ------------------------------------------------------------------------------
+
+function A.hasMenu()
+    if MenuUtil and type(MenuUtil.CreateContextMenu) == "function" then return true end
+    return type(UIDropDownMenu_Initialize) == "function" and type(UIDropDownMenu_CreateInfo) == "function"
+        and type(UIDropDownMenu_AddButton) == "function" and type(ToggleDropDownMenu) == "function"
+        and type(CreateFrame) == "function"
+end
+
+local menuFrame
+-- Shows a menu at anchor: a title, then items { text, checked, func }. Choosing one runs its func.
+-- Tries MenuUtil, then the classic dropdown; true when one was shown.
+function A.menu(anchor, title, items)
+    if MenuUtil and type(MenuUtil.CreateContextMenu) == "function" then
+        local ok = pcall(MenuUtil.CreateContextMenu, anchor, function(_, root)
+            root:CreateTitle(title)
+            for _, item in ipairs(items) do
+                root:CreateRadio(item.text, function() return item.checked end, function() item.func() end)
+            end
+        end)
+        if ok then return true end
+    end
+    if not A.hasMenu() or type(UIDropDownMenu_Initialize) ~= "function" then return false end
+    return (pcall(function()
+        menuFrame = menuFrame or CreateFrame("Frame", "ClosestVendorChoiceMenu", UIParent, "UIDropDownMenuTemplate")
+        UIDropDownMenu_Initialize(menuFrame, function(_, level)
+            local info = UIDropDownMenu_CreateInfo()
+            info.text, info.isTitle, info.notCheckable = title, true, true
+            UIDropDownMenu_AddButton(info, level)
+            for _, item in ipairs(items) do
+                info = UIDropDownMenu_CreateInfo()
+                info.text, info.checked, info.func, info.notCheckable = item.text, item.checked, item.func, false
+                UIDropDownMenu_AddButton(info, level)
+            end
+        end, "MENU")
+        ToggleDropDownMenu(1, nil, menuFrame, anchor, 0, 0)
+    end))
+end
+
 -- Version, client and locale for the diagnostic report.
 function A.clientInfo()
     local meta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata

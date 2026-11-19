@@ -2203,3 +2203,51 @@ do
     eq(d.env.ClosestVendorCharDB.cfg.bagThreshold, 2, "no earlier settings: defaults")
     eq(d.env.ClosestVendorDB.cfg, nil, "and nothing is written to the account table")
 end
+
+-- The row's arrow lists other sellers in the game's menu; picking one pins it. No menu control: no arrow.
+do
+    local function arrow(game, row)
+        for _, f in ipairs(game.frames) do
+            if f.parent == row and f.kind == "Button" then return f end
+        end
+    end
+    local g = boot({ tomtom = true }); login(g); g.autoAccept = false
+    local menu
+    g.env.MenuUtil = { CreateContextMenu = function(anchor, build)
+        menu = { anchor = anchor, items = {} }
+        build(anchor, {
+            CreateTitle = function(_, t) menu.title = t end,
+            CreateRadio = function(_, text, isSelected, pick) menu.items[#menu.items + 1] = { text = text, checked = isSelected(), pick = pick } end,
+            CreateButton = function(_, text, pick) menu.items[#menu.items + 1] = { text = text, pick = pick } end,
+        })
+    end }
+    g.env.SlashCmdList.CLOSESTVENDOR("hud row bags always"); flush(g)
+    local row = window(g).rows[1]
+    local more = arrow(g, row)
+    eq(more ~= nil and more.shown, true, "the bag row has an arrow: several vendors buy items")
+    more.scripts.OnClick()
+    eq(menu and menu.anchor, more, "the menu opens at the arrow")
+    eq(menu.title, "Other vendors to sell to", "with the row's title")
+    eq(#menu.items >= 2 and #menu.items <= 4, true, "the default and up to three others: " .. #menu.items)
+    eq(menu.items[1].checked, true, "the default is marked")
+    eq(#g.tomtom, 0, "opening the menu sets no waypoint")
+    local second = menu.items[2].text
+    menu.items[2].pick()
+    local name = second:match("^(.-) %(")
+    eq(g.tomtom[#g.tomtom], name, "picking the second entry pins it")
+    eq(has(lastPrinted(g), "Navigating to " .. name), true, "and chat names it: " .. lastPrinted(g))
+
+    -- Only one friendly repair vendor: no arrow on the durability row.
+    g.env.SlashCmdList.CLOSESTVENDOR("hud row bags never")
+    g.env.SlashCmdList.CLOSESTVENDOR("hud row durability always"); flush(g)
+    eq(arrow(g, window(g).rows[1]).shown, false, "a row with one seller has no arrow")
+
+    -- No menu control on this client: no arrow, and the row click still routes.
+    local n = boot({ tomtom = true }); login(n); n.autoAccept = false
+    n.env.SlashCmdList.CLOSESTVENDOR("hud row bags always"); flush(n)
+    local r = window(n).rows[1]
+    local a = arrow(n, r)
+    eq(a == nil or not a.shown, true, "no menu control: no arrow")
+    r.scripts.OnClick()
+    eq(#n.tomtom, 1, "and the row click still pins a vendor")
+end

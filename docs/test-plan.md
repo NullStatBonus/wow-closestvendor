@@ -606,6 +606,27 @@ Needs any addon that shares sounds, for example a SharedMedia pack (free, no gol
 - [ ] `/cvn test remind` plays the chosen sound-pack sound.
 - [ ] Disable the pack and reload. `/cvn test remind` plays the whisper ping, and the Sound tab still shows the chosen sound by name. Enable the pack and reload: the chosen sound plays again.
 
+## 29. About page
+
+- [ ] Open About: it shows the name, the version and the purpose sentence, and no command list. `/cvn help` still lists the commands.
+
+## 30. Other sellers
+
+Any level; Stormwind or Orgrimmar has several repair vendors.
+
+- [ ] Durability row visible (`/cvn hud row durability always`): the row has an arrow at its right end. Hover: "Other repair vendors".
+- [ ] Click the arrow: a menu opens at the arrow. The first entry is marked, then up to three more with zone and yards. No waypoint changes yet.
+- [ ] Pick the second entry: the menu closes, the waypoint moves there and chat says "Navigating to ...".
+- [ ] Open it again and press Escape: the menu closes and the waypoint stays.
+- [ ] Click the row outside the arrow: it routes to the marked seller as before.
+- [ ] Shrink the window to its smallest (scale 50%, short rows) with a low row showing: the arrow does not cover the text and looks right. If it does not, switch to right-click on the row (see the change design).
+- [ ] Unlocked window: Shift-click on the arrow does nothing; dragging from the arrow does not move the window. Locked window: the arrow still opens the menu.
+- [ ] A row with only one known seller has no arrow.
+- [ ] In a contested zone with an Alliance and a Horde camp (for example Stranglethorn Vale), the list shows none of the other faction.
+- [ ] Turn on `/cvn ah on`, ammo row: the list can show one auctioneer and picking it says "at the auction house".
+- [ ] A profession row near its cap: the list shows only trainers that teach the next tier.
+- [ ] Repeat the menu checks on the other client (Classic Era and WoW Forever).
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

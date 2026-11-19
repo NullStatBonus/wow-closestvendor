@@ -6,7 +6,7 @@ The common slash-command verbs and the typed public setting keys that commands a
 ## Requirements
 
 ### Requirement: Common command discovery
-The addon SHALL expose settings, status, help, demo, preview, typed get/set, debug and log commands. Bare `/cvn` SHALL open Home; `/cvn help` SHALL display addon purpose, scope and commands; `/cvn status` SHALL report current settings. Existing valid domain commands SHALL remain available. Help, About and README SHALL document safe demo. Visual-preview supersedes old demo side effects.
+The addon SHALL expose settings, status, help, demo, preview, typed get/set, debug and log commands. Bare `/cvn` SHALL open Home; `/cvn help` SHALL display addon purpose, scope and commands; `/cvn status` SHALL report current settings. Existing valid domain commands SHALL remain available. Help and README SHALL document safe demo. Visual-preview supersedes old demo side effects.
 
 #### Scenario: Legacy entry point
 - **WHEN** `/cvn` is used without arguments

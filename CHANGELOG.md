@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.0
+
+- **New: You can choose another seller from the status window.** A row with more than one known seller shows an arrow. Click the arrow to see up to three other sellers and pick one.
+- Changed: The About page shows only the name, the version and what the addon does. `/cvn help` lists the commands.
+
 ## 1.8.0
 
 - **New: The notification sound can come from a sound pack.** If another addon shares sounds through LibSharedMedia, they show after the built-in sounds. `/cvn sound <name>` accepts their names.
