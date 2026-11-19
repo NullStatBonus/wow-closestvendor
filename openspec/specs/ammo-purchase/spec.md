@@ -36,7 +36,7 @@ The addon SHALL buy at once, without a dialog, by default. When the "ask first" 
 - **THEN** a dialog shows the count and price, and nothing is bought until the player accepts
 
 ### Requirement: Ammo grade selection
-The addon SHALL choose which item to buy by a grade mode set separately for arrows and for bullets: "same as equipped" (the default) buys the item in the ammo slot; "best usable" buys the merchant's ammo of the right kind with the highest required level the character meets; "cheapest" buys the lowest price per unit. If the mode finds no item, or the equipped ammo is unknown, the addon SHALL fall back to the equipped item, and if the merchant does not sell that either, SHALL buy nothing and say so in chat.
+The addon SHALL choose which item to buy by a grade mode set separately for arrows and for bullets: "same as equipped" (the default) buys the item in the ammo slot; "best usable" buys the merchant's ammo of the right kind with the highest required level the character meets; "cheapest" buys the lowest price per unit.
 
 #### Scenario: Same as equipped
 - **WHEN** Jagged Arrows are equipped, the mode is "same as equipped", and the merchant sells them
@@ -86,3 +86,10 @@ The ammo purchase question SHALL use a dialog of its own and SHALL close when th
 #### Scenario: Different merchant
 - **WHEN** Yes is answered while a merchant offers a different item at that slot
 - **THEN** nothing is bought and no "Bought" line is printed
+
+### Requirement: Ammo grade fallback
+If the grade mode finds no item, or the equipped ammo is unknown, the addon SHALL fall back to the equipped item, and if the merchant does not sell that either, SHALL buy nothing and say so in chat.
+
+#### Scenario: Equipped item not sold either
+- **WHEN** neither the mode's item nor the equipped item is sold at this merchant
+- **THEN** nothing is bought and a chat line says so

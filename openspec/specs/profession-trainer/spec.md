@@ -6,7 +6,7 @@ Tell the player when a profession is close to its current tier cap and offer to 
 ## Requirements
 
 ### Requirement: Profession trainer trigger
-The addon SHALL ask the player to navigate to the closest known trainer for a profession when the points remaining to that profession's current tier cap are at or below the configured threshold (default 10) and a higher tier exists to learn. The cap SHALL come from the game, not from a built-in table. When the next tier is Artisan (cap 225) and no trainer tiers are known, the addon SHALL NOT ask, mark the row low or route, because few trainers teach it; a click on that profession's row SHALL say so in chat. When trainer tiers are known (NorgannonDB), Artisan SHALL be asked and routed like the other tiers. The trainer chosen SHALL be the closest one that teaches the tier needed: a trainer known to teach less SHALL be skipped, and one whose tier is not known SHALL be used for Journeyman and Expert but never for Artisan.
+The addon SHALL ask the player to navigate to the closest known trainer for a profession when the points remaining to that profession's current tier cap are at or below the configured threshold (default 10) and a higher tier exists to learn. The cap SHALL come from the game, not from a built-in table.
 
 #### Scenario: Near the cap
 - **WHEN** a profession is at 145 of 150 with the default threshold and a higher tier exists
@@ -125,3 +125,25 @@ The addon SHALL NOT ask about a profession near its cap, nor mark it low in the 
 #### Scenario: Level unreadable
 - **WHEN** the player's level cannot be read
 - **THEN** the profession is treated as before, with no level check
+
+### Requirement: Artisan needs known trainer tiers
+When the next tier is Artisan (cap 225) and no trainer tiers are known, the addon SHALL NOT ask, mark the row low or route, because few trainers teach it; a click on that profession's row SHALL say so in chat. When trainer tiers are known (NorgannonDB), Artisan SHALL be asked and routed like the other tiers.
+
+#### Scenario: No trainer tiers known
+- **WHEN** no trainer tiers are known and a profession is at 220 of 225 at level 35
+- **THEN** no question is asked and the profession row is not marked low
+
+#### Scenario: Trainer tiers known
+- **WHEN** NorgannonDB is installed and a profession is at 220 of 225 at level 35
+- **THEN** the player is asked as for any other tier
+
+### Requirement: Trainer teaches the needed tier
+The trainer chosen SHALL be the closest one that teaches the tier needed: a trainer known to teach less SHALL be skipped, and one whose tier is not known SHALL be used for Journeyman and Expert but never for Artisan.
+
+#### Scenario: Unknown tier for Expert
+- **WHEN** Expert is next and the closest trainer's tier is not known
+- **THEN** that trainer is chosen
+
+#### Scenario: Unknown tier for Artisan
+- **WHEN** Artisan is next and the closest trainer's tier is not known
+- **THEN** that trainer is skipped for one known to teach Artisan

@@ -47,7 +47,7 @@ When a bow, crossbow or gun is equipped, the addon SHALL request navigation to a
 - **THEN** no ammo navigation is requested
 
 ### Requirement: Repair takes priority
-When several triggers are active, the addon SHALL handle them one at a time in the order repair, ammo, reagent, food, water, pet food, sell, profession trainer. A repair or ammo trip also covers selling, and a lower-priority request SHALL NOT replace a higher-priority one that is still open or active. A reagent, food, water, pet food or trainer trip does not cover selling. A request resolves when its condition clears, a merchant opens for it, the player answers No, or no vendor serves it. A request that a higher one replaces SHALL be asked again after that one resolves, if its condition still holds.
+When several triggers are active, the addon SHALL handle them one at a time in the order repair, ammo, reagent, food, water, pet food, sell, profession trainer. A lower-priority request SHALL NOT replace a higher-priority one that is still open or active.
 
 #### Scenario: Both conditions active
 - **WHEN** bags are at threshold and durability is below threshold
@@ -139,7 +139,7 @@ The addon SHALL clear a vendor waypoint when a merchant window opens at a vendor
 - **THEN** the trainer waypoint stays
 
 ### Requirement: Settings panel
-The addon SHALL expose Home, Restock (Ammo, Reagents, Supplies), Navigation, Appearance (Notifications, Status window, Sound), Advanced and About using AceConfig/AceConfigDialog and AceGUI, following settings-interaction. Home SHALL hold every switch that decides whether the addon acts: the warning switches with bag, durability and profession thresholds, Destination on another map with Preferred target, and On-screen notice. Ammo, Reagents and Supplies SHALL retain all existing feature, threshold, grade and buying controls. Navigation SHALL contain waypoint method, instance anchor and auction routing. Appearance SHALL contain notification style, Status window controls with Lock position first, visibility modes, visual previews and positioning. The notification sound SHALL be on the Appearance Sound tab. Advanced SHALL show character scope and diagnostics; About SHALL show version and purpose. `/cvn config`, `/cvn options` and `/cvn settings` SHALL open Home; `/cvn settings <page>` SHALL open a child page or tab by its own name. Changes SHALL use the same saved values, limits and immediate refresh as slash commands. Game-options entries SHALL use AceConfigDialog registration where supported; without native Settings the standalone Ace dialog and slash commands SHALL continue working.
+The addon SHALL expose Home, Restock (Ammo, Reagents, Supplies), Navigation, Appearance (Notifications, Status window, Sound), Advanced and About using AceConfig/AceConfigDialog and AceGUI, following settings-interaction. Changes SHALL use the same saved values, limits and immediate refresh as slash commands. Game-options entries SHALL use AceConfigDialog registration where supported; without native Settings the standalone Ace dialog and slash commands SHALL continue working.
 
 #### Scenario: Change a threshold in the panel
 - **WHEN** the player moves the bag slider to 4
@@ -331,3 +331,54 @@ When the player changes zone or enters an instance while a warning's question is
 #### Scenario: Combat
 - **WHEN** a question is open and combat starts
 - **THEN** the question stays open and Yes still sets the waypoint
+
+### Requirement: Trips that cover selling
+A repair or ammo trip SHALL also cover selling. A reagent, food, water, pet food or trainer trip SHALL NOT cover selling.
+
+#### Scenario: Repair covers selling
+- **WHEN** a repair trip is active and bags reach their threshold
+- **THEN** no separate sell question is asked
+
+#### Scenario: Reagent does not cover selling
+- **WHEN** a reagent trip is active and bags reach their threshold
+- **THEN** the sell question is asked after the reagent request resolves
+
+### Requirement: When a request resolves
+A request SHALL resolve when its condition clears, a merchant opens for it, the player answers No, or no vendor serves it. A request that a higher one replaces SHALL be asked again after that one resolves, if its condition still holds.
+
+#### Scenario: Answer No
+- **WHEN** the player answers No to a repair question while ammo is also low
+- **THEN** the repair request resolves and the ammo question is asked
+
+### Requirement: Settings page contents
+Home SHALL hold every switch that decides whether the addon acts: the warning switches with bag, durability and profession thresholds, Destination on another map with Preferred target, and On-screen notice. Ammo, Reagents and Supplies SHALL retain all existing feature, threshold, grade and buying controls. Navigation SHALL contain waypoint method, instance anchor and auction routing.
+
+#### Scenario: Home holds the switches
+- **WHEN** the player opens Home
+- **THEN** it shows the warning switches with their thresholds, Destination on another map, Preferred target and On-screen notice
+
+#### Scenario: Navigation page
+- **WHEN** the player opens Navigation
+- **THEN** it shows waypoint method, instance anchor and auction routing
+
+### Requirement: Appearance, Advanced and About contents
+Appearance SHALL contain notification style, Status window controls with Lock position first, visibility modes, visual previews and positioning. The notification sound SHALL be on the Appearance Sound tab. Advanced SHALL show character scope and diagnostics; About SHALL show version and purpose.
+
+#### Scenario: Sound tab
+- **WHEN** the player opens Appearance
+- **THEN** the notification sound is on its Sound tab
+
+#### Scenario: About page
+- **WHEN** the player opens About
+- **THEN** it shows the version and the purpose
+
+### Requirement: Opening a settings page
+`/cvn config`, `/cvn options` and `/cvn settings` SHALL open Home; `/cvn settings <page>` SHALL open a child page or tab by its own name.
+
+#### Scenario: Open Home
+- **WHEN** the player runs `/cvn settings`
+- **THEN** Home opens
+
+#### Scenario: Open a page by name
+- **WHEN** the player runs `/cvn settings navigation`
+- **THEN** the Navigation page opens
