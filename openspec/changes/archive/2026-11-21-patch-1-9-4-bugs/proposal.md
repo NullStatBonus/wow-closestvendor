@@ -11,6 +11,7 @@ Patch 1.9.4 gathers the open bug and small-refactor issues: #41 (small command a
 - Worn-gear events fold into one check; the debug log gets one line with the count instead of a raw line per event.
 - Load drops old account-level keys and the retired `toastLocked`.
 - The demo restores the player's game waypoint only when the slot was readable, and clears its made-up rows when a step timer fails.
+- A bind at the same inn is also applied on logout or reload (#48). `/cvn reagent` accepts the game's item name (#53).
 - CI uses `actions/checkout@v5`. `tests/test_move.lua` covers Move. `AGENTS.md` states the Nav exception to the Adapter rule.
 
 ## Capabilities
@@ -27,4 +28,4 @@ None.
 
 - Code: `Core.lua`, `Controller.lua`, `Nav.lua`, `Commands.lua`, `Presentation.lua`, `Options.lua`, workflows.
 - No new player sentence. No saved-data break (old keys are removed).
-- Out of scope: #48 (needs an in-game check), #50 (test plan rewrite), `/cvn reagent` names on other locales (new issue), the enhancements.
+- Out of scope: #50 (test plan rewrite), the enhancements.

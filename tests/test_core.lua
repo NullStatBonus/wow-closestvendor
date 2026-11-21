@@ -1571,6 +1571,14 @@ g.pos = { map = 100, x = 0.3, y = 0.4 }
 g.onEvent("CONFIRM_BINDER", "Goldshire")
 g.onEvent("ZONE_CHANGED_NEW_AREA")
 eq(tostring(g.env.ClosestVendorCharDB.hearth.x), "300", "same inn, next zone change: the position is learned")
+-- A client with no bind event: binding and then logging out (or /reload) keeps the position.
+g = boot(); login(g); g.bind = "Goldshire"
+g.onEvent("PLAYER_ENTERING_WORLD")
+g.pos = { map = 100, x = 0.3, y = 0.4 }
+g.onEvent("CONFIRM_BINDER", "Goldshire")
+g.pos = { map = 100, x = 0.9, y = 0.9 }
+g.onEvent("PLAYER_LOGOUT")
+eq(tostring(g.env.ClosestVendorCharDB.hearth.x), "300", "logout right after the bind: the position is saved")
 g = boot(); login(g); g.bind = "Goldshire"
 g.onEvent("PLAYER_ENTERING_WORLD")
 g.pos = { map = 100, x = 0.3, y = 0.4 }

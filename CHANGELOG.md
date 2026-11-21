@@ -9,6 +9,8 @@
 - Fixed: The addon keeps your own map waypoint when it is near the addon waypoint. Before, it could remove yours.
 - Fixed: After `/cvn demo`, the status window shows real rows when a timer fails. Before, the made-up rows stayed.
 - Fixed: After `/cvn demo`, the addon does not set your old waypoint when the game cannot say what is there. Before, it could replace a newer waypoint.
+- Fixed: A bind at the same inn is kept when you log out or reload at once. Before, the addon could lose the inn's position.
+- Fixed: `/cvn reagent` accepts the reagent name in your game language. Before, only English names worked.
 - Changed: Durability and inventory events start one check each burst. The addon removes old saved keys at login.
 
 ## 1.9.3

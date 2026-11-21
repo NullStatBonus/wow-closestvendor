@@ -677,7 +677,11 @@ Before the first check: type `/cvn debug on`, then `/reload`. After the last che
   Check: nothing to see in game.
   Log: `ClosestVendorDB` has no `hearth`, `lastOutside`, `professions` or `log` key.
 
-No in-game check, unit tests only: the Unfriendly NorgannonDB trainer, the vendor and auctioneer tie in whole yards, the player waypoint next to the addon's, the demo with an unreadable waypoint or a failed timer, and Move (Done, Cancel, lock).
+- [ ] Classic Era only. Setup: bind your hearthstone at an inn you are not bound to, then type `/reload` at once.
+  Check: nothing changes on screen. The reviewer confirms this from the saved file.
+  Log: `ClosestVendorCharDB.hearth` has `x` and `y` for that inn.
+
+No in-game check, unit tests only: the reagent names in another game language, the Unfriendly NorgannonDB trainer, the vendor and auctioneer tie in whole yards, the player waypoint next to the addon's, the demo with an unreadable waypoint or a failed timer, and Move (Done, Cancel, lock).
 
 ## Not covered yet
 

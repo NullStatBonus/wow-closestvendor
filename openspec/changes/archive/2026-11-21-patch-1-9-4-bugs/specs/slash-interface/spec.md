@@ -27,3 +27,11 @@ The addon SHALL expose settings, status, help, demo, preview, typed get/set, deb
 - **WHEN** log or log clear is used
 - **THEN** log opens a copyable report; new log clear confirms irreversible diagnostic-only clearing and never clears gameplay data
 
+## ADDED Requirements
+
+### Requirement: Reagent names in the game language
+`/cvn reagent on|off <name>` SHALL accept the game's own item name as well as the English name, and `/cvn reagent` replies and `/cvn reagents` SHALL print the game's name when the game has it.
+
+#### Scenario: Localized name
+- **WHEN** the game names item 17020 "Poudre des arcanes" and the player types `/cvn reagent off poudre des arcanes`
+- **THEN** that reagent is switched off and the reply uses the game's name

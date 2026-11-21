@@ -77,3 +77,10 @@ The initial public registry SHALL provide the keys, types, bounds, defaults and 
 | appearance.toast.background-opacity | integer 0–100 | 100 | character |
 | appearance.toast.text-opacity | integer 0–100 | 100 | character |
 | appearance.toast.scale | integer 50–200 | 100 | character |
+
+### Requirement: Reagent names in the game language
+`/cvn reagent on|off <name>` SHALL accept the game's own item name as well as the English name, and `/cvn reagent` replies and `/cvn reagents` SHALL print the game's name when the game has it.
+
+#### Scenario: Localized name
+- **WHEN** the game names item 17020 "Poudre des arcanes" and the player types `/cvn reagent off poudre des arcanes`
+- **THEN** that reagent is switched off and the reply uses the game's name

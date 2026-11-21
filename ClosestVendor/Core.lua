@@ -758,7 +758,7 @@ SLASH_CLOSESTVENDOR1 = "/cvn"
 SLASH_CLOSESTVENDOR2 = "/closestvendor"
 SlashCmdList["CLOSESTVENDOR"] = function(msg)
     if not DB then return end
-    local lines, action = ns.Commands.Run(CHAR.cfg, msg, A.classToken())
+    local lines, action = ns.Commands.Run(CHAR.cfg, msg, A.classToken(), A.itemName)
     for _, line in ipairs(lines) do say(line) end
     if action and action[1] == "read" then return end
     if action and action[1] == "open" then
@@ -898,7 +898,8 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         if DB then noteBinder(arg1) end
         return
     end
-    if event == "HEARTHSTONE_BOUND" then
+    if event == "HEARTHSTONE_BOUND" or event == "PLAYER_LOGOUT" then
+        -- Logout and reload also apply a bind the client did not announce, before the question is lost.
         if DB then learnHearth() end
         return
     end
@@ -979,7 +980,7 @@ end)
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA",
         "BAG_UPDATE_DELAYED", "UPDATE_INVENTORY_DURABILITY", "UNIT_INVENTORY_CHANGED", "PLAYER_EQUIPMENT_CHANGED",
         "PLAYER_REGEN_ENABLED", "MERCHANT_SHOW", "TRAINER_SHOW", "TRAINER_UPDATE", "SKILL_LINES_CHANGED",
-        "TRADE_SKILL_SHOW", "UNIT_SPELLCAST_SUCCEEDED", "SPELLS_CHANGED" }) do
+        "TRADE_SKILL_SHOW", "UNIT_SPELLCAST_SUCCEEDED", "SPELLS_CHANGED", "PLAYER_LOGOUT" }) do
     ns.frame:RegisterEvent(e)
 end
 -- Registering an event the client does not have is an error, and this one's name is unverified.

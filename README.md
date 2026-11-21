@@ -487,6 +487,7 @@ The legacy `test` commands are live integration tests: accepting a question can 
 - They ignore the state of your bags, gear and ammo.
 - Yes sets the pin.
 - Opening any vendor window clears the pin.
+- `/cvn reagent on|off <name>` accepts the English name or the name your game shows. `/cvn reagents` prints the game's name once the game has loaded the item.
 - `/cvn debug on` turns on the debug log. It records decisions and failures. Durability and inventory events are not logged one by one: one line, "gear events: N folded into one check", gives the count.
 - `/cvn debug off` turns it off.
 - `/cvn log` shows a report that you can copy.
