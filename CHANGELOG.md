@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.2
+
+- **Fixed: When you click a row, the open warning comes back after that trip.** Before, the warning was lost or blocked the other warnings.
+- Fixed: After you answer No, the next warning waits for a map position. Before, it could stop and never show.
+- Fixed: A trainer question closes when you change zone. Before, Yes could route you from the old place.
+- Fixed: The bag space warning shows after you decline repair and ammo. Before, the addon did not ask about it.
+- Fixed: When you change to a gun or to a pet that eats other food, the addon asks again. Before, it kept the old vendor.
+
 ## 1.9.1
 
 - **Fixed: When you click Yes later, the addon buys only the ammo or reagents you still need.** Before, it bought the full amount, also after you bought some by hand.

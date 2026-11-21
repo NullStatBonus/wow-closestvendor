@@ -43,6 +43,7 @@ local function world(over)
         dead = function() return w.dead end,
         instanceType = function() return w.instance end,
         anchor = function(which) return w.anchors and w.anchors[which] end,
+        evaluate = w.evaluate,
         after = (not w.noAfter) and function(s, fn)
             if w.noTimers then return false end
             w.timers = w.timers or {}
@@ -1676,5 +1677,99 @@ eq(w.says[2], "You are in an instance, so the search started from your hearthsto
 w = world({ instance = "party", anchors = {} })
 eq(w.c.Pick("sell", nil, { v = VENDORS[1] }), false, "nothing to route now: not pinned")
 eq(w.setCount, 0, "no waypoint")
+
+-- A click keeps the warning it closes (#39).
+local SMITH = { 5, "Smith", 100, 0.9, 0.1, 0, true, 0, 90, 0, 0, 0 }
+local function clicky(totals, over)
+    local o = { dur = 10, autoAccept = false, buckets = { [1] = { SV[1], SV[2], SV[3], SV[4], SMITH } } }
+    for k, v in pairs(over or {}) do o[k] = v end
+    return supply("WARRIOR", totals, nil, nil, o)
+end
+w = clicky({ food = 3, water = 0, healthstone = 0 })
+w.c.Evaluate()
+eq(w.prompts[1].kind, "repair", "repair question open")
+eq(w.c.Go("supply", "food"), true, "low food row clicked")
+eq(w.cancelCount >= 1, true, "the repair question closes")
+w.c.Evaluate()
+eq(#w.prompts, 1, "no repair question during the clicked trip")
+w.c.OnMerchantShow()
+w.c.Evaluate()
+eq(#w.prompts .. ":" .. w.prompts[#w.prompts].kind, "2:repair", "repair asked after the merchant")
+w = clicky({ food = 3, water = 0, healthstone = 0 })
+w.c.Evaluate()
+local ch = w.c.Choices("supply", "food")
+eq(w.c.Pick("supply", "food", ch.entries[1]), true, "a seller choice")
+w.c.Evaluate()
+eq(#w.prompts, 1, "choice: no repair question during the trip")
+w.c.OnMerchantShow(); w.c.Evaluate()
+eq(w.prompts[#w.prompts].kind, "repair", "choice: repair asked after the merchant")
+-- A row that is not low: the closed warning is asked at the next check, and lower ones follow No.
+w = clicky({ food = 30, water = 0, healthstone = 0 }, { free = 1 })
+w.c.Evaluate()
+eq(w.prompts[1].kind, "repair", "repair question open")
+eq(w.c.Go("supply", "food"), true, "food row clicked while food is fine")
+w.c.Evaluate()
+eq(#w.prompts .. ":" .. w.prompts[2].kind, "2:repair", "repair asked again at the next check")
+w.prompts[2].decline()
+w.c.Evaluate()
+eq(w.prompts[#w.prompts].kind, "sell", "No to repair: the sell question is asked")
+-- Auto mode: a click replaces an active pinned warning trip, which comes back after it.
+w = clicky({ food = 3, water = 0, healthstone = 0 }, { cfg = { vendorMode = "auto" } })
+w.c.Evaluate()
+eq(w.last[2], "Smith", "repair pinned without asking")
+w.c.Go("supply", "food")
+eq(w.last[2], "Baker", "food pinned by the click")
+w.c.Evaluate()
+eq(w.last[2], "Baker", "repair does not replace the clicked trip")
+w.c.OnMerchantShow(); w.c.Evaluate()
+eq(w.last[2], "Smith", "repair pinned again after the merchant")
+
+-- After No, the re-check goes through Core's evaluate (which arms the position retry).
+local viaCore = 0
+w = world({ free = 1, dur = 10, autoAccept = false, evaluate = function() viaCore = viaCore + 1 end })
+w.c.Evaluate()
+w.prompts[1].decline()
+w.timers[#w.timers].fn()
+eq(viaCore, 1, "the re-check after No uses env.evaluate")
+
+-- A trainer question ends with the place.
+w = trade({ autoAccept = false })
+w.c.OnCraft()
+eq(#w.prompts, 1, "trainer question open")
+w.c.OnPlaceChange()
+eq(w.cancelCount >= 1, true, "zone change withdraws it")
+w.prompts[1].accept()
+eq(w.setCount, 0, "a late Yes sets no waypoint")
+
+-- The ammo request follows the weapon.
+w = world({ ammoKind = "arrow", ammoCount = 10 })
+w.c.Evaluate()
+eq(w.last[2], "Arrow Man", "arrow vendor pinned")
+w.ammoKind = "bullet"
+w.c.Evaluate()
+eq(w.clearCount >= 1 and w.last[2], "Gun Shop", "gun equipped: the arrow pin ends and bullets are asked")
+w = world({ ammoKind = "arrow", ammoCount = 10, autoAccept = false })
+w.c.Evaluate()
+w.ammoKind = "bullet"
+w.c.Evaluate()
+eq(w.cancelCount >= 1 and #w.prompts .. ":" .. w.prompts[2].kind, "2:bullet", "the arrow question closes, the bullet one is asked")
+w = world({ ammoKind = "arrow", ammoCount = 10, autoAccept = false, combat = true })
+w.c.Evaluate() -- in combat: nothing asked, the low ammo is only seen
+w.combat = false
+w.c.Go("ammo")
+eq(w.last[2], "Arrow Man", "arrow row clicked")
+w.ammoKind = "bullet"
+w.c.Evaluate()
+eq(w.prompts[#w.prompts].kind, "bullet", "a clicked arrow trip also follows the weapon")
+-- The pet food request follows the pet's diet.
+w = supply("HUNTER", { food = 30, water = 30, pet = 2, healthstone = 0 }, { Meat = true })
+w.c.Evaluate()
+eq(w.last[2], "Butcher", "meat seller pinned")
+w.supplies.diets = { Meat = true }
+w.c.Evaluate()
+eq(w.setCount, 1, "same diet: the pin stays")
+w.supplies.diets = { Bread = true }
+w.c.Evaluate()
+eq(w.clearCount >= 1 and w.last[2], "Baker", "a bread eater: the meat pin ends and a bread seller is asked")
 
 H.done()

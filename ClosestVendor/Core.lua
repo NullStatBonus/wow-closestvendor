@@ -680,6 +680,7 @@ local function start()
         instanceType = A.instanceType,
         anchor = anchor,
         after = A.after,
+        evaluate = evaluate, -- the controller's own re-checks also arm the position retry
     })
     -- The settings page is optional: if the client's settings API differs, only the page is lost.
     local ok, category = pcall(ns.Options.Register, CHAR.cfg, DEFAULTS, function() evaluate(); applyWindow() end, A.classToken(),

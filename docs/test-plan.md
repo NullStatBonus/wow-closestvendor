@@ -637,6 +637,16 @@ A hunter with a quiver, and any class with reagents (for example a mage). Do the
 - [ ] With asking off (`/cvn buy auto`, `/cvn reagentbuy auto`), open an arrow vendor and a reagent vendor. Expected: both purchases happen as before. This shows that usable items are no longer left out.
 - [ ] "Best usable" arrows (`/cvn arrows best`), right after a fresh login, at an arrow vendor you have not visited this session, with nothing in the ammo slot. Expected: one purchase, and no "does not sell" line before it. This is hard to cause on purpose, so it is fine to skip.
 
+## 32. Warning flow
+
+Use `/cvn choice ask` so questions show. Lower a threshold or wear gear down to make a warning fire.
+
+- [ ] Repair question open. Click a low reagent or food row in the status window. Expected: the repair question closes and the row's vendor is pinned. No repair question comes during that trip. After you open a vendor's window, the repair question comes back.
+- [ ] Repair question open. Click a row that is not low. Expected: that vendor is pinned, and the repair question comes back at the next check (move an item in your bags to cause one). Answer No. Expected: the next low warning is asked.
+- [ ] A profession near its cap (`/cvn trade 300`, then craft once), trainer question open. Enter a dungeon. Expected: the question closes.
+- [ ] Bags full and ammo low, ammo question open. Wear gear down below the durability threshold. Expected: the repair question replaces it. Answer No to repair, then No to ammo. Expected: the sell question comes.
+- [ ] Hunter with low arrows and low bullets, arrow question open or arrow vendor pinned. Equip a gun. Expected: the arrow question or pin ends and the bullet question is asked. With low pet food and a meat vendor pinned, call a pet that does not eat meat. Expected: the pin ends and a vendor for the new pet's food is asked.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.
