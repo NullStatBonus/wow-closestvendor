@@ -627,6 +627,16 @@ Any level; Stormwind or Orgrimmar has several repair vendors.
 - [ ] A profession row near its cap: the list shows only trainers that teach the next tier.
 - [ ] Repeat the menu checks on the other client (Classic Era and WoW Forever).
 
+## 31. Merchant purchases
+
+A hunter with a quiver, and any class with reagents (for example a mage). Do these on Classic Era and on WoW Forever.
+
+- [ ] Ammo buying on, "ask first" on (`/cvn buy ask`). Open an arrow vendor. Before clicking Yes, buy some arrows by hand. Click Yes. Expected: it buys only the room left, and chat names that amount.
+- [ ] Repeat, but fill the quiver by hand before Yes. Expected: nothing is bought and there is no "Bought" line.
+- [ ] Reagent buying on, asking on, amount 20 (`/cvn reagentbuy on`, `/cvn reagentbuy 20`). Open a reagent vendor. Buy some by hand, then click Yes. Expected: it buys only what brings you to 20.
+- [ ] With asking off (`/cvn buy auto`, `/cvn reagentbuy auto`), open an arrow vendor and a reagent vendor. Expected: both purchases happen as before. This shows that usable items are no longer left out.
+- [ ] "Best usable" arrows (`/cvn arrows best`), right after a fresh login, at an arrow vendor you have not visited this session, with nothing in the ammo slot. Expected: one purchase, and no "does not sell" line before it. This is hard to cause on purpose, so it is fine to skip.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

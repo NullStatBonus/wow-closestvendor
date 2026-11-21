@@ -246,4 +246,24 @@ eq(table.concat(b, ","), "3:5,4:10", "same merchant: bought after Yes")
 b, s, asked = run({ reagentBuyPrompt = true }, { money = function() return 50 end })
 eq(#asked .. "/" .. s[1], "0/You cannot afford any reagents here.", "nothing to buy: no question")
 
+-- Yes after buying by hand: plan again from what is carried now, never more than asked.
+local carried = { 5, 0 }
+local function watchedNow() return { { item = AP, count = carried[1] }, { item = RT, count = carried[2] } } end
+b, s, asked = run({ reagentBuyPrompt = true }, { watched = watchedNow })
+carried[2] = 8 -- bought 8 runes by hand
+asked[1][2]()
+eq(table.concat(b, ",") .. "/" .. s[1], "3:5,4:2/Bought 5 Arcane Powder, 2 Rune of Teleportation for 25s 0c.", "Yes after buying by hand: only what is still needed")
+carried = { 5, 0 }
+local m = 1e6
+b, s, asked = run({ reagentBuyPrompt = true }, { watched = watchedNow, money = function() return m end })
+carried = { 10, 10 }
+asked[1][2]()
+eq(#b .. "/" .. #s, "0/0", "already stocked at Yes: nothing bought and no Bought line")
+carried = { 5, 0 }
+b, s, asked = run({ reagentBuyPrompt = true, reagentBuyTarget = 10 }, { watched = watchedNow, money = function() return m end })
+carried = { 0, 0 } -- more needed now than asked
+m = 1e9
+asked[1][2]()
+eq(table.concat(b, ","), "3:5,4:10", "Yes never buys more than the question named")
+
 H.done()

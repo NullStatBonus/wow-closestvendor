@@ -82,8 +82,10 @@ local function boot(opts)
         NUM_BAG_SLOTS = 4,
         GetInventoryItemID = function(_, slot) return g.equipped and g.equipped[slot] end,
         GetItemInfoInstant = function(id)
-            local i = g.items[id]
-            if not i then return end
+            -- As in the game, every real item has a class (15 miscellaneous unless listed); only an
+            -- id in g.unloaded reads as nothing.
+            if g.unloaded and g.unloaded[id] then return end
+            local i = g.items[id] or { 15, 0 }
             return id, "type", "sub", "", 0, i[1], i[2]
         end,
         GetItemCount = function(id) return g.counts and g.counts[id] or 0 end,
@@ -1360,6 +1362,56 @@ do
     local asked = ig.shown
     ig.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
     eq(ig.shown, asked, "already asked: an item arriving asks nothing more")
+end
+
+-- A later Yes plans again: reagents bought by hand meanwhile are not bought twice.
+do
+    local gg = reagentShop()
+    gg.env.SlashCmdList.CLOSESTVENDOR("reagentbuy on")
+    gg.autoAccept = false
+    gg.onEvent("MERCHANT_SHOW")
+    eq(gg.popup.text, "Buy 17 Arcane Powder for 17s 0c?", "asked for 17")
+    gg.counts[17020] = 15 -- 12 bought by hand before Yes
+    gg.env.StaticPopupDialogs.CLOSESTVENDOR_CONFIRM_REAGENTS.OnAccept(nil, gg.popup.accept)
+    eq(table.concat(gg.bought, ",") .. "/" .. tostring(has(lastPrinted(gg), "Bought 5 Arcane Powder for 5s 0c.")), "1:5/true", "Yes buys only the 5 still needed")
+end
+-- A merchant whose item kinds have not loaded does not overwrite a known arrow vendor.
+do
+    local gg = mage(); gg.autoAccept = true
+    gg.npc = { guid = "Creature-0-4372-0-55-5555-0000A1B2C3", name = "Arrow Shop" }
+    gg.pos = { map = 100, x = 0.6, y = 0.5 }
+    gg.stock = { 200 }
+    gg.onEvent("MERCHANT_SHOW")
+    eq(gg.env.ClosestVendorDB.learned[5555][8], 1, "arrow vendor learned")
+    gg.unloaded = { [200] = true }
+    gg.onEvent("MERCHANT_SHOW")
+    eq(gg.env.ClosestVendorDB.learned[5555][8], 1, "item kind not loaded: still sells arrows")
+    gg.unloaded = nil
+    gg.onEvent("GET_ITEM_INFO_RECEIVED", 200)
+    eq(gg.env.ClosestVendorDB.learned[5555][8], 1, "read again once loaded")
+end
+-- Best usable ammo whose required level has not loaded: nothing said, bought once the data arrives.
+do
+    local gg = boot({ tomtom = true }); login(gg)
+    local e = gg.env
+    gg.npc = { guid = "Creature-0-4372-0-55-5556-0000A1B2C3", name = "Arrow Shop" }
+    gg.equipped = { [18] = 100 }; gg.counts = {} -- a bow, no arrows in the ammo slot
+    gg.stock, gg.bought = { 200 }, {}
+    e.ClosestVendorCharDB.cfg.arrowGrade = "best"
+    e.UnitLevel = function() return 30 end
+    e.GetMoney = function() return 100000 end
+    e.GetMerchantItemInfo = function() return "Rough Arrow", "tex", 100, 200, -1, true, false end
+    e.BuyMerchantItem = function(i) gg.bought[#gg.bought + 1] = i end
+    e.C_Container = { GetContainerNumFreeSlots = function(b) if b == 1 then return 1, 1 end return 0, 0 end } -- bag 1 is a quiver
+    e.GetContainerNumSlots = function(b) return b == 1 and 1 or 0 end
+    e.GetContainerItemInfo = function() return nil end
+    e.GetItemInfo = function() return nil end
+    local printed = #gg.printed
+    gg.onEvent("MERCHANT_SHOW")
+    eq(#gg.bought .. "/" .. (#gg.printed - printed), "0/0", "level not loaded: nothing bought, nothing said")
+    e.GetItemInfo = function() return "Rough Arrow", "l", 1, 1, 5, "", "", 200 end
+    gg.onEvent("GET_ITEM_INFO_RECEIVED", 200)
+    eq(#gg.bought, 1, "bought once the data arrives")
 end
 
 g = boot({ db = { cfg = { reagentBuyTarget = 150 } } }); login(g)

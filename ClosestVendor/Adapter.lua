@@ -413,6 +413,8 @@ local function merchantScan()
             if ns.Supplies.ItemMask(id) ~= 0 then supplies[id] = true end
             local c, sc = A.itemClass(id)
             if c == 6 and sc == 2 then arrows = 1 elseif c == 6 and sc == 3 then bullets = 2 end
+            -- Its kind cannot be read yet: the list is only partly read, as for a missing link.
+            if c == nil then partial = true end
         else
             partial = true
         end
@@ -589,7 +591,9 @@ end
 
 -- One merchant line: name, price per purchase, items per purchase, stock (-1 unlimited), paid with
 -- more than gold. Newer clients return a table from C_MerchantFrame.GetItemInfo, Classic Era
--- returns values from GetMerchantItemInfo.
+-- returns values from GetMerchantItemInfo: name, texture, price, quantity, numAvailable, then either
+-- isUsable, extendedCost (7 values) or isPurchasable, isUsable, extendedCost, ... (8 or more), so the
+-- extended cost is found by the number of values.
 local function merchantItem(i)
     if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
         local t = call("C_MerchantFrame.GetItemInfo", C_MerchantFrame.GetItemInfo, i)
@@ -597,8 +601,10 @@ local function merchantItem(i)
             return t.name, t.price, t.stackCount, t.numAvailable, t.hasExtendedCost
         end
     end
-    local name, _, price, batch, stock, _, extended = call("GetMerchantItemInfo", GetMerchantItemInfo, i)
-    return name, price, batch, stock, extended
+    local r = { n = 0 }
+    local function pack(...) r = { n = select("#", ...), ... } end
+    pack(call("GetMerchantItemInfo", GetMerchantItemInfo, i))
+    return r[1], r[3], r[4], r[5], r[r.n >= 8 and 8 or 7]
 end
 
 -- The open merchant's arrows and bullets: list of { index, id, name, price, batch, minLevel, kind, stock }.
@@ -615,6 +621,7 @@ function A.merchantAmmo()
             local c, sc = A.itemClass(id)
             if c == 6 and (sc == 2 or sc == 3) then
                 local _, _, _, _, minLevel = itemInfo(link)
+                if type(minLevel) ~= "number" then minLevel = nil; uncached[id] = true end
                 list[#list + 1] = { index = i, id = id, name = name or tostring(id), price = price, batch = batch or 1,
                     minLevel = minLevel, kind = sc == 2 and "arrow" or "bullet", stock = stock }
             end

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.1
+
+- **Fixed: When you click Yes later, the addon buys only the ammo or reagents you still need.** Before, it bought the full amount, also after you bought some by hand.
+- Fixed: Ammo and reagent buying works with items that you can use. Before, the addon could skip them on some clients.
+- Fixed: A vendor keeps its arrows and bullets when its items load slowly. Before, the addon could forget that the vendor sells ammo.
+- Fixed: "Best usable" ammo waits for the item data, then buys. Before, it said the merchant did not sell your ammo.
+
 ## 1.9.0
 
 - **New: You can choose another seller from the status window.** A row with more than one known seller shows an arrow. Click the arrow to see up to three other sellers and pick one.
