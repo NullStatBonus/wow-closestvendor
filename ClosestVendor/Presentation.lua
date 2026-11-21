@@ -6,7 +6,8 @@ ns.Presentation = P
 P.DEFAULTS = { notificationStyle = "toast", toastAlpha = 100, toastTextAlpha = 100,
     toastScale = 100 }
 P.PAGES = { home = true, restock = true, ammo = true, reagents = true, supplies = true, navigation = true,
-    appearance = true, sound = true, advanced = true, about = true }
+    appearance = true, sound = true, advanced = true, about = true,
+    notifications = true, ["status-window"] = true }
 P.KINDS = { notice = true, hud = true, prompt = true }
 P.KEYS = {
     ["bags.threshold"] = { storage = "bagThreshold", kind = "integer", limits = "bag", default = 2 },

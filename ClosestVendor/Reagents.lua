@@ -96,10 +96,11 @@ function R.Low(watched, count, threshold)
 end
 
 -- A class reagent by name (case-insensitive, extra spaces ignored) or by item id; nil if none.
-function R.Find(class, text)
+function R.Find(class, text, nameOf)
     local want = tostring(text or ""):lower():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")
     for _, item in ipairs(R.ForClass(class)) do
-        if item.name:lower() == want or tostring(item.id) == want then return item end
+        local local_ = nameOf and nameOf(item.id)
+        if item.name:lower() == want or tostring(item.id) == want or (local_ and local_:lower() == want) then return item end
     end
 end
 

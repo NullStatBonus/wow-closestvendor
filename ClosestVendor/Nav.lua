@@ -76,7 +76,7 @@ local adapters = {
                 local cur = m.GetUserWaypoint()
                 local p = cur and cur.position
                 if not (cur and p and cur.uiMapID == h.map
-                        and math.abs(p.x - h.x) < 0.001 and math.abs(p.y - h.y) < 0.001) then
+                        and math.abs(p.x - h.x) < 0.00001 and math.abs(p.y - h.y) < 0.00001) then
                     return
                 end
             end
@@ -148,12 +148,14 @@ function N.Clear(api, handle)
 end
 
 -- The game's own map waypoint (one slot, shared with the player): { map, x, y, tracked } or nil.
--- tracked is true only when the game says it is super-tracked. Never errors.
+-- tracked is true only when the game says it is super-tracked. Never errors. An empty slot is nil;
+-- a slot that cannot be read is nil, true.
 function N.ReadGame(api)
     local m, s = api.C_Map, api.C_SuperTrack
-    if not isFn(m, "GetUserWaypoint") then return nil end
+    if not isFn(m, "GetUserWaypoint") then return nil, true end
     local ok, cur = pcall(m.GetUserWaypoint)
-    local p = ok and type(cur) == "table" and cur.position
+    if not ok then return nil, true end
+    local p = type(cur) == "table" and cur.position
     if not (p and cur.uiMapID and p.x and p.y) then return nil end
     local tracked = false
     if isFn(s, "IsSuperTrackingUserWaypoint") then

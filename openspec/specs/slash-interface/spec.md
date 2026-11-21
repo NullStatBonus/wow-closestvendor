@@ -22,7 +22,7 @@ The addon SHALL expose settings, status, help, demo, preview, typed get/set, deb
 
 #### Scenario: Explicit pages
 - **WHEN** settings is used with no page or a case-insensitive page slug
-- **THEN** no page opens Home; valid slugs match settings-interaction; status-window opens Appearance; invalid pages list valid choices without writes
+- **THEN** no page opens Home; valid slugs match settings-interaction; status-window opens the Status window tab and notifications opens the Notifications tab of Appearance; invalid pages list valid choices without writes
 
 #### Scenario: Topic help and status
 - **WHEN** help or status is requested
@@ -77,3 +77,10 @@ The initial public registry SHALL provide the keys, types, bounds, defaults and 
 | appearance.toast.background-opacity | integer 0–100 | 100 | character |
 | appearance.toast.text-opacity | integer 0–100 | 100 | character |
 | appearance.toast.scale | integer 50–200 | 100 | character |
+
+### Requirement: Reagent names in the game language
+`/cvn reagent on|off <name>` SHALL accept the game's own item name as well as the English name, and `/cvn reagent` replies and `/cvn reagents` SHALL print the game's name when the game has it.
+
+#### Scenario: Localized name
+- **WHEN** the game names item 17020 "Poudre des arcanes" and the player types `/cvn reagent off poudre des arcanes`
+- **THEN** that reagent is switched off and the reply uses the game's name

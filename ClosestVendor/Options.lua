@@ -300,7 +300,7 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note)
 end
 -- Where a page name lives in the tree.
 O.PATHS = { ammo = { "restock", "ammo" }, reagents = { "restock", "reagents" }, supplies = { "restock", "supplies" },
-    sound = { "appearance", "sound" } }
+    sound = { "appearance", "sound" }, notifications = { "appearance", "notices" }, ["status-window"] = { "appearance", "hud" } }
 function O.Open(_, page)
     local dialog = library("AceConfigDialog-3.0")
     if not (O.tree and dialog) then return false, O.failure end

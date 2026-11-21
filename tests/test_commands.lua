@@ -280,6 +280,16 @@ out = M.Run(c, "reagent off nonsense", "MAGE")
 eq(has(out, "No reagent named nonsense"), true, "unknown name says so")
 eq(c.reagentOff[17031], nil, "and changes nothing")
 eq(has(M.Run(c, "reagent off ankh", "MAGE"), "No reagent named"), true, "another class's reagent is unknown")
+-- A client in another language: the game's own item name works, and the list prints it.
+do
+    local fr = function(id) if id == 17020 then return "Poudre des arcanes" end end
+    local cf = fresh()
+    local o = M.Run(cf, "reagent off Poudre des Arcanes", "MAGE", fr)
+    eq(cf.reagentOff[17020], true, "the game's name switches the reagent off")
+    eq(has(o, "Poudre des arcanes"), true, "and the reply uses the game's name")
+    eq(has(M.Run(cf, "reagents", "MAGE", fr), "Poudre des arcanes: off"), true, "the list prints the game's name")
+    eq(has(M.Run(cf, "reagents", "MAGE"), "Arcane Powder: off"), true, "no game name yet: the English name")
+end
 eq(has(M.Run(c, "reagent off", "MAGE"), "Name a reagent"), true, "no name given")
 eq(has(M.Run(c, "reagent off ankh", "WARRIOR"), "no reagents"), true, "a class without reagents")
 eq(has(M.Run(c, "reagents", "WARRIOR"), "no reagents"), true, "listing for a class without reagents")

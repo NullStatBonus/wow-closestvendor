@@ -257,7 +257,7 @@ The Sound tab has one choice, **Notification sound**. It plays with every notifi
 
 ### Advanced and About
 
-Advanced explains character settings and account-wide learned places, with Record debug information, Show debug report and confirmed diagnostic clearing. The report uses the same standard AceGUI window and scrollable, read-only text box as KeepThat, with copy instructions and a normal close button. About shows the addon name, the installed version and a one-sentence purpose. `/cvn help` lists the commands.
+Advanced explains character settings and account-wide learned places (at load, the addon removes old account-level copies of the hearthstone point, last outside position, professions and log that settings per character replaced), with Record debug information, Show debug report and confirmed diagnostic clearing. The report uses the same standard AceGUI window and scrollable, read-only text box as KeepThat, with copy instructions and a normal close button. About shows the addon name, the installed version and a one-sentence purpose. `/cvn help` lists the commands.
 
 ### Ammo
 
@@ -379,7 +379,7 @@ Advanced explains character settings and account-wide learned places, with Recor
 
 ### Presentation commands
 
-- `/cvn settings [page]` accepts home, restock, ammo, reagents, supplies, navigation, appearance, sound, advanced, about; `status-window` aliases appearance. Page names are case insensitive.
+- `/cvn settings [page]` accepts home, restock, ammo, reagents, supplies, navigation, appearance, sound, advanced, about, notifications and status-window; the last two open that tab of Appearance. Page names are case insensitive.
 - `/cvn status` reports effective settings, scope and availability guidance; bare `/cvn` opens Home.
 - `/cvn help appearance` lists public keys and previews; `help diagnostics` explains reports. Domain topics: bags, ammo, reagents, supplies, navigation, hud.
 - `/cvn get <key>` is read-only. `/cvn set <key> <value>` validates the whole input and gives one acknowledgement. Missing, unknown, fractional, out-of-range and surplus input never changes a setting.
@@ -487,7 +487,8 @@ The legacy `test` commands are live integration tests: accepting a question can 
 - They ignore the state of your bags, gear and ammo.
 - Yes sets the pin.
 - Opening any vendor window clears the pin.
-- `/cvn debug on` turns on the debug log.
+- `/cvn reagent on|off <name>` accepts the English name or the name your game shows. `/cvn reagents` prints the game's name once the game has loaded the item.
+- `/cvn debug on` turns on the debug log. It records decisions and failures. Durability and inventory events are not logged one by one: one line, "gear events: N folded into one check", gives the count.
 - `/cvn debug off` turns it off.
 - `/cvn log` shows a report that you can copy.
 - `/cvn log clear` asks for confirmation before clearing diagnostic entries only. Cancel keeps everything.

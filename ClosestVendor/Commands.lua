@@ -188,16 +188,20 @@ local function hudCommand(cfg, arg, rest)
     return { L["Choose lock, unlock, reset, scale, opacity, textopacity, color or row."] }
 end
 
+-- Localized item name reader for this Run (nil until the game has the item), set by M.Run.
+local nameOf
+local function shown(item) return nameOf and nameOf(item.id) or item.name end
+
 -- /cvn reagent ...: the threshold, or one reagent on or off by name.
 local function reagentCommand(cfg, arg, name, class)
     cfg.reagentOff = cfg.reagentOff or {}
     if arg == "on" or arg == "off" then
         if #ns.Reagents.ForClass(class) == 0 then return { L["Your class has no reagents to watch."] } end
-        local item = name ~= "" and ns.Reagents.Find(class, name)
+        local item = name ~= "" and ns.Reagents.Find(class, name, nameOf)
         if name == "" then return { L["Name a reagent, for example /cvn reagent off arcane powder (see /cvn reagents)."] } end
         if not item then return { L["No reagent named %s for your class. See /cvn reagents."]:format(name) } end
         cfg.reagentOff[item.id] = (arg == "off") or nil
-        return { L["%s: %s"]:format(item.name, arg == "on" and L["on"] or L["off"]) }
+        return { L["%s: %s"]:format(shown(item), arg == "on" and L["on"] or L["off"]) }
     end
     local v = tonumber(arg)
     local lo, hi = M.LIMITS.reagent[1], M.LIMITS.reagent[2]
@@ -235,7 +239,7 @@ local function reagentList(cfg, class)
     local lines = { L["Reagents for your class (asked at %d or fewer, switch with /cvn reagent off <name>):"]:format(cfg.reagentThreshold) }
     for _, item in ipairs(items) do
         local off = cfg.reagentOff and cfg.reagentOff[item.id]
-        lines[#lines + 1] = L["%s: %s"]:format(item.name, off and L["off"] or L["on"])
+        lines[#lines + 1] = L["%s: %s"]:format(shown(item), off and L["off"] or L["on"])
     end
     return lines
 end
@@ -293,7 +297,8 @@ local function setting(cfg, key, arg, lo, hi, what)
     return status(cfg)
 end
 
-function M.Run(cfg, msg, class)
+function M.Run(cfg, msg, class, itemName)
+    nameOf = itemName
     local cmd, rest = (msg or ""):match("^%s*(%S*)%s*(.-)%s*$")
     cmd = cmd:lower()
     if cmd ~= "reagent" then rest = rest:lower() end
@@ -321,7 +326,6 @@ function M.Run(cfg, msg, class)
     end
     if P and (cmd == "settings" or cmd == "config" or cmd == "options") then
         local page = rest == "" and "home" or rest
-        if page == "status-window" then page = "appearance" end
         if not P.PAGES[page] then return { L["Pages: home, restock, ammo, reagents, supplies, navigation, appearance, sound, advanced, about."] }, { "read" } end
         return { L["Opening the settings page..."] }, { "open", page }
     end

@@ -25,3 +25,10 @@ A character with no saved settings SHALL start from a copy of the account-wide s
 #### Scenario: First login after the update
 - **WHEN** a character logs in for the first time and the account holds old settings with a bag threshold of 7
 - **THEN** its bag threshold is 7, and changing it later leaves the account copy and other characters alone
+
+### Requirement: Retired saved keys are dropped
+At load the addon SHALL remove the account-level `hearth`, `lastOutside`, `professions` and `log` keys that settings per character replaced, and the retired `toastLocked` setting. It SHALL keep the account-level `cfg` and `hud` as the seed for a new character.
+
+#### Scenario: Old account keys
+- **WHEN** a character logs in and the account still holds `hearth`, `lastOutside`, `professions` or `log`
+- **THEN** those keys are removed and the seed settings stay

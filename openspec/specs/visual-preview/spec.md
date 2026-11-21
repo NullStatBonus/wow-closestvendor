@@ -76,3 +76,14 @@ When the game's own map waypoint holds the player's point (not one this addon se
 #### Scenario: New waypoint in the last step
 - **WHEN** the addon had its own game waypoint before the demo and the player sets a new one in the last step
 - **THEN** the player's waypoint stays and the addon's earlier waypoint is not set again
+
+### Requirement: Demo end is safe
+When a step timer cannot be scheduled, the demo SHALL end and the made-up status window rows SHALL go away. When the game waypoint cannot be read at the end, the addon SHALL NOT set the noted waypoint again and SHALL log why.
+
+#### Scenario: Timer fails mid-tour
+- **WHEN** the demo cannot schedule its next step
+- **THEN** the demo ends and the real status window rows are back
+
+#### Scenario: Unreadable game waypoint
+- **WHEN** the game waypoint read fails at the end of the demo
+- **THEN** no waypoint is set and the log says it was not set again

@@ -121,13 +121,14 @@ end
 -- trainers whose title tells which tier they teach, on every map. Read after login, and again if
 -- NorgannonDB finishes loading later; never on bag, merchant or movement events.
 local EXTERNAL_MAPS = { [2482] = true, [2548] = true, [2652] = true, [2521] = true, [2665] = true, [2524] = true }
-local external = { list = {}, skipped = 0, trainers = {} }
+local external = { list = {}, skipped = 0, trainers = {}, trainerIds = {} }
 local started = false
 
 local function readExternal()
     local list, skipped, schema = A.externalVendors(EXTERNAL_MAPS)
     external = { list = list or {}, skipped = list and skipped or 0, schema = schema, unsupported = skipped == "unsupported",
-                 trainers = list and A.externalTrainers() or {} }
+                 trainers = list and A.externalTrainers() or {}, trainerIds = {} }
+    for _, e in ipairs(external.trainers) do external.trainerIds[e[1]] = true end
 end
 
 -- Trainer tiers are known (NorgannonDB gave trainers with titles), so Artisan is routed too.
@@ -263,7 +264,8 @@ local function anchor(which)
     if p and p.continent then return p end
 end
 
-local function evaluate()
+local evaluate
+local function evaluateNow()
     if not controller then return end
     trackPlace()
     controller.Evaluate()
@@ -272,6 +274,7 @@ local function evaluate()
         if A.after(POLL_SECONDS, function() timerArmed = false; evaluate() end) then timerArmed = true end
     end
 end
+evaluate = evaluateNow
 
 -- Remember the merchant that just opened (position is the player's, within interaction range).
 -- A vendor this character can see (target, mouseover, nameplate): remember whether it will trade
@@ -280,7 +283,7 @@ local function learnStanding(unit)
     local id = A.npc(unit)
     -- Vendors, trainers and auctioneers: a goblin auction house or a neutral trainer refuses a
     -- character Unfriendly with its faction, like a vendor does.
-    local trainer, auctioneer = DB.trainers[id] ~= nil, auctionIds[id]
+    local trainer, auctioneer = DB.trainers[id] ~= nil or external.trainerIds[id] == true, auctionIds[id]
     if not id or not (vendorIds[id] or trainer or auctioneer) then return end
     local can = A.canTrade(unit)
     if can == nil or CHAR.standing[id] == can then return end
@@ -385,6 +388,10 @@ local function init()
     CHAR.professions = CHAR.professions or {}
     CHAR.standing = CHAR.standing or {} -- [npcId] = true (trades) / false (Unfriendly or Hostile), as seen by this character
     CHAR.log = CHAR.log or {}
+    -- Account-level copies from before settings and places moved per character; nothing reads them
+    -- (cfg and hud stay as the seed for a new character). toastLocked was retired from the settings.
+    DB.hearth, DB.lastOutside, DB.professions, DB.log = nil, nil, nil, nil
+    CHAR.cfg.toastLocked = nil
     log = ns.Log.New(CHAR.log, A.now)
 end
 
@@ -500,6 +507,23 @@ local function touchWindow()
     else
         refreshWindow() -- no timers on this client
     end
+end
+
+-- Worn-gear events come in bursts (a durability tick every few seconds, many inventory changes at
+-- once): one check shortly after, however many arrive. The window redraw batches the same way.
+local EVAL_DELAY = 0.2
+local burst, burstQueued = 0, false
+local function evaluateSoon()
+    burst = burst + 1
+    if burstQueued then return end
+    local function run()
+        burstQueued = false
+        if log then log.Add(("gear events: %d folded into one check"):format(burst)) end
+        burst = 0
+        evaluate()
+        touchWindow()
+    end
+    if A.after(EVAL_DELAY, run) then burstQueued = true else run() end
 end
 
 -- A window setting changed (scale, opacity, text opacity, colour, lock, a row mode): apply it and redraw at once.
@@ -734,7 +758,7 @@ SLASH_CLOSESTVENDOR1 = "/cvn"
 SLASH_CLOSESTVENDOR2 = "/closestvendor"
 SlashCmdList["CLOSESTVENDOR"] = function(msg)
     if not DB then return end
-    local lines, action = ns.Commands.Run(CHAR.cfg, msg, A.classToken())
+    local lines, action = ns.Commands.Run(CHAR.cfg, msg, A.classToken(), A.itemName)
     for _, line in ipairs(lines) do say(line) end
     if action and action[1] == "read" then return end
     if action and action[1] == "open" then
@@ -874,7 +898,8 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
         if DB then noteBinder(arg1) end
         return
     end
-    if event == "HEARTHSTONE_BOUND" then
+    if event == "HEARTHSTONE_BOUND" or event == "PLAYER_LOGOUT" then
+        -- Logout and reload also apply a bind the client did not announce, before the question is lost.
         if DB then learnHearth() end
         return
     end
@@ -890,6 +915,10 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
     end
     -- Only the player's own gear, casts and pet matter; party and raid members fire these too.
     if (event == "UNIT_INVENTORY_CHANGED" or event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_PET") and arg1 ~= "player" then return end
+    if event == "UPDATE_INVENTORY_DURABILITY" or event == "UNIT_INVENTORY_CHANGED" then
+        evaluateSoon() -- not logged one by one: the burst gets one line
+        return
+    end
     if log and (event ~= "ADDON_LOADED" or arg1 == ADDON) then
         log.Add("event " .. event .. (arg1 ~= nil and (" " .. tostring(arg1)) or ""))
     end
@@ -951,7 +980,7 @@ end)
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA",
         "BAG_UPDATE_DELAYED", "UPDATE_INVENTORY_DURABILITY", "UNIT_INVENTORY_CHANGED", "PLAYER_EQUIPMENT_CHANGED",
         "PLAYER_REGEN_ENABLED", "MERCHANT_SHOW", "TRAINER_SHOW", "TRAINER_UPDATE", "SKILL_LINES_CHANGED",
-        "TRADE_SKILL_SHOW", "UNIT_SPELLCAST_SUCCEEDED", "SPELLS_CHANGED" }) do
+        "TRADE_SKILL_SHOW", "UNIT_SPELLCAST_SUCCEEDED", "SPELLS_CHANGED", "PLAYER_LOGOUT" }) do
     ns.frame:RegisterEvent(e)
 end
 -- Registering an event the client does not have is an error, and this one's name is unverified.

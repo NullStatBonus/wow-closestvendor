@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.9.4
+
+- **Fixed: The debug log keeps decisions and failures longer.** Before, durability and inventory events filled it in about 20 minutes.
+- Fixed: `/cvn settings status-window` opens the Status window tab, and `/cvn settings notifications` works. Before, the first opened Appearance only and the second failed.
+- Fixed: The addon remembers an Unfriendly trainer that only NorgannonDB lists. Before, it offered that trainer again.
+- Fixed: When an auction house and a vendor are about the same distance, the closer one wins. Before, whole-yard rounding could choose the farther one.
+- Fixed: The addon keeps your own map waypoint when it is near the addon waypoint. Before, it could remove yours.
+- Fixed: After `/cvn demo`, the status window shows real rows when a timer fails. Before, the made-up rows stayed.
+- Fixed: After `/cvn demo`, the addon does not set your old waypoint when the game cannot say what is there. Before, it could replace a newer waypoint.
+- Fixed: A bind at the same inn is kept when you log out or reload at once. Before, the addon could lose the inn's position.
+- Fixed: `/cvn reagent` accepts the reagent name in your game language. Before, only English names worked.
+- Changed: Durability and inventory events start one check each burst. The addon removes old saved keys at login.
+
 ## 1.9.3
 
 - **Fixed: When you bind again at the inn you are bound to, the addon learns where it is.** Before, a row click in a dungeon searched near your last position outside.

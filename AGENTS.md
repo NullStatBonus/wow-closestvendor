@@ -24,7 +24,7 @@ When player-visible behavior, a setting, or a command changes, update the suppor
 
 ## Conventions
 
-- **Game calls live in `Adapter.lua` only.** Every function the game provides is read there, guarded and in `pcall`, returning nil when missing; nothing else calls `C_Map`, `C_Container`, unit or inventory functions. Unknown data is nil, never 0 or false.
+- **Game calls live in `Adapter.lua` only.** Every function the game provides is read there, guarded and in `pcall`, returning nil when missing; nothing else calls `C_Map`, `C_Container`, unit or inventory functions. Unknown data is nil, never 0 or false. One exception: `Nav.lua` receives the `C_Map`, `C_SuperTrack` and `UiMapPoint` tables from `A.navApi` and calls them, each call guarded and in `pcall`; this keeps waypoint logic testable with fake tables.
 - **Logic is plain Lua.** `Triggers`, `Professions`, `Search`, `Discovery`, `Controller`, `Commands`, `Nav` and `Log` have no game globals, so they run under `luajit tests/run.lua`.
 - **Every player-facing sentence is `L["The whole English sentence"]`.** No concatenation, no variable keys, and `say(L["..."])` rather than `say("...")`. `tests/test_locale.lua` enforces this. See `docs/localization.md`.
 - **New files go in both TOC files in the same order** (`make check` fails otherwise). The `Locales` files load first.
