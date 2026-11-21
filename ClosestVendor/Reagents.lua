@@ -198,12 +198,34 @@ function R.OnMerchant(cfg, env)
     end
     local list, coins = table.concat(parts, ", "), ns.Ammo.Coins(cost)
     local purchases = 0
-    local function buy()
+    local function buy(later)
         -- A question answered later: buy only if this merchant still offers every item at its slot.
         if env.sells then
             for _, l in ipairs(lines) do
                 if env.sells(l.offer.index) ~= l.offer.id then log("purchase dropped: the merchant window changed") return end
             end
+        end
+        if later then
+            -- The player may have bought some by hand meanwhile: plan again from what is carried now,
+            -- and never buy more of a reagent than the question named.
+            local w2 = env.watched()
+            local new, _, short2 = R.BuyPlan(w2 or {}, offers, env.slots(), env.stack, env.money(), target)
+            if not (w2 and new) then log("bags or money unknown at Yes") return end
+            local fresh = {}
+            for _, l in ipairs(new) do fresh[l.offer.id] = l end
+            local kept, keptParts, keptCost = {}, {}, 0
+            for _, l in ipairs(lines) do
+                local f = fresh[l.offer.id]
+                local p = f and math.min(f.purchases, l.purchases) or 0
+                if p > 0 then
+                    local items = p * l.offer.batch
+                    kept[#kept + 1] = { offer = l.offer, purchases = p, items = items, cost = p * l.offer.price }
+                    keptParts[#keptParts + 1] = L["%d %s"]:format(items, l.offer.name)
+                    keptCost = keptCost + p * l.offer.price
+                end
+            end
+            if #kept == 0 then log("nothing left to buy") return end
+            lines, list, coins, short = kept, table.concat(keptParts, ", "), ns.Ammo.Coins(keptCost), short2
         end
         for _, l in ipairs(lines) do
             local o = l.offer
@@ -226,7 +248,7 @@ function R.OnMerchant(cfg, env)
         env.say(text:format(list, coins))
     end
     if cfg.reagentBuyPrompt then
-        env.confirm(L["Buy %s for %s?"]:format(list, coins), buy)
+        env.confirm(L["Buy %s for %s?"]:format(list, coins), function() buy(true) end)
         return 0
     end
     buy()

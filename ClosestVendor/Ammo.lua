@@ -85,7 +85,14 @@ function M.OnMerchant(cfg, env)
     if not sells then log("merchant sells no " .. kind .. "s (" .. #offers .. " ammo item(s))") return 0 end
 
     local mode, equippedID = cfg[kind .. "Grade"] or "equipped", env.equippedID()
-    local o = M.Pick(mode, kind, offers, equippedID, env.level())
+    local level = env.level()
+    local o = M.Pick(mode, kind, offers, equippedID, level)
+    if not o and mode == "best" and level then
+        -- An offer whose required level has not loaded may be the best one: wait for its data.
+        for _, x in ipairs(offers) do
+            if x.kind == kind and not x.minLevel then log("item data not loaded") return 0 end
+        end
+    end
     if not o then
         log(("no %s offer for mode %s, equipped item %s"):format(kind, mode, tostring(equippedID)))
         env.say(L["This merchant does not sell the ammo your settings ask for."])
@@ -101,15 +108,23 @@ function M.OnMerchant(cfg, env)
         if partial then env.say(L["You cannot afford any ammo here."]) end
         return 0
     end
-    local function buy()
+    local function buy(later)
         -- A question answered later: buy only if this merchant still offers the item at that slot.
         if env.sells and env.sells(o.index) ~= o.id then log("purchase dropped: the merchant window changed") return end
+        if later then
+            -- The player may have bought some by hand meanwhile: buy only what still fits and can be
+            -- afforded, never more than the question named.
+            local n2, _, _, partial2 = M.Plan(env.space(o.id, kind), o, env.money())
+            if not n2 then log("space, price or money unknown at Yes") return end
+            if n2 < n then n, items, cost, partial = n2, n2 * o.batch, n2 * o.price, partial2 end
+            if n == 0 then log("nothing left to buy") return end
+        end
         for _ = 1, n do env.buy(o.index) end
         env.say((partial and L["Bought %d %s for %s (all you could afford)."] or L["Bought %d %s for %s."])
             :format(items, o.name, M.Coins(cost)))
     end
     if cfg.ammoBuyPrompt then
-        env.confirm(L["Buy %d %s for %s?"]:format(items, o.name, M.Coins(cost)), buy)
+        env.confirm(L["Buy %d %s for %s?"]:format(items, o.name, M.Coins(cost)), function() buy(true) end)
         return 0
     end
     buy()

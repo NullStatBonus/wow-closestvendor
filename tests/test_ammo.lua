@@ -122,4 +122,29 @@ run(nil, { space = function() return nil end, log = function(t) lines[#lines + 1
 eq(lines[#lines], "ammo buy: space, price or money unknown", "silent exits are logged")
 run({ ammoBuyEnabled = false }, { log = function(t) lines[#lines + 1] = t end })
 eq(lines[#lines], "ammo buy: off", "off is logged")
+-- Yes after buying by hand: only the room left, never more than asked.
+local room = 400
+b, s, asked = run({ ammoBuyPrompt = true }, { space = function() return room end })
+room = 100
+asked[1][2]()
+eq(#b .. "/" .. s[1], "1/Bought 100 Sharp for 4s 0c.", "Yes after buying by hand: only the room left")
+room = 400
+b, s, asked = run({ ammoBuyPrompt = true }, { space = function() return room end })
+room = 0
+asked[1][2]()
+eq(#b .. "/" .. #s, "0/0", "full at Yes: nothing bought and no Bought line")
+room = 400
+b, s, asked = run({ ammoBuyPrompt = true }, { space = function() return room end })
+room = 2000
+asked[1][2]()
+eq(#b, 4, "Yes never buys more than the question named")
+-- Best usable: an offer whose required level has not loaded waits for its data, silently.
+lines = {}
+b, s = run({ arrowGrade = "best" }, { equippedID = function() return 99 end,
+    offers = function() return { { index = 1, id = 10, name = "Rough", price = 100, batch = 100, kind = "arrow" } } end,
+    log = function(t) lines[#lines + 1] = t end })
+eq(#b .. "/" .. #s .. "/" .. lines[#lines], "0/0/ammo buy: item data not loaded", "best: unknown required level waits")
+b, s = run({ arrowGrade = "best" }, { equippedID = function() return 99 end, level = function() return nil end,
+    offers = function() return { { index = 1, id = 10, name = "Rough", price = 100, batch = 100, kind = "arrow" } } end })
+eq(s[1], "This merchant does not sell the ammo your settings ask for.", "best with the player's level unknown still says why")
 print("ok")

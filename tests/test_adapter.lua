@@ -191,6 +191,9 @@ eq(boot(merchantGame({ GetMerchantNumItems = boom })).merchant().ammo, 0, "stock
 eq(boot(merchantGame({ CanMerchantRepair = boom })).merchant().repair, false, "repair check throws: false")
 eq(boot(merchantGame({ GetMerchantItemLink = function(i) if i == 2 then error("x") end return "item:300:0" end })).merchant().ammo, 0, "one unreadable item skipped")
 eq(boot({}).merchant(), nil, "nothing available")
+eq(mer.partial, false, "every item read: not partial")
+eq(boot(merchantGame({ GetItemInfoInstant = function(id) if id == 200 then return nil end return id, "", "", "", 0, 0, 0 end })).merchant().partial, true,
+    "an item whose kind cannot be read: partly read")
 
 -- Reagents sold: the mask covers the class reagents offered, whatever their item class.
 eq(mer.reagents, 0, "no reagents offered")
@@ -378,6 +381,30 @@ for _, modern in ipairs({ false, true }) do
     eq(A.ammoSpace(ARROW, "bullet"), 0, label .. "bags readable but no pouch: no room")
 end
 eq(boot({}).merchantAmmo(), nil, "no merchant API: unknown")
+-- Classic Era clients that return the longer list (isPurchasable before isUsable): extended cost is the 8th value.
+do
+    local g = ammoGame(false)
+    g.GetMerchantItemInfo = function(i)
+        local m = merchantLines[i]
+        return m[1], "tex", m[2], m[3], m[4], true, true, m[5], 0, 0
+    end
+    local offers = boot(g).merchantAmmo()
+    eq(#offers .. "/" .. offers[1].id, "1/" .. ARROW, "longer list: usable gold item kept, extended-cost line skipped")
+    g.GetMerchantItemInfo = function(i)
+        local m = merchantLines[i]
+        return m[1], "tex", m[2], m[3], m[4], true, true, true, 0, 0
+    end
+    eq(#boot(g).merchantAmmo(), 0, "longer list: an arrow paid with more than gold is left out")
+end
+-- A required level not loaded yet: the offer has no level and the item counts as not loaded.
+do
+    local g = ammoGame(false)
+    g.GetItemInfo = function() return nil end
+    local A = boot(g)
+    A.resetItemData()
+    local offers = A.merchantAmmo()
+    eq(tostring(offers[1].minLevel) .. "/" .. tostring(A.missingItems() and A.missingItems()[ARROW]), "nil/true", "level not loaded: missing item")
+end
 
 -- Reagent buying on both API shapes: the merchant's class reagents (never display-only items or
 -- items paid with more than gold), the general bag slots and the stack size.
