@@ -1933,7 +1933,7 @@ eq(deep(g.env.ClosestVendorCharDB.cfg),saved,"the demo changes no setting")
 eq(window(g).rows[1].row ~= nil and window(g).rows[1].row.text ~= nil,true,"real rows are back")
 -- The player's own game waypoint (one slot) is set again after the demo used that slot, but a new
 -- one the player set during the tour is left alone.
-local function nativeDemo()
+local function nativeDemo(untracked)
     local gn = boot()
     gn.slot, gn.tracked = nil, false
     gn.env.C_Map.CanSetUserWaypointOnMap = function() return true end
@@ -1945,7 +1945,8 @@ local function nativeDemo()
     gn.env.UiMapPoint = { CreateFromCoordinates = function(m, x, y) return { uiMapID = m, position = { x = x, y = y } } end }
     login(gn); flush(gn)
     gn.env.SlashCmdList.CLOSESTVENDOR("nav native")
-    gn.slot, gn.tracked = { uiMapID = 200, position = { x = 0.2, y = 0.3 } }, true
+    gn.slot, gn.tracked = { uiMapID = 200, position = { x = 0.2, y = 0.3 } }, not untracked
+    gn.env.ClosestVendorCharDB.log.enabled = true
     gn.autoAccept = false; gn.timers = {}
     gn.env.SlashCmdList.CLOSESTVENDOR("demo")
     return gn
@@ -1957,6 +1958,14 @@ do
     while #gn.timers > 0 and n < 20 do table.remove(gn.timers, 1)(); n = n + 1 end
     eq(gn.slot and (gn.slot.uiMapID .. ":" .. gn.slot.position.x .. ":" .. tostring(gn.tracked)), "200:0.2:true",
         "the player's own game waypoint is back, still tracked")
+    eq(logged(gn, "demo: your game waypoint restored, tracked"), true, "the log says it is tracked")
+    -- An untracked point comes back untracked (test_nav.lua checks SetGame turns tracking off).
+    gn = nativeDemo(true)
+    n = 0
+    while #gn.timers > 0 and n < 20 do table.remove(gn.timers, 1)(); n = n + 1 end
+    eq(gn.slot and (gn.slot.uiMapID .. ":" .. tostring(gn.tracked)), "200:false",
+        "the player's untracked game waypoint is back, not tracked")
+    eq(logged(gn, "demo: your game waypoint restored, not tracked"), true, "the log says it is not tracked")
     -- Set after the first step: later steps use the slot, and the player's newest point comes back.
     gn = nativeDemo()
     table.remove(gn.timers, 1)()

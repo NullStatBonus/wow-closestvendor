@@ -943,7 +943,8 @@ function C.New(env)
             end
         end
         if before and before.game and not theirs and env.nav.SetGame and env.nav.SetGame(before.game) then
-            log("demo: your game waypoint restored")
+            log(before.game.tracked and "demo: your game waypoint restored, tracked"
+                or "demo: your game waypoint restored, not tracked")
         end
     end
     -- Pin without asking (way "auto") or ask (way "ask") for kind; key is the supply key for "supply".

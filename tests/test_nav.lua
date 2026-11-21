@@ -138,13 +138,13 @@ H.done()
 
 -- The game's own waypoint slot: read it, and set it back (tracked only when it was).
 do
-    local slot, tracked, calls = { uiMapID = 1429, position = { x = 0.2, y = 0.3 } }, true, 0
+    local slot, tracked, refuse = { uiMapID = 1429, position = { x = 0.2, y = 0.3 } }, true, false
     local api = {
         C_Map = { GetUserWaypoint = function() return slot end,
-                  SetUserWaypoint = function(p) slot = p end,
+                  SetUserWaypoint = function(p) if refuse then return false end slot = p return true end,
                   CanSetUserWaypointOnMap = function(m) return m ~= 999 end },
         C_SuperTrack = { IsSuperTrackingUserWaypoint = function() return tracked end,
-                         SetSuperTrackedUserWaypoint = function(on) tracked = on; calls = calls + 1 end },
+                         SetSuperTrackedUserWaypoint = function(on) tracked = on end },
         UiMapPoint = { CreateFromCoordinates = function(m, x, y) return { uiMapID = m, position = { x = x, y = y } } end },
     }
     local p = N.ReadGame(api)
@@ -153,9 +153,12 @@ do
     eq(N.ReadGame(api), nil, "empty slot: nil")
     eq(N.SetGame(api, p), true, "set back")
     eq(slot.uiMapID .. ":" .. slot.position.x .. ":" .. tostring(tracked), "1429:0.2:true", "same point, tracked again")
-    calls = 0
     eq(N.SetGame(api, { map = 1429, x = 0.5, y = 0.5, tracked = false }), true, "an untracked point")
-    eq(calls, 0, "tracking not turned on")
+    eq(tracked, false, "tracking turned off for an untracked point")
+    refuse = true
+    eq(N.SetGame(api, { map = 1429, x = 0.6, y = 0.6, tracked = true }), false, "the game refused the point: not set")
+    eq(tracked, false, "a refused point is not tracked")
+    refuse = false
     eq(N.SetGame(api, { map = 999, x = 0.5, y = 0.5 }), false, "a map that takes no waypoint")
     api.C_Map.GetUserWaypoint = function() error("boom") end
     eq(N.ReadGame(api), nil, "an error reads as nil")

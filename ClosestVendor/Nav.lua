@@ -163,15 +163,17 @@ function N.ReadGame(api)
     return { map = cur.uiMapID, x = p.x, y = p.y, tracked = tracked }
 end
 
--- Set the game's map waypoint to p (as ReadGame returns it). True when set; never errors.
+-- Set the game's map waypoint to p (as ReadGame returns it), tracked only when p.tracked.
+-- True when the game took it; never errors.
 function N.SetGame(api, p)
     local m, s = api.C_Map, api.C_SuperTrack
     if not (p and isFn(m, "SetUserWaypoint") and type(api.UiMapPoint) == "table"
             and type(api.UiMapPoint.CreateFromCoordinates) == "function") then return false end
-    local ok = pcall(function()
+    local ok, set = pcall(function()
         if isFn(m, "CanSetUserWaypointOnMap") and not m.CanSetUserWaypointOnMap(p.map) then error("map") end
-        m.SetUserWaypoint(api.UiMapPoint.CreateFromCoordinates(p.map, p.x, p.y))
-        if p.tracked and isFn(s, "SetSuperTrackedUserWaypoint") then s.SetSuperTrackedUserWaypoint(true) end
+        if m.SetUserWaypoint(api.UiMapPoint.CreateFromCoordinates(p.map, p.x, p.y)) == false then return false end
+        if isFn(s, "SetSuperTrackedUserWaypoint") then s.SetSuperTrackedUserWaypoint(p.tracked == true) end
+        return true
     end)
-    return ok
+    return ok and set == true
 end
