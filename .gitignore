@@ -17,3 +17,8 @@ __pycache__/
 .vscode/
 .idea/
 .DS_Store
+
+# In-game reports and screenshots shared for debugging (never committed)
+debug.txt
+Screenshot*.png
+screenshots/
