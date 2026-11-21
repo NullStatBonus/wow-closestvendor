@@ -15,12 +15,12 @@ When player-visible behavior, a setting, or a command changes, update the suppor
 
 - Cover each new behavior with an automated test. Temporarily break the behavior, verify the test fails for the expected reason, then restore the behavior and verify it passes.
 - Run the focused test during implementation. Use `make test` for the full suite and `make check` for packaging and version checks.
-- Keep manual checks short and few. Give each check one player action followed by a `Check:` line stating the expected result. Log a distinct line for each behavior the check verifies.
-- Give only essential setup before the action. Avoid old versions, disabled addons, and staged characters or items.
+- Keep manual checks short and few. Give each check one player action, then a `Check:` line that states the expected result in words a player understands. Put the log line that proves it on a separate `Log:` line for the reviewer. Never ask the player to read or interpret a log line. Log a distinct line for each behavior the check verifies.
+- Give only essential setup before the action, but name everything the check depends on: a profession, an installed addon, and turning on debug logging followed by `/reload`. Avoid old versions, disabled addons, and staged characters or items.
 - Verify the result from debug logs or saved variables wherever possible. Add missing evidence in the same change.
 - Keep raw saved variables and debug output out of Git. Anonymize any fixture derived from them.
 - Each module has a `tests/test_*.lua` file.
-- Use only the commands the check needs, usually `/cvn debug on` at the start and `/reload` at the end. Verify saved data in `ClosestVendorCharDB`. Mark destructive steps optional and identify behavior with no in-game check.
+- Use only the commands the check needs, usually `/cvn debug on` and `/reload` before the first check and `/reload` at the end. Verify saved data in `ClosestVendorCharDB`. Mark destructive steps optional and identify behavior with no in-game check.
 
 ## Conventions
 

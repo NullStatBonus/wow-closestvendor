@@ -649,12 +649,20 @@ Use `/cvn choice ask` so questions show. Lower a threshold or wear gear down to 
 
 ## 33. Places and waypoints
 
-Do these on Classic Era and on WoW Forever, except where a check says otherwise. Commands: `/cvn debug on` once at the start, `/reload` at the end. Then check `WTF/Account/<account>/<realm>/<character>/SavedVariables/ClosestVendor.lua` (`ClosestVendorCharDB`).
+Before the first check: type `/cvn debug on`, then `/reload`. After the last check: `/reload` again, so the game saves the log. The reviewer reads `ClosestVendorCharDB` in `WTF/Account/<account>/<realm>/<character>/SavedVariables/ClosestVendor.lua`.
 
-- [ ] Bind your hearthstone again at the inn you are already bound to. Check: `hearth` has `continent`, `x` and `y`; `log` has "hearthstone point learned: <inn>".
-- [ ] Hunter with a bow: open the arrow row's seller list (chevron), equip a gun, choose an arrow-only vendor. Check: chat says the list changed; `log` has "chosen pin: the seller no longer fits".
-- [ ] WoW Forever only (Classic Era has no game waypoint): put your own waypoint on the map, then `/cvn demo` (if TomTom or WaypointUI is installed, first `/cvn nav native`, and `/cvn nav auto` after). Wait for the tour to end. Check: your waypoint is on the map; `log` has "demo: your game waypoint restored".
-- [ ] Optional, on an alt only (unlearning loses the skill): pin a profession trainer, then unlearn that profession. Check: `log` has "trainer waypoint cleared: <profession> was unlearned".
+- [ ] Classic Era and WoW Forever. Setup: your hearthstone is already bound to an inn; stand at that inn's innkeeper. Bind your hearthstone there again.
+  Check: nothing changes on screen. The reviewer confirms this from the log.
+  Log: `hearth` has `continent`, `x` and `y`; `log` has "hearthstone point learned: <inn>".
+- [ ] Classic Era and WoW Forever. Setup: a hunter with a bow equipped and a gun in the bags; the status window shows the arrow row (`/cvn hud row ammo always`); the addon knows at least two arrow vendors, one of them selling no bullets. Click the small arrow at the right end of the arrow row, equip the gun, then pick the vendor that sells no bullets.
+  Check: chat says "The seller list changed. Open it again to choose." No waypoint appears.
+  Log: "chosen pin: the seller no longer fits".
+- [ ] WoW Forever only (Classic Era has no game waypoint). Setup: if TomTom or WaypointUI is installed, type `/cvn nav native` first and `/cvn nav auto` after the check. Put your own waypoint on the map, type `/cvn demo`, and wait about a minute for the tour to end.
+  Check: your waypoint is on the map again, where you put it.
+  Log: "demo: your game waypoint restored".
+- [ ] Optional, on an alt only (unlearning loses the skill). Setup: the alt has a profession and the addon knows a trainer for it; the status window shows the profession row (`/cvn hud row professions always`). Click the profession row to set a waypoint to the trainer, then unlearn that profession.
+  Check: the trainer waypoint goes away.
+  Log: "trainer waypoint cleared: <profession> was unlearned".
 
 The failed-timer fix has no in-game check; the unit tests cover it.
 
