@@ -121,6 +121,7 @@ It lists what the addon tracks, one row for each item.
 - A chat line ("Navigating to ... to buy ...") and an on-screen notice say why.
 - A profession row works only while the profession is within its threshold.
 - For a profession row, the addon must already know a trainer.
+- A trainer waypoint ends when the profession is no longer within its threshold, or when you unlearn it.
 
 ### Other sellers
 
@@ -130,6 +131,7 @@ It lists what the addon tracks, one row for each item.
 - Each entry shows the name, the zone and the distance. Pick one to set the waypoint there.
 - Press Escape or click elsewhere to close the list without a change.
 - With auction house routing on, the list can include the closest auctioneer.
+- If the seller no longer fits when you pick it (for example, you equipped a gun after opening the arrow list), no waypoint is set. Chat says "The seller list changed. Open it again to choose."
 
 ### Move and lock
 
@@ -381,7 +383,7 @@ Advanced explains character settings and account-wide learned places, with Recor
 - `/cvn status` reports effective settings, scope and availability guidance; bare `/cvn` opens Home.
 - `/cvn help appearance` lists public keys and previews; `help diagnostics` explains reports. Domain topics: bags, ammo, reagents, supplies, navigation, hud.
 - `/cvn get <key>` is read-only. `/cvn set <key> <value>` validates the whole input and gives one acknowledgement. Missing, unknown, fractional, out-of-range and surplus input never changes a setting.
-- `/cvn demo` runs a tour of real outcomes, one every five seconds: a route set without asking (notification), a question (confirmation), food, water or pet food for your class, arrows, a status-window row click (your class reagent, which can route to an auction house, or repair) and a reminder. Each uses your real vendor data, waypoint and notification style, with your sound, even with On-screen notice off. The status window shows made-up rows meanwhile. At the end the waypoint you had before comes back. Settings are never changed, and no warning is marked as handled. Repeating restarts it.
+- `/cvn demo` runs a tour of real outcomes, one every five seconds: a route set without asking (notification), a question (confirmation), food, water or pet food for your class, arrows, a status-window row click (your class reagent, which can route to an auction house, or repair) and a reminder. Each uses your real vendor data, waypoint and notification style, with your sound, even with On-screen notice off. The status window shows made-up rows meanwhile. At the end your game waypoint comes back: the one you had before, or the one you set during the tour. Settings are never changed, and no warning is marked as handled. Repeating restarts it.
 - `/cvn preview notice`, `hud` or `prompt` shows one safe sample for ten seconds. Samples cannot buy or set waypoints. Timers and supported drawing APIs are required.
 
 | Public key | Values | Default | Stored character key |

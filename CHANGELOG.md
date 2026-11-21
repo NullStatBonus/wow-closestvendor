@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.3
+
+- **Fixed: When you bind again at the inn you are bound to, the addon learns where it is.** Before, a row click in a dungeon searched near your last position outside.
+- Fixed: When you pick a seller from an old list, the addon checks it again. Before, it could route you to a vendor without your ammo.
+- Fixed: When you unlearn a profession, its trainer waypoint goes away. Before, the waypoint stayed.
+- Fixed: After `/cvn demo`, your own map waypoint comes back. Before, the demo removed it.
+- Fixed: The status window updates when a timer does not start. Before, the window could stop updating.
+
 ## 1.9.2
 
 - **Fixed: When you click a row, the open warning comes back after that trip.** Before, the warning was lost or blocked the other warnings.

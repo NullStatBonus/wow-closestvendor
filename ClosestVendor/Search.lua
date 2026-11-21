@@ -26,6 +26,9 @@ local function eligible(v, need)
     return code == 2 or code == 3
 end
 
+-- True when record v sells what need asks for (need as above). Faction is not checked.
+S.Fits = eligible
+
 -- bucket: list of records on the player's continent. Returns the nearest eligible record or
 -- nil. Squared distance only; nothing is converted for non-winners. With mapId, also returns the
 -- nearest eligible record on that map (the same record when it is the overall nearest).

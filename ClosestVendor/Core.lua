@@ -227,15 +227,26 @@ local function noteBinder(area)
     local continent, x, y, map = A.playerWorldPos()
     pendingBind = continent and { area = area, continent = continent, map = map, x = x, y = y } or nil
 end
+-- An innkeeper question at the inn already saved (same name) gives that inn's position, so a point
+-- saved by name only gets one. Not every client fires HEARTHSTONE_BOUND, so a zone change counts too;
+-- a question closed without binding there still names the inn the player is bound to.
 local function learnHearth()
     local name = A.bindLocation()
     if not name then return end
     local h = CHAR.hearth
-    if h and h.name == name then return end
     local p = pendingBind
-    pendingBind = nil
     -- The innkeeper names the place it binds to; a question declined there says nothing about this bind.
-    if p and type(p.area) == "string" and p.area ~= name then p = nil end
+    -- A question that named another place is forgotten, so it cannot place a later bind.
+    if p and type(p.area) == "string" and p.area ~= name then p, pendingBind = nil, nil end
+    if h and h.name == name then
+        -- Same name: only a question that named this inn says where it is.
+        if not (p and p.area == name) then return end
+        pendingBind = nil
+        CHAR.hearth = { name = name, continent = p.continent, map = p.map, x = p.x, y = p.y }
+        log.Add("hearthstone point learned: " .. name)
+        return
+    end
+    pendingBind = nil
     if h and p then
         CHAR.hearth = { name = name, continent = p.continent, map = p.map, x = p.x, y = p.y }
         log.Add("hearthstone point learned: " .. name)
@@ -634,7 +645,9 @@ local function start()
     rebuildTrainers()
     rebuildAuctioneers()
     local nav = { Set = function(v) return ns.Nav.Set(A.navApi(say), v, CHAR.cfg.navProvider) end,
-                  Clear = function(h) ns.Nav.Clear(A.navApi(say), h) end }
+                  Clear = function(h) ns.Nav.Clear(A.navApi(say), h) end,
+                  ReadGame = function() return ns.Nav.ReadGame(A.navApi(say)) end,
+                  SetGame = function(p) return ns.Nav.SetGame(A.navApi(say), p) end }
     controller = ns.Controller.New({
         cfg = CHAR.cfg,
         log = function(msg) log.Add(msg) end,

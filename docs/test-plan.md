@@ -647,6 +647,22 @@ Use `/cvn choice ask` so questions show. Lower a threshold or wear gear down to 
 - [ ] Bags full and ammo low, ammo question open. Wear gear down below the durability threshold. Expected: the repair question replaces it. Answer No to repair, then No to ammo. Expected: the sell question comes.
 - [ ] Hunter with low arrows and low bullets, arrow question open or arrow vendor pinned. Equip a gun. Expected: the arrow question or pin ends and the bullet question is asked. With low pet food and a meat vendor pinned, call a pet that does not eat meat. Expected: the pin ends and a vendor for the new pet's food is asked.
 
+## 33. Places and waypoints
+
+Before the first check: type `/cvn debug on`, then `/reload`. After the last check: `/reload` again, so the game saves the log. The reviewer reads `ClosestVendorCharDB` in `WTF/Account/<account>/<realm>/<character>/SavedVariables/ClosestVendor.lua`.
+
+- [ ] Classic Era and WoW Forever. Setup: your hearthstone is already bound to an inn; stand at that inn's innkeeper. Bind your hearthstone there again.
+  Check: nothing changes on screen. The reviewer confirms this from the log.
+  Log: `hearth` has `continent`, `x` and `y`; `log` has "hearthstone point learned: <inn>".
+- [ ] WoW Forever only (Classic Era has no game waypoint). Setup: if TomTom or WaypointUI is installed, type `/cvn nav native` first and `/cvn nav auto` after the check. Put your own waypoint on the map, type `/cvn demo`, and wait about a minute for the tour to end.
+  Check: your waypoint is on the map again, where you put it.
+  Log: "demo: your game waypoint restored, not tracked".
+- [ ] Optional, on an alt only (unlearning loses the skill). Setup: the alt has a profession and the addon knows a trainer for it; the status window shows the profession row (`/cvn hud row professions always`). Click the profession row to set a waypoint to the trainer, then unlearn that profession.
+  Check: the trainer waypoint goes away.
+  Log: "trainer waypoint cleared: <profession> was unlearned".
+
+No in-game check, unit tests only: the seller list that changes before you pick, a tracked game waypoint after the demo, a game waypoint the game refuses, and the failed timer.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

@@ -67,8 +67,8 @@ function P.Within(skills, known, threshold, level, artisan)
     return out
 end
 
--- Skill-change detector. Changed(skills) is true when any skill differs from the previous call;
--- the first readable call only stores what is there.
+-- Skill-change detector. Changed(skills) is true when any skill differs from the previous call or
+-- is gone (unlearned); the first readable call only stores what is there.
 function P.New()
     local ranks, seen = {}, false
     local self = {}
@@ -80,6 +80,12 @@ function P.New()
         if seen then
             for name, rank in pairs(now) do
                 if ranks[name] ~= rank then changed = true break end
+            end
+            -- A skill gone since (unlearned) is a change too.
+            if not changed then
+                for name in pairs(ranks) do
+                    if now[name] == nil then changed = true break end
+                end
             end
         end
         ranks, seen = now, true

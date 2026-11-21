@@ -509,6 +509,37 @@ w = trade({ skills = mining(70), autoAccept = false })
 w.c.OnSkillChange()
 w.c.OnSkillChange()
 eq(#w.prompts, 0, "unchanged skills do not ask")
+-- Unlearning a profession ends its trainer waypoint at the next skill update.
+w = trade({ skills = { { name = "Mining", rank = 70, max = 75 }, { name = "Swords", rank = 5, max = 75 } } })
+w.c.OnSkillChange()
+w.c.OnCraft()
+eq(w.c.PinKind(), "trainer", "trainer waypoint set")
+local clears = w.clearCount
+w.skills = { { name = "Swords", rank = 5, max = 75 } }
+w.c.OnSkillChange()
+eq(w.clearCount, clears + 1, "Mining unlearned: its waypoint ends")
+eq(has(w, "trainer waypoint cleared: Mining was unlearned"), true, "unlearned: its own log line")
+eq(has(w, "is no longer near its cap"), false, "unlearned: not logged as past the cap")
+-- Pinned by a craft before the first skill read: the first read already ends it.
+w = trade({ skills = { { name = "Mining", rank = 70, max = 75 }, { name = "Swords", rank = 5, max = 75 } } })
+w.c.OnCraft()
+eq(w.c.PinKind(), "trainer", "pinned before any skill read")
+clears = w.clearCount
+w.skills = { { name = "Swords", rank = 5, max = 75 } }
+w.c.OnSkillChange()
+eq(w.clearCount, clears + 1, "unlearned before the first read: the waypoint still ends")
+-- Profession warnings off: a trainer pinned from the status window ends too.
+w = trade({ skills = { { name = "Mining", rank = 70, max = 75 }, { name = "Swords", rank = 5, max = 75 } }, cfg = { tradeEnabled = false } })
+w.c.OnSkillChange()
+eq(w.c.Go("trainer", "Mining"), true, "row click pins the trainer")
+clears = w.clearCount
+w.skills = { { name = "Swords", rank = 5, max = 75 } }
+w.c.OnSkillChange()
+eq(w.clearCount, clears + 1, "warnings off: unlearned, the waypoint ends")
+eq(has(w, "trainer waypoint cleared: Mining was unlearned"), true, "warnings off: unlearned log line")
+w.skills = nil
+w.c.OnSkillChange()
+eq(w.clearCount, clears + 1, "unreadable skills end nothing")
 
 -- Priority: trainer is lowest.
 w = trade({ free = 1, autoAccept = false })
@@ -1677,6 +1708,24 @@ eq(w.says[2], "You are in an instance, so the search started from your hearthsto
 w = world({ instance = "party", anchors = {} })
 eq(w.c.Pick("sell", nil, { v = VENDORS[1] }), false, "nothing to route now: not pinned")
 eq(w.setCount, 0, "no waypoint")
+-- The list was built for arrows; a gun equipped since makes an arrow-only seller wrong.
+w = world({ ammoKind = "arrow", ammoCount = 10, autoAccept = false })
+c = w.c.Choices("ammo")
+eq(c.entries[1].v[2], "Arrow Man", "arrow seller listed")
+w.ammoKind = "bullet"
+eq(w.c.Pick("ammo", nil, c.entries[1]), false, "gun equipped since: the arrow seller is not pinned")
+eq(w.setCount, 0, "no waypoint")
+eq(w.says[1], "The seller list changed. Open it again to choose.", "chat says to open the list again")
+eq(w.c.Pick("ammo", nil, w.c.Choices("ammo").entries[1]), true, "a fresh list pins")
+eq(w.last[2], "Gun Shop", "the bullet seller")
+w = world({ ammoKind = "arrow", ammoCount = 10, autoAccept = false })
+c = w.c.Choices("ammo")
+w.ammoKind = nil -- the bow is put away
+eq(w.c.Pick("ammo", nil, c.entries[1]), false, "no ranged weapon now: nothing pinned")
+eq(w.says[1], "The seller list changed. Open it again to choose.", "and chat still says so")
+w = trade({ tiers = true, trainers = { [1] = TIERED } })
+eq(w.c.Pick("trainer", "Mining", { v = { 9, "Herbalist", 100, 0.1, 0.1, 0, { Herbalism = true }, 10, 0 } }), false,
+    "a trainer that does not teach the row's profession is not pinned")
 
 -- A click keeps the warning it closes (#39).
 local SMITH = { 5, "Smith", 100, 0.9, 0.1, 0, true, 0, 90, 0, 0, 0 }
