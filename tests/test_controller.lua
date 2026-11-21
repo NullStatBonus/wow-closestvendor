@@ -45,7 +45,8 @@ local function world(over)
         anchor = function(which) return w.anchors and w.anchors[which] end,
         evaluate = w.evaluate,
         after = (not w.noAfter) and function(s, fn)
-            if w.noTimers then return false end
+            w.afterCalls = (w.afterCalls or 0) + 1
+            if w.noTimers or (w.afterFailsAt and w.afterCalls >= w.afterFailsAt) then return false end
             w.timers = w.timers or {}
             w.timers[#w.timers + 1] = { s = s, fn = fn }
             return true
@@ -1228,6 +1229,10 @@ eq(w.c.Go("reagent", 17020), true, "pinned")
 eq(w.last[2], "Auctioneer Near", "auctioneer closer than the powder seller")
 eq(w.says[1]:find("at the auction house", 1, true) ~= nil, true, "notice says to buy at the auction house: " .. w.says[1])
 eq(w.c.PinKind(), "reagent", "still a reagent pin")
+-- Two sellers that round to the same whole yards: the truly closer one wins.
+w = auction({ pos = { 1, 0, 0 }, buckets = { [1] = { RV[2] } }, auction = { [1] = { { 90, "Auctioneer Near", 100, 0.2, 0.1, 0, nil, 0, 29.6, 0, 0 } } } })
+w.c.Go("reagent", 17020)
+eq(w.last[2], "Auctioneer Near", "30 yards and 29.6 yards: the auctioneer is closer")
 w = auction({ pos = { 1, 25, 0 } })
 w.c.Go("reagent", 17020)
 eq(w.last[2], "Powder Seller", "vendor closer: the vendor")
@@ -1820,5 +1825,14 @@ eq(w.setCount, 1, "same diet: the pin stays")
 w.supplies.diets = { Bread = true }
 w.c.Evaluate()
 eq(w.clearCount >= 1 and w.last[2], "Baker", "a bread eater: the meat pin ends and a bread seller is asked")
+
+-- A step timer that cannot be scheduled ends the tour and still tells the caller (done), so the
+-- made-up status rows go away.
+w = world({ afterFailsAt = 2, autoAccept = false })
+local doneCount = 0
+w.c.Demo(function() doneCount = doneCount + 1 end)
+eq(doneCount, 0, "the tour runs while timers work")
+table.remove(w.timers, 1).fn()
+eq(doneCount, 1, "the second timer failed: done runs")
 
 H.done()

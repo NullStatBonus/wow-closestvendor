@@ -34,3 +34,10 @@ Automatic warnings (the questions and automatic pins) SHALL keep choosing vendor
 #### Scenario: Question stays vendor-only
 - **WHEN** the setting is on and ammo runs low
 - **THEN** the question offers vendors only
+
+### Requirement: Closest by true distance
+The addon SHALL compare an auctioneer and a vendor by their exact distance, not by distances rounded to whole yards.
+
+#### Scenario: Same whole yards
+- **WHEN** a vendor is 30 yards away and an auctioneer is 29.6 yards away
+- **THEN** the auctioneer is the closer one

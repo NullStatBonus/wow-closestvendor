@@ -149,3 +149,10 @@ When the merchant list has an item whose kind (arrow, bullet or other) the game 
 #### Scenario: Arrow kind not loaded yet
 - **WHEN** the player opens a known arrow vendor and the game cannot yet tell that one of its items is an arrow
 - **THEN** the vendor still counts as selling arrows, and the record is updated once the items load
+
+### Requirement: Standing of an external trainer
+The addon SHALL record the standing (trades or not) of a profession trainer known only from NorgannonDB, as it does for a learned trainer.
+
+#### Scenario: Unfriendly external trainer
+- **WHEN** this character targets a NorgannonDB trainer the addon has not learned and the game reports Unfriendly
+- **THEN** the standing is saved as not trading and the trainer is not used

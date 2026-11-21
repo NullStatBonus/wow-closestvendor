@@ -22,7 +22,7 @@ The addon SHALL expose settings, status, help, demo, preview, typed get/set, deb
 
 #### Scenario: Explicit pages
 - **WHEN** settings is used with no page or a case-insensitive page slug
-- **THEN** no page opens Home; valid slugs match settings-interaction; status-window opens Appearance; invalid pages list valid choices without writes
+- **THEN** no page opens Home; valid slugs match settings-interaction; status-window opens the Status window tab and notifications opens the Notifications tab of Appearance; invalid pages list valid choices without writes
 
 #### Scenario: Topic help and status
 - **WHEN** help or status is requested

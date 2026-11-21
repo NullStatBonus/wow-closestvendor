@@ -24,13 +24,23 @@ local function boot(opts)
                 items = { [100] = { 2, 2 }, [101] = { 2, 3 }, [102] = { 2, 16 }, [103] = { 2, 7 },
                           [200] = { 6, 2 }, [201] = { 6, 3 }, [300] = { 0, 0 },
                           [400] = { 4, 2 }, [401] = { 4, 3 } } }
-    g.frames, g.time, g.hudTimers = {}, 100, {}
+    g.frames, g.time, g.hudTimers, g.gearTimers = {}, 100, {}, {}
     -- A frame that records what the addon needs to see and ignores every other call.
     function g.newFrame(kind, name)
         local f = { kind = kind, name = name, events = {}, scripts = {}, shown = false }
         function f:RegisterEvent(e) self.events[e] = true end
         function f:SetScript(event, fn)
-            if event == "OnEvent" then g.onEvent = function(ev, a) fn(self, ev, a) end else self.scripts[event] = fn end
+            if event == "OnEvent" then
+                -- Worn-gear events are checked after a short delay; onEvent runs that check at once, rawEvent leaves it queued.
+                g.rawEvent = function(ev, a) fn(self, ev, a) end
+                g.onEvent = function(ev, a)
+                    fn(self, ev, a)
+                    if ev == "UPDATE_INVENTORY_DURABILITY" or ev == "UNIT_INVENTORY_CHANGED" then
+                        local t = g.gearTimers; g.gearTimers = {}
+                        for _, run in ipairs(t) do run() end
+                    end
+                end
+            else self.scripts[event] = fn end
         end
         function f:SetText(t) self.text = t end
         function f:Show() self.shown = true end
@@ -77,7 +87,7 @@ local function boot(opts)
         UnitName = function() return g.npc and g.npc.name end,
         CanMerchantRepair = function() return g.repairable end,
         -- The status window's redraw timer (0.25 s) is kept apart from the retry timer.
-        C_Timer = { After = function(s, fn) local t = s == 0.25 and g.hudTimers or g.timers; t[#t + 1] = fn end },
+        C_Timer = { After = function(s, fn) local t = s == 0.25 and g.hudTimers or s == 0.2 and g.gearTimers or g.timers; t[#t + 1] = fn end },
         C_AddOns = { IsAddOnLoaded = function(name) return opts.tomtom and name == "TomTom" end },
         NUM_BAG_SLOTS = 4,
         GetInventoryItemID = function(_, slot) return g.equipped and g.equipped[slot] end,
@@ -805,9 +815,43 @@ g.onEvent("UNIT_INVENTORY_CHANGED", "target")
 g.onEvent("ADDON_LOADED", "SomeOtherAddon")
 local text = logText(g)
 eq(has(text, "event BAG_UPDATE_DELAYED"), true, "events recorded")
-eq(has(text, "event UNIT_INVENTORY_CHANGED player"), true, "event arguments recorded")
+eq(has(text, "event UNIT_INVENTORY_CHANGED"), false, "gear events are not logged one by one")
+eq(has(text, "gear events: 1 folded into one check"), true, "the gear event shows as one folded check")
 eq(has(text, "UNIT_INVENTORY_CHANGED target"), false, "other units' inventory events are not noise")
 eq(has(text, "SomeOtherAddon"), false, "other addons' loads are not recorded")
+-- A burst of gear events: one check, one log line with the count, however many arrive.
+do
+    local gb = boot({ tomtom = true }); login(gb)
+    gb.env.ClosestVendorCharDB.log.enabled = true
+    gb.autoAccept = false
+    gb.dur = 10
+    gb.gearTimers = {}
+    for _ = 1, 5 do gb.rawEvent("UPDATE_INVENTORY_DURABILITY") end
+    gb.rawEvent("UNIT_INVENTORY_CHANGED", "player")
+    eq(#gb.gearTimers, 1, "six gear events arm one timer")
+    eq(gb.popup, nil, "nothing is checked before the timer")
+    gb.gearTimers[1]()
+    eq(gb.popup ~= nil and gb.popup.text:find("needs repair", 1, true) ~= nil, true, "the timer runs one check that finds the low durability")
+    eq(logText(gb):find("gear events: 6 folded into one check", 1, true) ~= nil, true, "one line with the count")
+    eq(logText(gb):find("event UPDATE_INVENTORY_DURABILITY", 1, true), nil, "no raw line per event")
+    -- A client without timers checks at once.
+    local gt = boot({ tomtom = true }); login(gt)
+    gt.autoAccept = false; gt.dur = 10
+    gt.env.C_Timer = nil
+    gt.rawEvent("UPDATE_INVENTORY_DURABILITY")
+    eq(gt.popup ~= nil, true, "no timer API: the check runs at once")
+end
+-- Old account-level copies and the retired toastLocked key are dropped at load; cfg and hud stay as the seed.
+do
+    local gs = boot({ tomtom = true, db = { hearth = { name = "x" }, lastOutside = { x = 1 }, professions = { Mining = true },
+        log = { entries = { { t = 1, msg = "old" } } }, cfg = { bagThreshold = 3 }, hud = { x = 5 } },
+        charDb = { cfg = { toastLocked = true } } })
+    login(gs)
+    local db = gs.env.ClosestVendorDB
+    eq(db.hearth == nil and db.lastOutside == nil and db.professions == nil and db.log == nil, true, "old account-level keys are dropped")
+    eq(db.cfg ~= nil and db.hud ~= nil, true, "cfg and hud stay as the seed for new characters")
+    eq(gs.env.ClosestVendorCharDB.cfg.toastLocked, nil, "the retired toastLocked key is dropped")
+end
 g.autoAccept = false
 g.free = 1
 g.onEvent("BAG_UPDATE_DELAYED")
@@ -1966,6 +2010,14 @@ do
     eq(gn.slot and (gn.slot.uiMapID .. ":" .. tostring(gn.tracked)), "200:false",
         "the player's untracked game waypoint is back, not tracked")
     eq(logged(gn, "demo: your game waypoint restored, not tracked"), true, "the log says it is not tracked")
+    -- A game waypoint that cannot be read at the end is not set over: the log says why.
+    gn = nativeDemo()
+    table.remove(gn.timers, 1)()
+    gn.env.C_Map.GetUserWaypoint = function() error("boom") end
+    n = 0
+    while #gn.timers > 0 and n < 20 do table.remove(gn.timers, 1)(); n = n + 1 end
+    eq(logged(gn, "demo: your game waypoint not set again: the game would not tell what is there now"), true, "unreadable slot: no restore")
+    eq(logged(gn, "demo: your game waypoint restored"), false, "and nothing was set")
     -- Set after the first step: later steps use the slot, and the player's newest point comes back.
     gn = nativeDemo()
     table.remove(gn.timers, 1)()
@@ -2296,6 +2348,23 @@ g.free = 1
 g.onEvent("BAG_UPDATE_DELAYED")
 eq(lastPrinted(g):find("Hyjal Seller", 1, true) ~= nil, true, "NorgannonDB vendor is the nearest: " .. lastPrinted(g))
 eq(has(reportOf(g), "NorgannonDB: found, schema 1.5, 1 vendors added, 0 skipped"), true, "report line")
+-- A trainer only NorgannonDB knows: an Unfriendly reaction is remembered, so it is not offered.
+do
+    local ng = fakeNG()
+    local peekVendor = ng.Peek
+    local tnpcs = { [9100] = { name = "Master Smith", subName = "Master Blacksmith", reaction = "AH", spawns = { [700] = { { 90, 50 } } } } }
+    ng.Peek = function(self, kind, id) return tnpcs[id] or peekVendor(self, kind, id) end
+    ng.zones[700] = { uiMapId = 100 }
+    ng.categories.trainer = { npcs = { [9100] = "AH" } }
+    ng.recipes = { [1] = { skill = 164, trainers = { [9100] = 1 } } }
+    ng.L = function(_, kind, id) if kind == "professions" and id == 164 then return "Blacksmithing" end end
+    local gs = boot({ tomtom = true, ng = ng }); login(gs)
+    gs.npc = { guid = "Creature-0-4372-0-55-9100-0000A1B2C3", name = "Master Smith" }
+    gs.env.UnitReaction = function() return 3 end
+    gs.onEvent("PLAYER_TARGET_CHANGED")
+    eq(gs.env.ClosestVendorCharDB.standing[9100], false, "an Unfriendly trainer only NorgannonDB knows is remembered")
+end
+
 -- Trainers with a tier from NorgannonDB: Artisan is routed, only to a trainer whose title teaches it;
 -- a learned trainer of unknown tier is not used for Artisan, and its position wins when NorgannonDB has it.
 do

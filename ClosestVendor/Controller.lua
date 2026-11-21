@@ -159,10 +159,11 @@ function C.New(env)
     end
 
     -- Straight-line distance in whole yards from the player to a record (world x,y at index i, i+1).
-    local function yards(v, i, x, y)
+    local function dist(v, i, x, y)
         local dx, dy = v[i] - x, v[i + 1] - y
-        return math.floor(math.sqrt(dx * dx + dy * dy) + 0.5)
+        return math.sqrt(dx * dx + dy * dy)
     end
+    local function yards(v, i, x, y) return math.floor(dist(v, i, x, y) + 0.5) end
 
     -- The player's position as { continent, x, y, map }, or nil.
     local function here()
@@ -710,7 +711,7 @@ function C.New(env)
 
     -- True when the auctioneer ah is the one to route to instead of the vendor v (which may be nil).
     local function auctionWins(q, v, ah)
-        return ah and (not v or yards(ah, 9, q.at.x, q.at.y) < yards(v, 9, q.at.x, q.at.y)) or false
+        return ah and (not v or dist(ah, 9, q.at.x, q.at.y) < dist(v, 9, q.at.x, q.at.y)) or false
     end
 
     -- After a click pinned something: the low condition it serves becomes the handled request. When it
@@ -930,7 +931,8 @@ function C.New(env)
         demoing = false
         local before = demoBefore
         -- The slot now: empty, one this addon set, or the player's own point (left as it is).
-        local cur = env.nav.ReadGame and env.nav.ReadGame()
+        local cur, unreadable = nil, false
+        if env.nav.ReadGame then cur, unreadable = env.nav.ReadGame() end
         local theirs = cur and not ours(cur)
         demoBefore, demoSpots = nil, {}
         if before then lastKind, lastTrade = before.lastKind, before.lastTrade end
@@ -942,7 +944,9 @@ function C.New(env)
                 log("demo: previous waypoint restored")
             end
         end
-        if before and before.game and not theirs and env.nav.SetGame and env.nav.SetGame(before.game) then
+        if before and before.game and unreadable then
+            log("demo: your game waypoint not set again: the game would not tell what is there now")
+        elseif before and before.game and not theirs and env.nav.SetGame and env.nav.SetGame(before.game) then
             log(before.game.tracked and "demo: your game waypoint restored, tracked"
                 or "demo: your game waypoint restored, not tracked")
         end
@@ -1021,7 +1025,11 @@ function C.New(env)
                 return
             end
             steps[i]()
-            if not env.after(C.DEMO_STEP, function() run(i + 1) end) then endDemo(); return false end
+            if not env.after(C.DEMO_STEP, function() run(i + 1) end) then
+                endDemo()
+                if done then done() end
+                return false
+            end
             return true
         end
         demoing = true

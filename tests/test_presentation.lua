@@ -41,7 +41,8 @@ local saved=c.bagThreshold
 for _,msg in ipairs({"set", "set bags.threshold", "set cfg.bagThreshold 7", "set bags.threshold 7 extra", "get", "get bags.threshold extra"}) do
     C.Run(c,msg);eq(c.bagThreshold,saved,"malformed command read only")
 end
-local _,a=C.Run(c,"SETTINGS STATUS-WINDOW");eq(a[2],"appearance","case insensitive alias")
+local _,a=C.Run(c,"SETTINGS STATUS-WINDOW");eq(a[2],"status-window","case insensitive page name")
+_,a=C.Run(c,"settings notifications");eq(a[2],"notifications","notifications page")
 _,a=C.Run(c,"options");eq(a[2],"home","Home alias")
 for kind in pairs(P.KINDS) do _,a=C.Run(c,"preview "..kind);eq(a[2],kind,"preview allowlist") end
 local out=C.Run(c,"preview unknown");eq(out[1]:find("hud",1,true)~=nil,true,"kinds listed")

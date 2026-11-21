@@ -663,6 +663,22 @@ Before the first check: type `/cvn debug on`, then `/reload`. After the last che
 
 No in-game check, unit tests only: the seller list that changes before you pick, a tracked game waypoint after the demo, a game waypoint the game refuses, and the failed timer.
 
+## 34. Patch 1.9.4 fixes
+
+Before the first check: type `/cvn debug on`, then `/reload`. After the last check: `/reload` again, so the game saves the log. The reviewer reads `ClosestVendorCharDB` and `ClosestVendorDB` in `WTF/Account/<account>/<realm>/<character>/SavedVariables/ClosestVendor.lua`.
+
+- [ ] Type `/cvn settings status-window`, then `/cvn settings notifications`.
+  Check: the settings window opens on Appearance, first on the Status window tab, then on the Notifications tab.
+  Log: none; this is on screen only.
+- [ ] Play for two minutes with gear that wears (fight or wait for a durability tick), then type `/cvn log`.
+  Check: the report is short and readable, with no line for each durability event.
+  Log: "gear events: N folded into one check" lines.
+- [ ] After the `/reload` at the end.
+  Check: nothing to see in game.
+  Log: `ClosestVendorDB` has no `hearth`, `lastOutside`, `professions` or `log` key.
+
+No in-game check, unit tests only: the Unfriendly NorgannonDB trainer, the vendor and auctioneer tie in whole yards, the player waypoint next to the addon's, the demo with an unreadable waypoint or a failed timer, and Move (Done, Cancel, lock).
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

@@ -192,3 +192,10 @@ The addon SHALL let the player choose the waypoint method: automatic (the defaul
 #### Scenario: Chosen method missing
 - **WHEN** the player chose WaypointUI and it is not installed
 - **THEN** the usual order is used
+
+### Requirement: Own waypoint check is exact
+When navigation ends, the addon SHALL clear the game waypoint only when it holds the point the addon set, with a tolerance of 0.00001 of the map; a nearby waypoint of the player SHALL stay.
+
+#### Scenario: Waypoint 0.0005 away
+- **WHEN** the player replaced the addon's game waypoint with one 0.0005 away on the same map
+- **THEN** navigation ending leaves it alone

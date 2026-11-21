@@ -123,6 +123,9 @@ eq(log[4], "super:false", "supertrack off")
 api, log = env({ native = true, replaced = { uiMapID = 1429, position = { x = 0.9, y = 0.9 } } })
 h = N.Set(api, V); N.Clear(api, h)
 eq(#log, 2, "user's replacement waypoint is left alone")
+api, log = env({ native = true, replaced = { uiMapID = 1429, position = { x = 0.4155, y = 0.659 } } })
+h = N.Set(api, V); N.Clear(api, h)
+eq(#log, 2, "a player waypoint 0.0005 away is not removed")
 
 -- Native refuses the map -> chat.
 api, log = env({ native = true, canSet = false })
@@ -161,7 +164,13 @@ do
     refuse = false
     eq(N.SetGame(api, { map = 999, x = 0.5, y = 0.5 }), false, "a map that takes no waypoint")
     api.C_Map.GetUserWaypoint = function() error("boom") end
-    eq(N.ReadGame(api), nil, "an error reads as nil")
-    eq(N.ReadGame({}), nil, "no map API: nil")
+    local v, bad = N.ReadGame(api)
+    eq(v == nil and bad, true, "an error reads as unreadable")
+    api.C_Map.GetUserWaypoint = function() return slot end
+    slot = nil
+    v, bad = N.ReadGame(api)
+    eq(v == nil and bad == nil, true, "an empty slot is not unreadable")
+    v, bad = N.ReadGame({})
+    eq(v == nil and bad, true, "no map API: unreadable")
     eq(N.SetGame({}, p), false, "no map API: not set")
 end
