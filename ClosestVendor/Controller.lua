@@ -902,7 +902,7 @@ function C.New(env)
     local demoToken, demoHandle, demoPrompt, demoBefore = 0, nil, nil, nil
     -- The game waypoint slot holds p when the map matches and x, y are within 0.001 (as Nav checks).
     local function sameSpot(a, b)
-        return a and b and a.map == b.map and math.abs(a.x - b.x) < 0.001 and math.abs(a.y - b.y) < 0.001
+        return a and b and a.map == b.map and math.abs(a.x - b.x) < ns.Nav.SPOT and math.abs(a.y - b.y) < ns.Nav.SPOT
     end
     local demoSpots = {} -- the game waypoints this addon set: its pin from before the demo, and the steps' pins
     local function ours(cur)
@@ -937,7 +937,9 @@ function C.New(env)
         demoBefore, demoSpots = nil, {}
         if before then lastKind, lastTrade = before.lastKind, before.lastTrade end
         if before and before.v and not handle then
-            if before.native and theirs then
+            if before.native and unreadable then
+                log("demo: previous waypoint not set again: the game would not tell what is there now")
+            elseif before.native and theirs then
                 log("demo: previous waypoint not set again: the game waypoint is yours now")
             else
                 pin(before.v, before.trade, before.kind, before.id)

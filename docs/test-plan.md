@@ -663,7 +663,7 @@ Before the first check: type `/cvn debug on`, then `/reload`. After the last che
 
 No in-game check, unit tests only: the seller list that changes before you pick, a tracked game waypoint after the demo, a game waypoint the game refuses, and the failed timer.
 
-## 34. Patch 1.9.4 fixes
+## 34. Patches 1.9.4 and 1.9.5
 
 Before the first check: type `/cvn debug on`, then `/reload`. After the last check: `/reload` again, so the game saves the log. The reviewer reads `ClosestVendorCharDB` and `ClosestVendorDB` in `WTF/Account/<account>/<realm>/<character>/SavedVariables/ClosestVendor.lua`.
 
@@ -681,7 +681,11 @@ Before the first check: type `/cvn debug on`, then `/reload`. After the last che
   Check: nothing changes on screen. The reviewer confirms this from the saved file.
   Log: `ClosestVendorCharDB.hearth` has `x` and `y` for that inn.
 
-No in-game check, unit tests only: the reagent names in another game language, the Unfriendly NorgannonDB trainer, the vendor and auctioneer tie in whole yards, the player waypoint next to the addon's, the demo with an unreadable waypoint or a failed timer, and Move (Done, Cancel, lock).
+- [ ] Low durability on gear that wears (or wait for a tick). Open a merchant at the same moment.
+  Check: no repair question stays on screen.
+  Log: "merchant window opened" comes before any "trigger" line for repair.
+
+No in-game check, unit tests only: the demo with an unreadable waypoint or a waypoint near a demo pin, the reagent names in another game language, the Unfriendly NorgannonDB trainer, the vendor and auctioneer tie in whole yards, the player waypoint next to the addon's, the demo with an unreadable waypoint or a failed timer, and Move (Done, Cancel, lock).
 
 ## Not covered yet
 
