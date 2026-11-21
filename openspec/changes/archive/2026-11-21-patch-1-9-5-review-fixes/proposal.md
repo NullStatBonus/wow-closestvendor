@@ -9,7 +9,7 @@ A Codex review of 1.9.4 found three regressions and three smaller gaps.
 - The demo and `Nav.clear` share one tolerance (`Nav.SPOT`, 0.00001).
 - The invalid-page message lists `notifications` and `status-window`.
 - Tests: a logout registration check and a bind to a new inn.
-- Not fixed: localized reagent names match case-insensitively for ASCII only (Lua has no Unicode lowercase); the README says so.
+- Localized reagent names match without regard to case for A-Z, Latin-1, Latin Extended-A and Cyrillic (`Reagents.Lower`).
 
 ## Capabilities
 

@@ -5,6 +5,7 @@
 - **Fixed: A repair question no longer opens after you reach a merchant.** Before, a gear check could ask just after the merchant window opened.
 - Fixed: After `/cvn demo`, your own map waypoint stays when the game cannot say what is there. Before, the addon could replace it.
 - Fixed: When you stop `/cvn demo`, a waypoint you set very near a demo pin stays. Before, the addon could replace it.
+- Fixed: `/cvn reagent` matches a reagent name in any case for accented Latin and Cyrillic letters. Before, only A to Z ignored case.
 - Fixed: `/cvn settings` with a wrong page name lists `notifications` and `status-window`. Before, it left them out.
 
 ## 1.9.4
