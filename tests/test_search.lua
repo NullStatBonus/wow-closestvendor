@@ -215,3 +215,8 @@ eq(names(S.SeveralTrainers(tdup, 0, 0, "Mining", ALLIANCE, 10)), "Mine near,Othe
 eq(names(S.SeveralTrainers(tdup, 0, 0, "Mining", ALLIANCE, 1)), "Mine near", "several trainers: a duplicate takes one slot")
 
 H.done()
+
+-- Fits: the same check the searches use, for one record.
+eq(S.Fits({ 3, "Arrows", 100, 0, 0, 0, false, 1, 0, 0 }, "arrow"), true, "arrow seller fits arrows")
+eq(S.Fits({ 3, "Arrows", 100, 0, 0, 0, false, 1, 0, 0 }, "bullet"), false, "but not bullets")
+eq(S.Fits({ 2, "Smith", 100, 0, 0, 0, true, 0, 0, 0 }, "repair"), true, "repairer fits repair")

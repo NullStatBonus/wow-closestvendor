@@ -31,15 +31,23 @@ While in the open world with a known position, the addon SHALL remember the cont
 - **THEN** the last outdoor position is unchanged
 
 ### Requirement: Hearthstone point
-The addon SHALL note the player's position when an innkeeper asks to bind the hearthstone, with the place it names. When the bind location name then differs from the saved one and matches that place, the noted position SHALL become the hearthstone point, at once where the client reports the bind. A bind the addon did not see SHALL be saved by name only, never at the position the player happens to have. A hearthstone bound before the addon was installed is unknown until it is bound again.
+The addon SHALL note the player's position when an innkeeper asks to bind the hearthstone, with the place it names. When the bind location then matches that place, that position SHALL become the hearthstone point (at once where the client reports the bind, else at the next login or zone change), also for a bind again at the same inn. A question for another place SHALL be forgotten once the bind location is read. A bind the addon did not see SHALL be saved by name only.
 
 #### Scenario: Rebind
 - **WHEN** the player binds at a new inn
 - **THEN** the hearthstone point becomes the position where the innkeeper asked, even if the player walks away before the next zone change
 
+#### Scenario: Rebind at the same inn
+- **WHEN** the hearthstone point is saved by name only and the player binds again at that same inn
+- **THEN** the hearthstone point gets the position where the innkeeper asked
+
 #### Scenario: Bind not seen
 - **WHEN** the bind location changes without an innkeeper question the addon saw, or the question named another place
 - **THEN** the new point is saved by name with no position, and a dungeon search uses the last outdoor position until the player binds again
+
+#### Scenario: Same name, no innkeeper question
+- **WHEN** the player logs in or changes zone, the bind name is the saved one, and no innkeeper question for that place was seen
+- **THEN** the saved point does not change
 
 ### Requirement: Anchor setting
 A setting `instanceAnchor`, `hearth` (default) or `last`, SHALL choose where a row click searches from while the player is in a dungeon or raid. A battleground SHALL always use the last outdoor position. If the chosen anchor is unknown, the other known one SHALL be used; if neither is known, chat SHALL say that no target is known yet. `/cvn anchor hearth` and `/cvn anchor last` SHALL set it, and the settings page SHALL have a matching dropdown.

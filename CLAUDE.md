@@ -25,7 +25,7 @@ Update the supporting docs in the same change as any user-visible addon behavior
 
 - `README.md`: features, settings page, command list (`tests/test_readme.lua` checks the commands), and "Good to know" limits.
 - `docs/listing.md`: the CurseForge/Wago listing text, including the summary line if the headline behavior changes.
-- `docs/test-plan.md`: manual in-game checks for the new behavior; keep section numbers unique and in order.
+- `docs/test-plan.md`: manual in-game checks for the new behavior; keep section numbers unique and in order. Keep each check simple and to the bare minimum: one in-game action, then a "Check:" line. Use only the commands a check cannot do without (usually `/cvn debug on` at the start and `/reload` at the end), and verify results in the debug log and saved variables (`ClosestVendorCharDB`) wherever possible, not by on-screen inspection. Make the code log a distinct line for each behavior a check verifies. Mark destructive steps optional, and say when something has no in-game check.
 - The debug report header in `Core.lua` (`reportText`) lists any new setting.
 - `CHANGELOG.md` is written at archive (see Releases), not before.
 

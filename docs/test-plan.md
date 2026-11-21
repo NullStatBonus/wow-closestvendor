@@ -647,6 +647,17 @@ Use `/cvn choice ask` so questions show. Lower a threshold or wear gear down to 
 - [ ] Bags full and ammo low, ammo question open. Wear gear down below the durability threshold. Expected: the repair question replaces it. Answer No to repair, then No to ammo. Expected: the sell question comes.
 - [ ] Hunter with low arrows and low bullets, arrow question open or arrow vendor pinned. Equip a gun. Expected: the arrow question or pin ends and the bullet question is asked. With low pet food and a meat vendor pinned, call a pet that does not eat meat. Expected: the pin ends and a vendor for the new pet's food is asked.
 
+## 33. Places and waypoints
+
+Do these on Classic Era and on WoW Forever, except where a check says otherwise. Commands: `/cvn debug on` once at the start, `/reload` at the end. Then check `WTF/Account/<account>/<realm>/<character>/SavedVariables/ClosestVendor.lua` (`ClosestVendorCharDB`).
+
+- [ ] Bind your hearthstone again at the inn you are already bound to. Check: `hearth` has `continent`, `x` and `y`; `log` has "hearthstone point learned: <inn>".
+- [ ] Hunter with a bow: open the arrow row's seller list (chevron), equip a gun, choose an arrow-only vendor. Check: chat says the list changed; `log` has "chosen pin: the seller no longer fits".
+- [ ] WoW Forever only (Classic Era has no game waypoint): put your own waypoint on the map, then `/cvn demo` (if TomTom or WaypointUI is installed, first `/cvn nav native`, and `/cvn nav auto` after). Wait for the tour to end. Check: your waypoint is on the map; `log` has "demo: your game waypoint restored".
+- [ ] Optional, on an alt only (unlearning loses the skill): pin a profession trainer, then unlearn that profession. Check: `log` has "trainer waypoint cleared: <profession> was unlearned".
+
+The failed-timer fix has no in-game check; the unit tests cover it.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

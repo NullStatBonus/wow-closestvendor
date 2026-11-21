@@ -809,11 +809,10 @@ function A.now()
     return call("GetTime", GetTime) or 0
 end
 
--- Run fn after seconds; returns false if timers are unavailable.
+-- Run fn after seconds; returns false if timers are unavailable or the call failed (then fn never runs).
 function A.after(seconds, fn)
     if not (C_Timer and C_Timer.After) then return false end
-    call("C_Timer.After", C_Timer.After, seconds, fn)
-    return true
+    return call("C_Timer.After", function() C_Timer.After(seconds, fn) return true end) == true
 end
 
 function A.showPopup(which, text, data)

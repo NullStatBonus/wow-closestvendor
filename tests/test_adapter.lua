@@ -236,7 +236,12 @@ local scheduled
 eq(boot({ C_Timer = { After = function(s, fn) scheduled = { s, fn } end } }).after(5, print), true, "timer scheduled")
 eq(scheduled[1], 5, "delay passed")
 eq(boot({}).after(5, print), false, "no timer API")
-eq(boot({ C_Timer = { After = boom } }).after(5, print), true, "timer throws: no error")
+do
+    local At, errs = boot({ C_Timer = { After = boom } })
+    eq(At.after(5, print), false, "timer throws: not scheduled, no error")
+    eq(At.after(5, print), false, "and again on the next try")
+    eq(#errs, 1, "the failure is logged once")
+end
 local log = {}
 A = boot({ StaticPopup_Hide = function(w) log[#log + 1] = "hide " .. w end, StaticPopup_Show = function(w, t, _, d) log[#log + 1] = "show " .. w .. " " .. t .. " " .. d end })
 A.showPopup("W", "text", "data")

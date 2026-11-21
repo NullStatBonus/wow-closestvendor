@@ -135,3 +135,30 @@ N.Clear(api, nil)
 N.Clear(api, { kind = "unknown" })
 
 H.done()
+
+-- The game's own waypoint slot: read it, and set it back (tracked only when it was).
+do
+    local slot, tracked, calls = { uiMapID = 1429, position = { x = 0.2, y = 0.3 } }, true, 0
+    local api = {
+        C_Map = { GetUserWaypoint = function() return slot end,
+                  SetUserWaypoint = function(p) slot = p end,
+                  CanSetUserWaypointOnMap = function(m) return m ~= 999 end },
+        C_SuperTrack = { IsSuperTrackingUserWaypoint = function() return tracked end,
+                         SetSuperTrackedUserWaypoint = function(on) tracked = on; calls = calls + 1 end },
+        UiMapPoint = { CreateFromCoordinates = function(m, x, y) return { uiMapID = m, position = { x = x, y = y } } end },
+    }
+    local p = N.ReadGame(api)
+    eq(p.map .. ":" .. p.x .. ":" .. p.y .. ":" .. tostring(p.tracked), "1429:0.2:0.3:true", "reads the slot and tracking")
+    slot, tracked = nil, false
+    eq(N.ReadGame(api), nil, "empty slot: nil")
+    eq(N.SetGame(api, p), true, "set back")
+    eq(slot.uiMapID .. ":" .. slot.position.x .. ":" .. tostring(tracked), "1429:0.2:true", "same point, tracked again")
+    calls = 0
+    eq(N.SetGame(api, { map = 1429, x = 0.5, y = 0.5, tracked = false }), true, "an untracked point")
+    eq(calls, 0, "tracking not turned on")
+    eq(N.SetGame(api, { map = 999, x = 0.5, y = 0.5 }), false, "a map that takes no waypoint")
+    api.C_Map.GetUserWaypoint = function() error("boom") end
+    eq(N.ReadGame(api), nil, "an error reads as nil")
+    eq(N.ReadGame({}), nil, "no map API: nil")
+    eq(N.SetGame({}, p), false, "no map API: not set")
+end

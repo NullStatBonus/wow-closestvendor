@@ -1499,6 +1499,7 @@ g.onEvent("ZONE_CHANGED_NEW_AREA")
 hearth = g.env.ClosestVendorCharDB.hearth
 eq(hearth.name .. ":" .. tostring(hearth.continent), "Stormwind:nil", "a bind the addon did not see: name only, no guessed position")
 eq(g.ns.frame.events.CONFIRM_BINDER, true, "listens for the innkeeper's question")
+eq(g.ns.frame.events.HEARTHSTONE_BOUND, true, "and for the bind itself")
 g.bind = "Goldshire"; g.pos = { map = 100, x = 0.3, y = 0.4 }
 g.onEvent("CONFIRM_BINDER", "Goldshire")
 g.pos = { map = 100, x = 0.9, y = 0.9 } -- walked away before the next zone change
@@ -1518,6 +1519,34 @@ g.bind = "Stormwind"
 g.bind = nil
 g.onEvent("ZONE_CHANGED_NEW_AREA")
 eq(g.env.ClosestVendorCharDB.hearth.name, "Stormwind", "an unreadable bind name keeps the point")
+-- A point saved by name only gets its position when the player binds again at that same inn, from the
+-- bind event or (clients without it) the next zone change.
+g = boot(); login(g); g.bind = "Goldshire"
+g.onEvent("PLAYER_ENTERING_WORLD")
+g.pos = { map = 100, x = 0.3, y = 0.4 }
+g.onEvent("CONFIRM_BINDER", "Goldshire")
+g.onEvent("ZONE_CHANGED_NEW_AREA")
+eq(tostring(g.env.ClosestVendorCharDB.hearth.x), "300", "same inn, next zone change: the position is learned")
+g = boot(); login(g); g.bind = "Goldshire"
+g.onEvent("PLAYER_ENTERING_WORLD")
+g.pos = { map = 100, x = 0.3, y = 0.4 }
+g.onEvent("CONFIRM_BINDER", "Goldshire")
+g.pos = { map = 100, x = 0.9, y = 0.9 }
+g.onEvent("HEARTHSTONE_BOUND")
+hearth = g.env.ClosestVendorCharDB.hearth
+eq(hearth.name .. ":" .. tostring(hearth.continent) .. ":" .. tostring(hearth.x), "Goldshire:1:300", "rebind at the same inn: where the innkeeper asked becomes the point")
+g.onEvent("CONFIRM_BINDER", "Darkshire")
+g.onEvent("HEARTHSTONE_BOUND")
+eq(g.env.ClosestVendorCharDB.hearth.x, 300, "a bind event for another place's question keeps the point")
+g.pos = { map = 100, x = 0.7, y = 0.7 }
+g.onEvent("CONFIRM_BINDER") -- a question that names no place
+g.onEvent("HEARTHSTONE_BOUND")
+eq(g.env.ClosestVendorCharDB.hearth.x, 300, "same name, a question with no place: the point stays")
+g.onEvent("CONFIRM_BINDER", "Darkshire") -- declined
+g.onEvent("ZONE_CHANGED_NEW_AREA") -- still Goldshire: the Darkshire question is forgotten
+g.bind = "Darkshire"
+g.onEvent("ZONE_CHANGED_NEW_AREA") -- bound there later, unseen
+eq(tostring(g.env.ClosestVendorCharDB.hearth.continent), "nil", "an old question for another place does not place a later bind")
 
 -- ---- Status window, its settings and auctioneers ----
 
@@ -1602,6 +1631,17 @@ eq(w.frame.shown, false, "and hidden again when set to never")
 -- Other addons' unit events do not touch the window.
 g.onEvent("UNIT_INVENTORY_CHANGED", "target")
 eq(#g.hudTimers, 0, "another unit's inventory: no redraw")
+-- A timer call that throws schedules nothing: the window redraws at once instead of waiting forever.
+g = boot({ tomtom = true }); login(g); g.autoAccept = false; flush(g)
+local timerCalls = 0
+g.env.C_Timer.After = function() timerCalls = timerCalls + 1; error("timer broke") end
+g.free = 1
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(window(g).frame.shown, true, "failed timer: redrawn at once")
+g.free = 20
+g.onEvent("BAG_UPDATE_DELAYED")
+eq(window(g).frame.shown, false, "and the next change redraws too")
+eq(timerCalls >= 2, true, "each change tries the timer again")
 
 -- Reagents and display-only items in the window; the warning switch does not hide a row.
 g = boot(); login(g); g.autoAccept = false
@@ -1891,6 +1931,91 @@ eq(steps>=6,true,"the tour has several steps: "..steps)
 eq(g.tomtom[#g.tomtom],before,"the waypoint from before the demo is restored")
 eq(deep(g.env.ClosestVendorCharDB.cfg),saved,"the demo changes no setting")
 eq(window(g).rows[1].row ~= nil and window(g).rows[1].row.text ~= nil,true,"real rows are back")
+-- The player's own game waypoint (one slot) is set again after the demo used that slot, but a new
+-- one the player set during the tour is left alone.
+local function nativeDemo()
+    local gn = boot()
+    gn.slot, gn.tracked = nil, false
+    gn.env.C_Map.CanSetUserWaypointOnMap = function() return true end
+    gn.env.C_Map.SetUserWaypoint = function(p) gn.slot = p end
+    gn.env.C_Map.GetUserWaypoint = function() return gn.slot end
+    gn.env.C_Map.ClearUserWaypoint = function() gn.slot = nil end
+    gn.env.C_SuperTrack = { SetSuperTrackedUserWaypoint = function(on) gn.tracked = on end,
+        IsSuperTrackingUserWaypoint = function() return gn.tracked end }
+    gn.env.UiMapPoint = { CreateFromCoordinates = function(m, x, y) return { uiMapID = m, position = { x = x, y = y } } end }
+    login(gn); flush(gn)
+    gn.env.SlashCmdList.CLOSESTVENDOR("nav native")
+    gn.slot, gn.tracked = { uiMapID = 200, position = { x = 0.2, y = 0.3 } }, true
+    gn.autoAccept = false; gn.timers = {}
+    gn.env.SlashCmdList.CLOSESTVENDOR("demo")
+    return gn
+end
+do
+    local gn = nativeDemo()
+    eq(gn.slot.uiMapID ~= 200, true, "the demo's first step uses the game waypoint")
+    local n = 0
+    while #gn.timers > 0 and n < 20 do table.remove(gn.timers, 1)(); n = n + 1 end
+    eq(gn.slot and (gn.slot.uiMapID .. ":" .. gn.slot.position.x .. ":" .. tostring(gn.tracked)), "200:0.2:true",
+        "the player's own game waypoint is back, still tracked")
+    -- Set after the first step: later steps use the slot, and the player's newest point comes back.
+    gn = nativeDemo()
+    table.remove(gn.timers, 1)()
+    gn.slot = { uiMapID = 300, position = { x = 0.6, y = 0.6 } }
+    n = 0
+    while #gn.timers > 0 and n < 20 do table.remove(gn.timers, 1)(); n = n + 1 end
+    eq(gn.slot and gn.slot.uiMapID, 300, "a waypoint the player set during the tour stays")
+    -- Set in the last step: left as it is.
+    gn = nativeDemo()
+    gn.env.ClosestVendorCharDB.log.enabled = true
+    n = 0
+    while #gn.timers > 0 and not logged(gn, "demo: reminder") and n < 20 do table.remove(gn.timers, 1)(); n = n + 1 end
+    gn.slot = { uiMapID = 400, position = { x = 0.6, y = 0.6 } }
+    while #gn.timers > 0 and n < 20 do table.remove(gn.timers, 1)(); n = n + 1 end
+    eq(gn.slot and gn.slot.uiMapID, 400, "a waypoint set at the last step stays")
+    -- The addon's own game waypoint from before the demo is not put back over the player's new one.
+    gn = nativeDemo()
+    gn.env.SlashCmdList.CLOSESTVENDOR("preview notice")
+    gn.autoAccept = true
+    gn.env.SlashCmdList.CLOSESTVENDOR("test sell") -- the addon's pin now holds the slot
+    gn.autoAccept = false
+    local own = gn.slot.uiMapID
+    gn.timers = {}
+    gn.env.SlashCmdList.CLOSESTVENDOR("demo")
+    table.remove(gn.timers, 1)()
+    gn.slot = { uiMapID = 500, position = { x = 0.1, y = 0.1 } }
+    n = 0
+    while #gn.timers > 0 and n < 20 do table.remove(gn.timers, 1)(); n = n + 1 end
+    eq(gn.slot and gn.slot.uiMapID, 500, "the player's new waypoint wins over the addon's old pin")
+    gn = nativeDemo()
+    gn.env.SlashCmdList.CLOSESTVENDOR("preview notice")
+    gn.autoAccept = true
+    gn.env.SlashCmdList.CLOSESTVENDOR("test sell")
+    gn.autoAccept = false
+    gn.timers = {}
+    gn.env.ClosestVendorCharDB.log.enabled = true
+    gn.env.SlashCmdList.CLOSESTVENDOR("demo")
+    n = 0
+    while #gn.timers > 0 and not logged(gn, "demo: reminder") and n < 20 do table.remove(gn.timers, 1)(); n = n + 1 end
+    gn.slot = { uiMapID = 600, position = { x = 0.1, y = 0.1 } }
+    while #gn.timers > 0 and n < 20 do table.remove(gn.timers, 1)(); n = n + 1 end
+    eq(gn.slot and gn.slot.uiMapID, 600, "set at the last step: the addon's old pin is not put over it")
+    eq(logged(gn, "demo: previous waypoint not set again: the game waypoint is yours now"), true, "and the log says why")
+    gn = nativeDemo()
+    gn.env.SlashCmdList.CLOSESTVENDOR("preview notice")
+    gn.slot = nil
+    gn.autoAccept = true
+    gn.env.SlashCmdList.CLOSESTVENDOR("test sell")
+    gn.autoAccept = false
+    own = gn.slot.uiMapID
+    gn.timers = {}
+    gn.env.SlashCmdList.CLOSESTVENDOR("demo")
+    n = 0
+    while #gn.timers > 0 and n < 20 do table.remove(gn.timers, 1)(); n = n + 1 end
+    eq(gn.slot and gn.slot.uiMapID, own, "untouched by the player: the addon's own pin comes back")
+    gn = nativeDemo()
+    gn.env.SlashCmdList.CLOSESTVENDOR("preview notice") -- a newer request stops the demo
+    eq(gn.slot and gn.slot.uiMapID, 200, "stopping the demo puts it back too")
+end
 -- A second demo replaces the first: the old chain stops.
 g.timers={}
 g.env.SlashCmdList.CLOSESTVENDOR("demo")

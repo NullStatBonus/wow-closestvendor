@@ -72,5 +72,7 @@ eq(c.Changed({ { name = "Mining", rank = 11 }, { name = "Swords", rank = 5 } }),
 eq(c.Changed({ { name = "Mining", rank = 11 }, { name = "Swords", rank = 5 }, { name = "Herbalism", rank = 1 } }), true, "a new skill appeared")
 eq(c.Changed(nil), false, "unreadable keeps the old ranks")
 eq(c.Changed({ { name = "Mining", rank = 11 }, { name = "Swords", rank = 5 }, { name = "Herbalism", rank = 1 } }), false, "ranks survived the unreadable read")
+eq(c.Changed({ { name = "Mining", rank = 11 }, { name = "Swords", rank = 5 } }), true, "a skill unlearned")
+eq(c.Changed({ { name = "Mining", rank = 11 }, { name = "Swords", rank = 5 } }), false, "stored without it")
 
 H.done()

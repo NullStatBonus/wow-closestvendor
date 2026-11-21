@@ -6,7 +6,9 @@
 --   env.playerPos()                 -> continentId, x, y (world coords), mapId  or nil (mapId may be nil)
 --   env.playerFaction               -> 1 Alliance, 2 Horde, 0 unknown
 --   env.buckets                     { [continentId] = { vendor records, see Search.lua } }
---   env.nav                         { Set(vendor) -> handle|nil, Clear(handle) }
+--   env.nav                         { Set(vendor) -> handle|nil, Clear(handle), and optional
+--                                     ReadGame() -> { map, x, y, tracked }|nil, SetGame(p) (the
+--                                     game's own map waypoint, for /cvn demo) }
 --   env.ammo()                      -> "arrow"|"bullet", count  for the equipped ranged weapon, or nil
 --   env.reagents()                  -> list of { item, count, name } for the class reagents being watched
 --                                      (spell known, not switched off, count readable), or nil; name is
@@ -307,25 +309,38 @@ function C.New(env)
         asking = (yields or kind == "trainer") and { kind = kind, id = id, prompt = promptId } or nil
     end
 
+    -- The professions near their cap now, or nil when the skills cannot be read.
+    local function within(skills)
+        if type(skills) ~= "table" then return nil end
+        return ns.Professions.Within(skills, env.known or {}, env.cfg.tradeThreshold, env.level and env.level(), tiers())
+    end
+    -- A trainer waypoint ends once its profession is no longer near the cap or is unlearned, also with
+    -- profession warnings off (the player may have pinned it from the status window).
+    local function dropTrainerPin(near, skills)
+        if not pinTrade or type(near) ~= "table" then return end
+        for _, p in ipairs(near) do if p.name == pinTrade then return end end
+        local learned = false
+        for _, s in ipairs(skills) do if s.name == pinTrade then learned = true break end end
+        if learned then
+            log("trainer waypoint cleared: " .. pinTrade .. " is no longer near its cap")
+        else
+            log("trainer waypoint cleared: " .. pinTrade .. " was unlearned")
+        end
+        clearNav()
+    end
     -- skills: the player's skill list. Asks about the profession nearest its cap that has a
     -- known trainer. Runs on every skill change and craft: there is deliberately no latch.
     local function checkTrade(skills)
-        if not env.cfg.tradeEnabled then return end
-        local within = ns.Professions.Within(skills, env.known or {}, env.cfg.tradeThreshold, env.level and env.level(), tiers())
-        -- A trainer waypoint ends once its profession is no longer near the cap.
-        if pinTrade then
-            local still = false
-            for _, p in ipairs(within) do if p.name == pinTrade then still = true end end
-            if not still then log("trainer waypoint cleared: " .. pinTrade .. " is no longer near its cap") clearNav() end
-        end
-        if #within == 0 then return end
+        local near = within(skills)
+        dropTrainerPin(near, skills)
+        if not (env.cfg.tradeEnabled and near) or #near == 0 then return end
         if env.inCombat() or dead() then log("profession check skipped: in combat or dead") return end
         if instance() then log("profession check skipped: in an instance") return end
         -- Lowest priority: never over an open question, an open or active vendor request, or a trainer trip.
         if pinTrade or questionOpen() or triggers.Active() then return end
         local continent, x, y, map = env.playerPos()
         if not continent then log("profession check: no map position") return end
-        for _, p in ipairs(within) do
+        for _, p in ipairs(near) do
             local v, onMap = ns.Search.NearestTrainer((env.trainerBuckets or {})[continent] or {}, x, y, p.name, env.playerFaction, map, p.need)
             if v then
                 if onMap == v then onMap = nil end
@@ -506,6 +521,8 @@ function C.New(env)
         if professions.Changed(skills) then
             log("a skill changed")
             checkTrade(skills)
+        else
+            dropTrainerPin(within(skills), skills) -- also the first read: a pin set before it may be for a skill gone now
         end
     end
 
@@ -611,20 +628,22 @@ function C.New(env)
     -- type for ammo), need a trainer tier, at the search start and which the anchor used ("hearth",
     -- "last" or nil). ahOk: an auctioneer may compete. Unless quiet, chat and the debug log say why
     -- nothing can be routed, and the ammo seen is remembered as Evaluate does; quiet changes and
-    -- prints nothing, so the status window can ask on every refresh.
+    -- prints nothing, so the status window can ask on every refresh. A second result, true, means
+    -- the row no longer applies (no weapon, pet, item or profession near its cap) and chat said nothing.
     local function resolve(kind, id, quiet)
         local speak = quiet and function() end or say
         local note = quiet and function() end or log
+        local function gone(why) note(why) return nil, true end
         local q = { kind = kind, id = id, find = kind }
         if kind == "ammo" then
             local ak, ac = env.ammo()
             if not quiet then ammoKind, ammoCount = ak, ac end
-            if not ak then note("direct pin: no ranged weapon that uses ammo") return nil end
+            if not ak then return gone("direct pin: no ranged weapon that uses ammo") end
             q.find, q.ammoCount = ak, ac
         elseif kind == "reagent" then
             local item = ns.Reagents.ById(id)
             -- An item no vendor sells (display-only) cannot be routed to.
-            if not item or item.vendor == false then note("direct pin: not an item a vendor sells") return nil end
+            if not item or item.vendor == false then return gone("direct pin: not an item a vendor sells") end
             q.item, q.name = item, item.name
             for _, r in ipairs(env.reagents and env.reagents() or {}) do
                 if r.item.id == id then q.name = r.name end
@@ -633,7 +652,7 @@ function C.New(env)
             -- id is "food", "water" or "pet"; a pet needs a pet out and a known diet.
             local s = env.supplies and env.supplies()
             q.supplyBits = s and ns.Supplies.Want(id, s.diets)
-            if not q.supplyBits then note("direct pin: nothing to look for") return nil end
+            if not q.supplyBits then return gone("direct pin: nothing to look for") end
             q.name = supplyName(id, s.diets)
             if id == "pet" then q.petKey = "pet:" .. dietList(s.diets) end
         elseif kind == "trainer" then
@@ -649,7 +668,7 @@ function C.New(env)
                         return nil
                     end
                 end
-                note("direct pin: profession is not near its cap") return nil
+                return gone("direct pin: profession is not near its cap")
             end
             q.trade = id
         elseif kind ~= "sell" and kind ~= "repair" then
@@ -839,13 +858,27 @@ function C.New(env)
     function self.Pick(kind, id, entry)
         log(("chosen pin: %s%s, %s"):format(tostring(kind), id and (" " .. tostring(id)) or "", entry and entry.v and tostring(entry.v[2]) or "nothing"))
         if not (entry and entry.v) then return false end
-        local q = resolve(kind, id)
-        if not q then return false end
+        local q, gone = resolve(kind, id)
+        if not q then
+            -- The row no longer applies (weapon, pet or profession gone since the list opened).
+            if gone then say(L["The seller list changed. Open it again to choose."]) end
+            return false
+        end
         if entry.auction then
             if not q.ahOk then log("chosen pin: an auctioneer is not allowed here now") return false end
             return pinAuction(q, entry.v)
         end
-        return pinTarget(q, entry.v, nil)
+        -- The list was built when the menu opened; the row may want something else now (another weapon).
+        local v = entry.v
+        local fits
+        if q.trade then fits = type(v[7]) == "table" and ns.Professions.Teaches(v[7][q.trade], q.need)
+        else fits = ns.Search.Fits(v, needFor(q.find, q.item, q.supplyBits)) end
+        if not fits then
+            log("chosen pin: the seller no longer fits")
+            say(L["The seller list changed. Open it again to choose."])
+            return false
+        end
+        return pinTarget(q, v, nil)
     end
 
     -- The player changed zone or entered an instance: a warning's open question names a vendor
@@ -866,7 +899,28 @@ function C.New(env)
     -- back and the next one runs. At the end the waypoint the player had before the demo is restored.
     -- Settings are only read, and no warning is marked as handled. done() runs when the tour is over.
     local demoToken, demoHandle, demoPrompt, demoBefore = 0, nil, nil, nil
+    -- The game waypoint slot holds p when the map matches and x, y are within 0.001 (as Nav checks).
+    local function sameSpot(a, b)
+        return a and b and a.map == b.map and math.abs(a.x - b.x) < 0.001 and math.abs(a.y - b.y) < 0.001
+    end
+    local demoSpots = {} -- the game waypoints this addon set: its pin from before the demo, and the steps' pins
+    local function ours(cur)
+        if demoHandle and demoHandle.kind == "native" and sameSpot(cur, demoHandle) then return true end
+        for _, h in ipairs(demoSpots) do if sameSpot(cur, h) then return true end end
+        return false
+    end
+    -- The game waypoint slot holds the player's own point (not one this addon set): the one to put back
+    -- at the end, so a point the player sets during the tour is the one that comes back.
+    local function noteGame()
+        local cur = demoBefore and env.nav.ReadGame and env.nav.ReadGame()
+        if cur and not ours(cur) then
+            if not (demoBefore.game and sameSpot(cur, demoBefore.game)) then log("demo: noted your game waypoint") end
+            demoBefore.game = cur
+        end
+    end
     local function undoStep()
+        noteGame()
+        if demoHandle and demoHandle.kind == "native" then demoSpots[#demoSpots + 1] = demoHandle end
         if demoHandle and demoHandle == handle then clearNav() end
         if demoPrompt and demoPrompt == promptId then cancelPrompt() end
         demoHandle, demoPrompt = nil, nil
@@ -875,11 +929,21 @@ function C.New(env)
         undoStep()
         demoing = false
         local before = demoBefore
-        demoBefore = nil
+        -- The slot now: empty, one this addon set, or the player's own point (left as it is).
+        local cur = env.nav.ReadGame and env.nav.ReadGame()
+        local theirs = cur and not ours(cur)
+        demoBefore, demoSpots = nil, {}
         if before then lastKind, lastTrade = before.lastKind, before.lastTrade end
         if before and before.v and not handle then
-            pin(before.v, before.trade, before.kind, before.id)
-            log("demo: previous waypoint restored")
+            if before.native and theirs then
+                log("demo: previous waypoint not set again: the game waypoint is yours now")
+            else
+                pin(before.v, before.trade, before.kind, before.id)
+                log("demo: previous waypoint restored")
+            end
+        end
+        if before and before.game and not theirs and env.nav.SetGame and env.nav.SetGame(before.game) then
+            log("demo: your game waypoint restored")
         end
     end
     -- Pin without asking (way "auto") or ask (way "ask") for kind; key is the supply key for "supply".
@@ -938,6 +1002,11 @@ function C.New(env)
         if not env.after then return false end
         if demoing then endDemo() end -- a running demo is taken back first, its own waypoint put back
         demoBefore = { v = pinVendor, trade = pinTrade, kind = pinKind, id = pinId, lastKind = lastKind, lastTrade = lastTrade }
+        -- The addon's own game waypoint is put back as pinVendor, never taken for the player's.
+        demoBefore.native = handle and handle.kind == "native" or nil
+        demoHandle, demoSpots = nil, {}
+        if demoBefore.native then demoSpots[1] = handle end
+        noteGame()
         demoToken = demoToken + 1
         local mine = demoToken
         local steps = demoSteps()
