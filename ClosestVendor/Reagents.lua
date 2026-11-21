@@ -96,11 +96,27 @@ function R.Low(watched, count, threshold)
 end
 
 -- A class reagent by name (case-insensitive, extra spaces ignored) or by item id; nil if none.
+-- Lowercase for ASCII and the two-byte UTF-8 letters game names use (Latin-1, Latin Extended-A,
+-- Cyrillic); Lua's own lower() leaves those unchanged. Other letters are left as they are.
+function R.Lower(s)
+    s = tostring(s or ""):lower()
+    return (s:gsub("[\194-\223][\128-\191]", function(ch)
+        local cp = (ch:byte(1) - 0xC0) * 64 + (ch:byte(2) - 0x80)
+        local low
+        if (cp >= 0xC0 and cp <= 0xDE and cp ~= 0xD7) or (cp >= 0x410 and cp <= 0x42F) then low = cp + 32
+        elseif cp >= 0x400 and cp <= 0x40F then low = cp + 80
+        elseif (cp >= 0x100 and cp <= 0x137 or cp >= 0x14A and cp <= 0x177) and cp % 2 == 0 then low = cp + 1
+        elseif (cp >= 0x139 and cp <= 0x148 or cp >= 0x179 and cp <= 0x17E) and cp % 2 == 1 then low = cp + 1 end
+        if not low then return ch end
+        return string.char(0xC0 + math.floor(low / 64), 0x80 + low % 64)
+    end))
+end
+
 function R.Find(class, text, nameOf)
-    local want = tostring(text or ""):lower():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")
+    local want = R.Lower(text):gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")
     for _, item in ipairs(R.ForClass(class)) do
         local local_ = nameOf and nameOf(item.id)
-        if item.name:lower() == want or tostring(item.id) == want or (local_ and local_:lower() == want) then return item end
+        if item.name:lower() == want or tostring(item.id) == want or (local_ and R.Lower(local_) == want) then return item end
     end
 end
 

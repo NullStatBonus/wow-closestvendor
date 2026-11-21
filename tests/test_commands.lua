@@ -289,6 +289,15 @@ do
     eq(has(o, "Poudre des arcanes"), true, "and the reply uses the game's name")
     eq(has(M.Run(cf, "reagents", "MAGE", fr), "Poudre des arcanes: off"), true, "the list prints the game's name")
     eq(has(M.Run(cf, "reagents", "MAGE"), "Arcane Powder: off"), true, "no game name yet: the English name")
+    -- Non-ASCII letters: case does not matter.
+    local ru = function(id) if id == 17020 then return "Порошок" end end
+    local cr = fresh()
+    M.Run(cr, "reagent off порошок", "MAGE", ru)
+    eq(cr.reagentOff[17020], true, "Cyrillic: lowercase input matches a capitalized name")
+    local de = function(id) if id == 17020 then return "Äther" end end
+    cr = fresh()
+    M.Run(cr, "reagent off ÄTHER", "MAGE", de)
+    eq(cr.reagentOff[17020], true, "Latin-1: uppercase input matches")
 end
 eq(has(M.Run(c, "reagent off", "MAGE"), "Name a reagent"), true, "no name given")
 eq(has(M.Run(c, "reagent off ankh", "WARRIOR"), "no reagents"), true, "a class without reagents")

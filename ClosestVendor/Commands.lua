@@ -326,7 +326,7 @@ function M.Run(cfg, msg, class, itemName)
     end
     if P and (cmd == "settings" or cmd == "config" or cmd == "options") then
         local page = rest == "" and "home" or rest
-        if not P.PAGES[page] then return { L["Pages: home, restock, ammo, reagents, supplies, navigation, appearance, sound, advanced, about."] }, { "read" } end
+        if not P.PAGES[page] then return { L["Pages: home, restock, ammo, reagents, supplies, navigation, appearance, notifications, status-window, sound, advanced, about."] }, { "read" } end
         return { L["Opening the settings page..."] }, { "open", page }
     end
     if P and cmd == "preview" then
