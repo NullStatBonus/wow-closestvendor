@@ -841,6 +841,16 @@ do
     gt.rawEvent("UPDATE_INVENTORY_DURABILITY")
     eq(gt.popup ~= nil, true, "no timer API: the check runs at once")
 end
+-- A gear check still waiting when a merchant opens runs first, so the merchant dismisses its question.
+do
+    local gm = boot({ tomtom = true }); login(gm)
+    gm.autoAccept = false; gm.dur = 10
+    gm.gearTimers = {}
+    gm.rawEvent("UPDATE_INVENTORY_DURABILITY")
+    gm.rawEvent("MERCHANT_SHOW")
+    gm.gearTimers[1]()
+    eq(gm.popup, nil, "the merchant opened first: no repair question is left open")
+end
 -- Old account-level copies and the retired toastLocked key are dropped at load; cfg and hud stay as the seed.
 do
     local gs = boot({ tomtom = true, db = { hearth = { name = "x" }, lastOutside = { x = 1 }, professions = { Mining = true },
@@ -1571,6 +1581,18 @@ g.pos = { map = 100, x = 0.3, y = 0.4 }
 g.onEvent("CONFIRM_BINDER", "Goldshire")
 g.onEvent("ZONE_CHANGED_NEW_AREA")
 eq(tostring(g.env.ClosestVendorCharDB.hearth.x), "300", "same inn, next zone change: the position is learned")
+-- Logout is delivered, and a new inn (not the saved one) also keeps its position.
+do
+    local gl = boot(); login(gl)
+    eq(gl.ns.frame.events.PLAYER_LOGOUT, true, "listens for logout")
+    gl.bind = "Stormwind"; gl.onEvent("PLAYER_ENTERING_WORLD")
+    gl.pos = { map = 100, x = 0.3, y = 0.4 }
+    gl.onEvent("CONFIRM_BINDER", "Goldshire")
+    gl.bind = "Goldshire"
+    gl.onEvent("PLAYER_LOGOUT")
+    local hh = gl.env.ClosestVendorCharDB.hearth
+    eq(hh.name .. ":" .. tostring(hh.x), "Goldshire:300", "a new inn bound just before logout: name and position")
+end
 -- A client with no bind event: binding and then logging out (or /reload) keeps the position.
 g = boot(); login(g); g.bind = "Goldshire"
 g.onEvent("PLAYER_ENTERING_WORLD")
@@ -1985,7 +2007,7 @@ eq(deep(g.env.ClosestVendorCharDB.cfg),saved,"the demo changes no setting")
 eq(window(g).rows[1].row ~= nil and window(g).rows[1].row.text ~= nil,true,"real rows are back")
 -- The player's own game waypoint (one slot) is set again after the demo used that slot, but a new
 -- one the player set during the tour is left alone.
-local function nativeDemo(untracked)
+local function nativeDemo(untracked, pre)
     local gn = boot()
     gn.slot, gn.tracked = nil, false
     gn.env.C_Map.CanSetUserWaypointOnMap = function() return true end
@@ -1997,7 +2019,7 @@ local function nativeDemo(untracked)
     gn.env.UiMapPoint = { CreateFromCoordinates = function(m, x, y) return { uiMapID = m, position = { x = x, y = y } } end }
     login(gn); flush(gn)
     gn.env.SlashCmdList.CLOSESTVENDOR("nav native")
-    gn.slot, gn.tracked = { uiMapID = 200, position = { x = 0.2, y = 0.3 } }, not untracked
+    if pre then pre(gn) else gn.slot, gn.tracked = { uiMapID = 200, position = { x = 0.2, y = 0.3 } }, not untracked end
     gn.env.ClosestVendorCharDB.log.enabled = true
     gn.autoAccept = false; gn.timers = {}
     gn.env.SlashCmdList.CLOSESTVENDOR("demo")
@@ -2026,6 +2048,23 @@ do
     while #gn.timers > 0 and n < 20 do table.remove(gn.timers, 1)(); n = n + 1 end
     eq(logged(gn, "demo: your game waypoint not set again: the game would not tell what is there now"), true, "unreadable slot: no restore")
     eq(logged(gn, "demo: your game waypoint restored"), false, "and nothing was set")
+    -- The addon had its own game pin, the player set a point in the last step, and the slot cannot be read
+    -- at the end: the old pin is not set over the player's point.
+    gn = nativeDemo(nil, function(x) x.env.SlashCmdList.CLOSESTVENDOR("test sell") end)
+    eq(gn.slot ~= nil, true, "the addon's own game pin is set before the demo")
+    local k = 0
+    while #gn.timers > 0 and not logged(gn, "demo: reminder") and k < 20 do table.remove(gn.timers, 1)(); k = k + 1 end
+    gn.slot = { uiMapID = 600, position = { x = 0.6, y = 0.6 } }
+    gn.env.C_Map.GetUserWaypoint = function() error("boom") end
+    while #gn.timers > 0 and k < 40 do table.remove(gn.timers, 1)(); k = k + 1 end
+    eq(logged(gn, "demo: over"), true, "the tour ended")
+    eq(gn.slot.uiMapID, 600, "unreadable slot: the player's last point is not replaced by the old pin")
+    -- A point the player sets 0.0005 from a demo pin is the player's: stopping the demo keeps it.
+    gn = nativeDemo()
+    local p0 = gn.slot.position
+    gn.slot = { uiMapID = gn.slot.uiMapID, position = { x = p0.x + 0.0005, y = p0.y } }
+    gn.env.SlashCmdList.CLOSESTVENDOR("preview notice")
+    eq(gn.slot and gn.slot.position.x, p0.x + 0.0005, "a nearby player point survives a stopped demo")
     -- Set after the first step: later steps use the slot, and the player's newest point comes back.
     gn = nativeDemo()
     table.remove(gn.timers, 1)()

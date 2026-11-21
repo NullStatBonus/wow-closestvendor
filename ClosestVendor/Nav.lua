@@ -12,6 +12,8 @@ local N = {}
 ns.Nav = N
 
 local FLAG = "ClosestVendor"
+-- Two game waypoints are the same point when both coordinates differ by less than this (0-1 of the map).
+N.SPOT = 0.00001
 
 local function isFn(t, name) return type(t) == "table" and type(t[name]) == "function" end
 
@@ -76,7 +78,7 @@ local adapters = {
                 local cur = m.GetUserWaypoint()
                 local p = cur and cur.position
                 if not (cur and p and cur.uiMapID == h.map
-                        and math.abs(p.x - h.x) < 0.00001 and math.abs(p.y - h.y) < 0.00001) then
+                        and math.abs(p.x - h.x) < N.SPOT and math.abs(p.y - h.y) < N.SPOT) then
                     return
                 end
             end

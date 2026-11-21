@@ -513,17 +513,17 @@ end
 -- once): one check shortly after, however many arrive. The window redraw batches the same way.
 local EVAL_DELAY = 0.2
 local burst, burstQueued = 0, false
+local function flushBurst()
+    burstQueued = false
+    if log then log.Add(("gear events: %d folded into one check"):format(burst)) end
+    burst = 0
+    evaluate()
+    touchWindow()
+end
 local function evaluateSoon()
     burst = burst + 1
     if burstQueued then return end
-    local function run()
-        burstQueued = false
-        if log then log.Add(("gear events: %d folded into one check"):format(burst)) end
-        burst = 0
-        evaluate()
-        touchWindow()
-    end
-    if A.after(EVAL_DELAY, run) then burstQueued = true else run() end
+    if A.after(EVAL_DELAY, function() if burstQueued then flushBurst() end end) then burstQueued = true else flushBurst() end
 end
 
 -- A window setting changed (scale, opacity, text opacity, colour, lock, a row mode): apply it and redraw at once.
@@ -935,6 +935,8 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "PLAYER_LOGIN" then
         start()
     elseif event == "MERCHANT_SHOW" then
+        -- A gear check still waiting runs first, so a repair question it makes is the one the merchant answers.
+        if burstQueued then flushBurst() end
         if DB then learnMerchant() end
         if controller then controller.OnMerchantShow() end
         if DB then
