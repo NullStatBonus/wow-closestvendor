@@ -209,6 +209,23 @@ do
     eq(gn.tomtom[1], nil, "and TomTom was not used")
 end
 
+-- 4c. After No, a next warning with no map position is retried once a position comes back (#39).
+do
+    local gr = boot({ tomtom = true }); login(gr)
+    gr.autoAccept = false
+    gr.free, gr.dur = 1, 10
+    gr.onEvent("UPDATE_INVENTORY_DURABILITY")
+    eq(gr.popup.text:find("repair") ~= nil, true, "repair question open")
+    gr.pos = nil
+    gr.popup.data.decline()
+    local function runTimers() local t = gr.timers; gr.timers = {}; for _, fn in ipairs(t) do fn() end end
+    runTimers() -- the re-check after No: no position, the sell request waits
+    eq(#gr.timers > 0, true, "the position retry is armed")
+    gr.pos = { map = 100, x = 0.5, y = 0.5 }
+    runTimers()
+    eq(gr.popup ~= nil and gr.popup.text:find("bags") ~= nil, true, "the sell question is asked once a position is back")
+end
+
 -- 5. Unconvertible map is skipped without error; the rest still load.
 g = boot(); login(g)
 g.free = 1

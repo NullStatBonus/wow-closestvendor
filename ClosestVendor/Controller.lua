@@ -31,6 +31,7 @@
 --   env.zoneName(mapId)             optional: the name of a map, or nil
 --   env.log(text)                   optional: record a decision in the debug log
 --   env.auctionBuckets              optional: { [continentId] = { auctioneer records, same shape as vendors } }
+--   env.evaluate()                  optional: Core's check (arms the position retry); used for re-checks
 --   env.instanceType()              optional: "none", "party", "raid" or "pvp"; nil (unknown) counts as "none"
 --   env.anchor(which)               optional: { continent, x, y, map } (world x,y) for "hearth" (the
 --                                      hearthstone point) or "last" (the last position outside an
@@ -119,6 +120,9 @@ function C.New(env)
     local lowSupply = {} -- "food"/"water"/"pet" -> { count, name, bits } for the supplies low at the last Evaluate
     local noticedSupply = {} -- supplies already told about having no known seller
     local SUPPLY = { food = true, water = true, pet = true }
+    -- What the ammo or pet food request was placed for: the ammo kind, or the pet's diet key. A change
+    -- of weapon or pet with another one asks again (see Evaluate).
+    local placedFor = {}
     local promptId = 0
     local log = env.log or function() end
     local professions = ns.Professions.New()
@@ -252,7 +256,8 @@ function C.New(env)
     local function release(kind, id)
         if triggers.Release(triggerOf(kind, id), id) then
             log("request released: " .. kind)
-            if env.after then env.after(0.1, function() self.Evaluate() end) end
+            -- Core's evaluate arms the position retry; plain Evaluate is the fallback.
+            if env.after then env.after(0.1, function() (env.evaluate or self.Evaluate)() end) end
         end
     end
 
@@ -298,7 +303,8 @@ function C.New(env)
     local function offer(kind, v, onMap, x, y, count, trade, name, id, yields)
         if env.cfg.vendorMode == "auto" then return autoPin(kind, v, onMap, x, y, trade, name, id) end
         ask(kind, v, onMap, x, y, count, trade, name, id, nil, yields and function() release(kind, id) end or nil)
-        asking = yields and { kind = kind, id = id, prompt = promptId } or nil
+        -- A warning's question, or an automatic trainer question: either ends with the place.
+        asking = (yields or kind == "trainer") and { kind = kind, id = id, prompt = promptId } or nil
     end
 
     -- skills: the player's skill list. Asks about the profession nearest its cap that has a
@@ -372,6 +378,7 @@ function C.New(env)
             log("no map position yet: " .. key .. " request kept for a retry")
         elseif v then
             self.pending, self.pendingId = nil, nil
+            if key == "pet" then placedFor.pet = s.noticeKey end
             offer("supply", v, onMap, x, y, s.count, nil, s.name, key, true)
         else
             self.pending, self.pendingId = nil, nil
@@ -402,6 +409,7 @@ function C.New(env)
             log("no map position yet: " .. trigger .. " request kept for a retry")
         elseif v then
             self.pending, self.pendingId = nil, nil
+            if trigger == "ammo" then placedFor.ammo = ammoKind end
             offer(kind, v, onMap, x, y, trigger == "ammo" and ammoCount or (r and r.count) or nil, nil, r and r.name, id, true)
         else
             self.pending, self.pendingId = nil, nil
@@ -451,6 +459,17 @@ function C.New(env)
                 remindKeys[#remindKeys + 1] = e.key
                 remindCount[e.key] = e.count
             end
+        end
+        -- The ammo or pet food request follows its weapon or pet: another ammo kind or diet ends its
+        -- question and waypoint, and the request is asked again below for the new one.
+        local act = triggers.Active()
+        local cur = (act == "ammo" and ammoKind) or (act == "pet" and state and state.diets and ("pet:" .. dietList(state.diets))) or nil
+        if cur and placedFor[act] and placedFor[act] ~= cur then
+            log(("%s request restarted: %s -> %s"):format(act, tostring(placedFor[act]), cur))
+            if asking and asking.prompt == promptId and triggerOf(asking.kind, asking.id) == act then cancelPrompt() end
+            if act == "ammo" then clearVendorNav("ammo") else clearVendorNav("supply", "pet") end
+            triggers.Release(act, nil, true)
+            placedFor[act], self.pending, self.pendingId = nil, nil, nil
         end
         local a = triggers.Update(free, dur, combat, ammoKind and ammoCount or nil, lowIds, inside ~= nil, supKeys)
         if a then
@@ -616,6 +635,7 @@ function C.New(env)
             q.supplyBits = s and ns.Supplies.Want(id, s.diets)
             if not q.supplyBits then note("direct pin: nothing to look for") return nil end
             q.name = supplyName(id, s.diets)
+            if id == "pet" then q.petKey = "pet:" .. dietList(s.diets) end
         elseif kind == "trainer" then
             -- Only while the profession is near its cap: otherwise the next skill check would clear the pin.
             local near = false
@@ -674,6 +694,23 @@ function C.New(env)
         return ah and (not v or yards(ah, 9, q.at.x, q.at.y) < yards(v, 9, q.at.x, q.at.y)) or false
     end
 
+    -- After a click pinned something: the low condition it serves becomes the handled request. When it
+    -- serves none (not low, or a trainer), the warning request that was open or active, whose question
+    -- or waypoint the click replaced, is asked again at the next check instead of blocking.
+    local function handOver(takeKind, takeId, demo, placed)
+        if demo then return end
+        if takeKind and triggers.Take(takeKind, takeId) then
+            if placed then placedFor[takeKind] = placed end
+            self.pending, self.pendingId = nil, nil
+            return
+        end
+        local act, actId = triggers.Active()
+        if act and triggers.Release(act, actId, true) then
+            self.pending, self.pendingId = nil, nil
+            log("request put back: " .. act .. " (a click replaced it)")
+        end
+    end
+
     -- Pin the auctioneer ah for a query and say so; the warning counts as handled (not in a demo).
     local function pinAuction(q, ah, demo)
         local kind, id = q.kind, q.id
@@ -686,7 +723,7 @@ function C.New(env)
         else text = L["Navigating to %s to buy ammo at the auction house."]:format(where) end
         say(text)
         notice(text)
-        if not demo and triggers.Take(kind, id) then self.pending, self.pendingId = nil, nil end
+        handOver(kind, id, demo, kind == "ammo" and q.find or nil)
         return true
     end
 
@@ -704,7 +741,9 @@ function C.New(env)
         -- A low condition is now handled and active, so it ends the usual way and is not asked about.
         local takeKind, takeId = kind, id -- a supply request is kept under its own key
         if kind == "supply" then takeKind, takeId = id, nil end
-        if not demo and not trade and triggers.Take(takeKind, takeId) then self.pending, self.pendingId = nil, nil end
+        if trade then takeKind = nil end -- a trainer trip takes no warning
+        local placed = (kind == "ammo" and q.find) or (kind == "supply" and id == "pet" and q.petKey) or nil
+        handOver(takeKind, takeId, demo, placed)
         return true
     end
 
