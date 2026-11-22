@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.10.0
+
+- **New: `/cvn find` shows the nearest known sellers of a food, drink, pet food or class reagent item.** Type an item name or paste an item link. Pick a seller to set a waypoint.
+- New: A **Find supplies** box at the end of the Home page runs the same search.
+- New: When many items match, chat asks you to type more of the name.
+- New: For food, drink and pet food, chat says the seller may not stock that exact item.
+
 ## 1.9.5
 
 - **Fixed: A repair question no longer opens after you reach a merchant.** Before, a gear check could ask just after the merchant window opened.

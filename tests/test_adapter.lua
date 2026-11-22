@@ -225,6 +225,10 @@ eq(boot({}).itemCount(17020), nil, "no count API: unknown")
 eq(boot({ GetItemInfo = function() return "Arcane Powder" end }).itemName(17020), "Arcane Powder", "item name")
 eq(boot({ GetItemInfo = function() return nil end }).itemName(17020), nil, "name not cached")
 eq(boot({}).itemName(17020), nil, "no item API")
+eq(boot({ GetItemInfoInstant = function() return 17020, "Reagent", "", "", 134417, 5, 0 end }).itemIcon(17020), 134417, "item icon")
+eq(boot({ C_Item = { GetItemInfoInstant = function() return 1, "", "", "", "path" end } }).itemIcon(1), "path", "item icon from C_Item")
+eq(boot({ GetItemInfoInstant = function() return nil end }).itemIcon(17020), nil, "icon unknown")
+eq(boot({}).itemIcon(17020), nil, "no item API: no icon")
 
 -- now.
 eq(boot({ GetTime = function() return 123.5 end }).now(), 123.5, "game time")
@@ -849,6 +853,19 @@ do
     g, d = dropGame({ MenuUtil = { CreateContextMenu = boom } })
     eq(boot(g).menu("anc", "Pick", items), true, "MenuUtil throws: dropdown shown")
     eq(#d.entries, 3, "MenuUtil throws: dropdown filled")
+
+    -- At the cursor: MenuUtil gets the parent frame, the dropdown the "cursor" anchor; an icon leads the text.
+    local icons = { { text = "Ice Milk", icon = 132800, func = function() end } }
+    rec = {}
+    local A5 = boot({ UIParent = "ui", MenuUtil = { CreateContextMenu = function(a, gen) rec.anchor = a; rec[1] = nil; gen(a, root) end } })
+    eq(A5.menu("cursor", "Pick", icons), true, "cursor: MenuUtil shown")
+    eq(rec.anchor, "ui", "cursor: MenuUtil owner is UIParent")
+    eq(rec[1][1], "|T132800:16|t Ice Milk", "cursor: icon before the text")
+    eq(rec[1][2], nil, "cursor: no checked state")
+    g, d = dropGame()
+    eq(boot(g).menu("cursor", "Pick", icons), true, "cursor: dropdown shown")
+    eq(d.anchor, "cursor", "cursor: dropdown anchor")
+    eq(d.entries[2].text, "|T132800:16|t Ice Milk", "cursor: dropdown icon before the text")
 
     local A4 = boot({})
     eq(A4.hasMenu(), false, "neither: hasMenu false")

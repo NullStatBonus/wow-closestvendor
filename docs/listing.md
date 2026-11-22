@@ -40,6 +40,8 @@ Closest Vendor tells you when it is a good time to repair, restock or make bag s
 - Food, water or pet food is running low: it offers the closest vendor that sells it. Mages and warlocks who can make their own get a reminder with a sound instead.
 - A profession is near its skill limit and you are high enough level to learn the next tier: it offers the closest trainer you have visited. With NorgannonDB installed, it offers only trainers who teach that tier, Artisan included; without it, Artisan is left to you.
 
+**Find it before you need it.** Type `/cvn find Moonberry Juice` (or use the box on Home) to see the closest known sellers of a food, drink, pet food or class reagent, and pick one to set a waypoint.
+
 **Restock without the trip planning.** At any merchant, it can fill your quiver or ammo pouch. It can also top up your class reagents (off by default). It buys only what you can afford and tells you in chat.
 
 **See it at a glance.** An optional status window shows what is low. Click a row to set a waypoint, or click its arrow to pick another seller. You can make the background see-through, and the window is gentle on OLED screens.
@@ -49,6 +51,7 @@ Closest Vendor tells you when it is a good time to repair, restock or make bag s
 **Good to know**
 
 - It ships with about 900 vendors and learns the ones you open.
+- Food, drink and pet food are found by category, not item by item, so `/cvn find` may list a seller that does not stock the exact item. Class reagents are exact.
 - TomTom and WaypointUI are optional. Classic Era needs TomTom to show an arrow. Choose the waypoint method with `/cvn nav` (for example, the game's own waypoint even when TomTom is installed).
 - Settings are saved per character. The vendors, trainers and auctioneers the addon learns are shared by the whole account.
 - One question at a time, and No means no: it moves on to your next need and does not ask again until things change. It waits while you are dead or in combat, and drops a question when you change zone or enter a dungeon.

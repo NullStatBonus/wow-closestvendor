@@ -1,7 +1,7 @@
 -- Pure slash-command handling: no WoW globals.
 -- Run() edits cfg and returns the lines to print, plus an optional action for the caller:
 -- {"test", kind} with kind "sell", "repair", "arrow", "bullet", "reagent", "food", "water", "petfood" or "remind"; {"open"} for the settings page;
--- {"debug", on}; {"log"} to show the report; {"log", "clear"}; {"hud", "pick"} for /cvn hud color with no colour (open the colour picker); {"hud", "reset"} to put the status
+-- {"find", text} for /cvn find; {"debug", on}; {"log"} to show the report; {"log", "clear"}; {"hud", "pick"} for /cvn hud color with no colour (open the colour picker); {"hud", "reset"} to put the status
 -- window back at its default position (lock, scale, opacity, text opacity, colour and row modes are
 -- plain settings); {"demo"} for the tour of real routes, questions and notifications.
 -- Run(cfg, msg, class): class is the player's class token ("MAGE"), needed by the reagent commands.
@@ -47,6 +47,7 @@ local HELP = {
     L["/cvn test sell, repair, arrows, bullets, reagent  ask the question now"],
     L["/cvn test food, water, petfood  ask about food, water or pet food now; /cvn test remind  show the conjure or healthstone reminder now"],
     L["/cvn debug on/off  record what the addon sees; /cvn log  show the report; /cvn log clear  empty it"],
+    L["/cvn find <item link or name>  show the nearest known sellers of a supply or class reagent"],
 }
 
 local function gradeName(g)
@@ -427,6 +428,10 @@ function M.Run(cfg, msg, class, itemName)
         return { L["Choose on or off."] }
     end
     if cmd == "demo" then return {}, { "demo" } end
+    if cmd == "find" then
+        if rest == "" then return { L["Use /cvn find <item link or name>, for example /cvn find Moonberry Juice."] }, { "read" } end
+        return {}, { "find", rest }
+    end
     if cmd == "hud" then return hudCommand(cfg, arg, rest) end
     if cmd == "anchor" then
         if arg == "hearth" or arg == "last" then

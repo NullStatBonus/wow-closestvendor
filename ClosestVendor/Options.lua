@@ -134,6 +134,11 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note)
     local notices = {}
     appearance.notices = { type = "group", name = L["Notifications"], order = 1, args = notices }
     toggle(home, "autoNotice", L["On-screen notice"])
+    -- Last on Home: a one-time search, not a setting. It saves nothing and runs the same lookup as /cvn find.
+    add(home, "findSupplies", { type = "input", name = L["Item name or link"],
+        desc = L["Type part of an item name or paste an item link, then press Okay. Nothing is saved."],
+        get = function() return "" end,
+        set = function(_, v) if type(v) == "string" and v:match("%S") then run("find " .. v) end end })
     public(notices, "appearance.notification-style", L["Style"])
     local sound = select(soundPage, "remindSound", L["Notification sound"], sounds)
     sound.set = function(_, v) cfg.remindSound = v; onChange(); run("sound " .. v) end
@@ -222,6 +227,8 @@ function O.Register(cfg, defaults, onChange, class, pickColor, note)
     intro(restock, L["Set the counts that warn you, choose items, and decide whether to buy at merchants. Turn each warning on or off on Home."])
     section(home, "targetHeading", L["Destination choice"], "vendorMode")
     section(home, "noticeHeading", L["Notifications"], "autoNotice")
+    section(home, "findHeading", L["Find supplies"], "findSupplies")
+    context(home, "findHelp", L["Shows the nearest known sellers of a food, drink, pet food or class reagent item. Vendors are known by category, not by item."], "findSupplies")
     section(nav, "waypointHeading", L["Waypoint"], "navProvider")
     section(nav, "instanceHeading", L["Inside instances"], "instanceAnchor")
     section(nav, "auctionHeading", L["Auction house"], "ahEnabled")

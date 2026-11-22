@@ -124,3 +124,42 @@ function S.SeveralTrainers(bucket, px, py, trade, playerFaction, n, need)
     end
     return list
 end
+
+-- Items an on-demand search can find: the shipped food, drink and pet-food items, and the vendor-sold
+-- reagents of class. text is an item link (its id decides) or part of an item name, any letter case.
+-- nameOf(id) is the game's name for an item or nil when it is not cached yet; an item with no name
+-- matches only by link. Returns a list sorted by name, each { id, name, kind = "supply", key, bits }
+-- (key "food", "water" or "pet"; bits the Supplies bits to look for) or { id, name, kind = "reagent",
+-- item }. Healthstones are skipped: no vendor record carries them.
+function S.FindItems(text, class, nameOf)
+    text = tostring(text or "")
+    local linked = tonumber(text:match("item:(%d+)"))
+    local want = ns.Reagents.Lower(text):gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")
+    local out = {}
+    local function consider(id, make)
+        if linked and id ~= linked then return end -- a link needs one name, not the whole catalog
+        local name = nameOf and nameOf(id)
+        local hit
+        if linked then hit = true
+        else hit = want ~= "" and name and ns.Reagents.Lower(name):find(want, 1, true) ~= nil end
+        if not hit then return end
+        local m = make()
+        m.id, m.name = id, name or (m.item and m.item.name) or tostring(id)
+        out[#out + 1] = m
+    end
+    for id, mask in pairs(ns.SupplyItems or {}) do
+        local bits = mask % 256
+        if bits > 0 then
+            local human = bits % 4
+            consider(id, function()
+                if human > 0 then return { kind = "supply", key = human == 2 and "water" or "food", bits = human } end
+                return { kind = "supply", key = "pet", bits = bits }
+            end)
+        end
+    end
+    for _, item in ipairs(ns.Reagents.ForClass(class)) do
+        consider(item.id, function() return { kind = "reagent", item = item } end)
+    end
+    table.sort(out, function(a, b) if a.name ~= b.name then return a.name < b.name end return a.id < b.id end)
+    return out
+end

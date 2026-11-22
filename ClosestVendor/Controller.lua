@@ -631,7 +631,7 @@ function C.New(env)
     -- nothing can be routed, and the ammo seen is remembered as Evaluate does; quiet changes and
     -- prints nothing, so the status window can ask on every refresh. A second result, true, means
     -- the row no longer applies (no weapon, pet, item or profession near its cap) and chat said nothing.
-    local function resolve(kind, id, quiet)
+    local function resolve(kind, id, quiet, opts)
         local speak = quiet and function() end or say
         local note = quiet and function() end or log
         local function gone(why) note(why) return nil, true end
@@ -649,13 +649,19 @@ function C.New(env)
             for _, r in ipairs(env.reagents and env.reagents() or {}) do
                 if r.item.id == id then q.name = r.name end
             end
+            if opts and opts.name then q.name = opts.name end -- a find: the name the player matched
         elseif kind == "supply" then
             -- id is "food", "water" or "pet"; a pet needs a pet out and a known diet.
-            local s = env.supplies and env.supplies()
-            q.supplyBits = s and ns.Supplies.Want(id, s.diets)
-            if not q.supplyBits then return gone("direct pin: nothing to look for") end
-            q.name = supplyName(id, s.diets)
-            if id == "pet" then q.petKey = "pet:" .. dietList(s.diets) end
+            -- opts { bits, name } is a find: the bits of the item looked up, whatever the player carries.
+            if opts and opts.bits then
+                q.supplyBits, q.name, q.fromFind = opts.bits, opts.name, true
+            else
+                local s = env.supplies and env.supplies()
+                q.supplyBits = s and ns.Supplies.Want(id, s.diets)
+                if not q.supplyBits then return gone("direct pin: nothing to look for") end
+                q.name = supplyName(id, s.diets)
+                if id == "pet" then q.petKey = "pet:" .. dietList(s.diets) end
+            end
         elseif kind == "trainer" then
             -- Only while the profession is near its cap: otherwise the next skill check would clear the pin.
             local near = false
@@ -761,6 +767,12 @@ function C.New(env)
         -- A low condition is now handled and active, so it ends the usual way and is not asked about.
         local takeKind, takeId = kind, id -- a supply request is kept under its own key
         if kind == "supply" then takeKind, takeId = id, nil end
+        -- A find may pick a seller of something else than the warning needs (fish for a pet that eats meat).
+        if q.fromFind and kind == "supply" then
+            local s = env.supplies and env.supplies()
+            local want = s and ns.Supplies.Want(id, s.diets)
+            if not (want and ns.Search.Fits(v, { supply = want })) then takeKind, takeId = nil, nil end
+        end
         if trade then takeKind = nil end -- a trainer trip takes no warning
         local placed = (kind == "ammo" and q.find) or (kind == "supply" and id == "pet" and q.petKey) or nil
         handOver(takeKind, takeId, demo, placed)
@@ -815,15 +827,16 @@ function C.New(env)
     -- entries = { { v = record, label = "Name (Zone, N yards)", default, auction } } }. entries[1] is
     -- what a row click pins (default = true), then up to CHOICE_OTHERS others by straight-line
     -- distance from the search start, one per NPC. Prints and logs nothing.
-    function self.Choices(kind, id)
-        local q = resolve(kind, id, true)
+    function self.Choices(kind, id, opts)
+        local q = resolve(kind, id, true, opts)
         if not q then return nil end
         local v, onMap, ah = search(q)
         local at, i = q.at, q.trade and 8 or 9
         local entries, seen = {}, {}
         local function add(r, auction, default)
             seen[r[1]] = true
-            entries[#entries + 1] = { v = r, label = target(r, env.zoneName and env.zoneName(r[3]), yards(r, i, at.x, at.y)),
+            local d = yards(r, i, at.x, at.y)
+            entries[#entries + 1] = { v = r, label = target(r, env.zoneName and env.zoneName(r[3]), d), d = d,
                 default = default, auction = auction }
         end
         local ahFirst = auctionWins(q, v, ah)
@@ -856,10 +869,10 @@ function C.New(env)
 
     -- Pin entry (one of Choices(kind, id).entries) as a row click pins its default: waypoint, chat,
     -- notification, and the warning counts as handled. Returns true when pinned.
-    function self.Pick(kind, id, entry)
+    function self.Pick(kind, id, entry, opts)
         log(("chosen pin: %s%s, %s"):format(tostring(kind), id and (" " .. tostring(id)) or "", entry and entry.v and tostring(entry.v[2]) or "nothing"))
         if not (entry and entry.v) then return false end
-        local q, gone = resolve(kind, id)
+        local q, gone = resolve(kind, id, false, opts)
         if not q then
             -- The row no longer applies (weapon, pet or profession gone since the list opened).
             if gone then say(L["The seller list changed. Open it again to choose."]) end
@@ -880,6 +893,91 @@ function C.New(env)
             return false
         end
         return pinTarget(q, v, nil)
+    end
+
+    -- A find (/cvn find, or the Home box) ----------------------------------------------------------
+
+    -- More matching items than this and the player is asked to type more of the name.
+    local FIND_MAX = 8
+
+    -- What a supply item's sellers are called: vendors are known by category, not by item.
+    local function categoryName(key)
+        if key == "food" then return L["food"] end
+        if key == "water" then return L["drink"] end
+        return L["pet food"]
+    end
+
+    -- Run fn after the choice that called it has returned, so a menu opened now is not closed by the
+    -- menu that is still handling the click; at once when nothing can wait.
+    local function later(fn)
+        if not (env.after and env.after(0, fn)) then fn() end
+    end
+
+    -- The sellers of one matched item m (an entry of Search.FindItems): say what is known, then open
+    -- the seller list at the cursor. Nothing is pinned until the player chooses a seller.
+    local function findSellers(m)
+        local kind = m.kind == "reagent" and "reagent" or "supply"
+        local id = m.kind == "reagent" and m.item.id or m.key
+        local opts = m.kind == "supply" and { bits = m.bits, name = categoryName(m.key) } or { name = m.name }
+        local q = resolve(kind, id, false, opts)
+        if not q then return end
+        local c = self.Choices(kind, id, opts)
+        if not c then
+            log(("find: %s is known, no seller"):format(m.name))
+            say(L["%s is a known item, but no known vendor sells it yet for your faction."]:format(m.name))
+            return
+        end
+        c.title = L["Sellers of %s"]:format(m.name)
+        if m.kind == "supply" then
+            log(("find: %s looked up as %s"):format(m.name, opts.name))
+            say(L["Vendors are known by category, not by item, so these sell %s in general and may not stock %s."]:format(opts.name, m.name))
+        end
+        local items = {}
+        for i, e in ipairs(c.entries) do
+            items[i] = { text = e.label, checked = e.default, func = function()
+                log(("find: chosen %s"):format(tostring(e.v[2])))
+                self.StopDemo() -- a running demo's next step would replace the waypoint chosen now
+                if not self.Pick(kind, id, e, opts) then log("find: nothing pinned") end
+            end }
+        end
+        if env.menu and env.menu(c.title, items) then
+            log(("find: seller list for %s, %d entries"):format(m.name, #c.entries))
+            if m.kind == "reagent" then say(L["The sellers of %s are listed. Pick one to set a waypoint."]:format(m.name)) end
+        else
+            log("find: no menu control")
+            -- The default entry follows the map preference; the chat line names the nearest one.
+            local nearest = c.entries[1]
+            for _, e in ipairs(c.entries) do if e.d < nearest.d then nearest = e end end
+            say(L["Nearest known seller of %s: %s."]:format(m.name, nearest.label))
+        end
+    end
+
+    -- Look up what the player typed: an item link or part of an item name. No match, too many and
+    -- no known seller each get their own chat line. One match opens its seller list; two or more
+    -- open a menu of the items first. Changes no waypoint and no setting.
+    function self.Find(text)
+        text = tostring(text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+        local s = env.supplies and env.supplies()
+        local found = ns.Search.FindItems(text, s and s.class, env.itemName)
+        log(("find: %q, %d item(s)"):format(text, #found))
+        if #found == 0 then
+            log("find: no item matches")
+            say(L["No supply item matches %s."]:format(text))
+        elseif #found > FIND_MAX then
+            log("find: too many items match")
+            say(L["Too many items match %s. Type more of the name."]:format(text))
+        elseif #found == 1 then
+            findSellers(found[1])
+        else
+            local items = {}
+            for i, m in ipairs(found) do
+                items[i] = { text = m.name, icon = env.itemIcon and env.itemIcon(m.id), func = function() later(function() findSellers(m) end) end }
+            end
+            if not (env.menu and env.menu(L["Which item?"], items)) then
+                log("find: no menu control")
+                say(L["Several items match %s. Type more of the name."]:format(text))
+            end
+        end
     end
 
     -- The player changed zone or entered an instance: a warning's open question names a vendor

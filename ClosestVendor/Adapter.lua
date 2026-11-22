@@ -80,6 +80,13 @@ function A.itemClass(id)
     return classID, subClassID
 end
 
+-- The icon (file id or path) of an item from its id; nil when unknown.
+function A.itemIcon(id)
+    local f = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+    local _, _, _, _, icon = call("GetItemInfoInstant", f, id)
+    return icon
+end
+
 local function itemCount(id)
     local f = (C_Item and C_Item.GetItemCount) or GetItemCount
     return call("GetItemCount", f, id)
@@ -849,14 +856,21 @@ function A.hasMenu()
 end
 
 local menuFrame
--- Shows a menu at anchor: a title, then items { text, checked, func }. Choosing one runs its func.
--- Tries MenuUtil, then the classic dropdown; true when one was shown.
+-- An item's menu text: its icon in front when it has one.
+local function menuText(item)
+    return item.icon and ("|T%s:16|t %s"):format(tostring(item.icon), item.text) or item.text
+end
+
+-- Shows a menu at anchor: a title, then items { text, checked, func, icon }. Choosing one runs its
+-- func. anchor "cursor" opens it at the mouse pointer. Tries MenuUtil, then the classic dropdown;
+-- true when one was shown.
 function A.menu(anchor, title, items)
     if MenuUtil and type(MenuUtil.CreateContextMenu) == "function" then
-        local ok = pcall(MenuUtil.CreateContextMenu, anchor, function(_, root)
+        local owner = anchor == "cursor" and UIParent or anchor
+        local ok = pcall(MenuUtil.CreateContextMenu, owner, function(_, root)
             root:CreateTitle(title)
             for _, item in ipairs(items) do
-                root:CreateRadio(item.text, function() return item.checked end, function() item.func() end)
+                root:CreateRadio(menuText(item), function() return item.checked end, function() item.func() end)
             end
         end)
         if ok then return true end
@@ -870,7 +884,7 @@ function A.menu(anchor, title, items)
             UIDropDownMenu_AddButton(info, level)
             for _, item in ipairs(items) do
                 info = UIDropDownMenu_CreateInfo()
-                info.text, info.checked, info.func, info.notCheckable = item.text, item.checked, item.func, false
+                info.text, info.checked, info.func, info.notCheckable = menuText(item), item.checked, item.func, false
                 UIDropDownMenu_AddButton(info, level)
             end
         end, "MENU")
