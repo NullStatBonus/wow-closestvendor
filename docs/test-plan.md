@@ -687,6 +687,31 @@ Before the first check: type `/cvn debug on`, then `/reload`. After the last che
 
 No in-game check, unit tests only: the demo with an unreadable waypoint or a waypoint near a demo pin, the reagent names in another game language, the Unfriendly NorgannonDB trainer, the vendor and auctioneer tie in whole yards, the player waypoint next to the addon's, the demo with an unreadable waypoint or a failed timer, and Move (Done, Cancel, lock).
 
+## 35. Find supplies
+
+Before the first check: type `/cvn debug on`, then `/reload`. Use a character that knows a vendor that sells drink (any class) and, for the reagent check, a mage. After the last check: `/reload` again.
+
+- [ ] Type `/cvn find zzzz`.
+  Check: chat says no supply item matches zzzz, and no menu opens.
+  Log: "find: no item matches".
+- [ ] Type `/cvn find` and part of a drink's name, for example `/cvn find juice`. If a menu of items opens, pick one drink.
+  Check: chat says the sellers sell drink in general. A list opens at the mouse with the nearest seller marked, each with zone and distance. Your waypoint has not changed.
+  Log: "find: <item> looked up as drink" and "find: seller list for <item>".
+- [ ] In that list, pick a seller.
+  Check: a waypoint is set to that seller and chat names it.
+  Log: "accepted: <seller> via <provider>".
+- [ ] Repeat the search, then press Escape with the list open.
+  Check: the list closes and the waypoint stays where it was.
+  Log: no new "accepted:" line.
+- [ ] Mage only. Type `/cvn find rune of teleportation`.
+  Check: chat says the sellers of that rune are listed, and a list opens with no "sell drink in general" note.
+  Log: "find: seller list for Rune of Teleportation".
+- [ ] Type `/cvn settings`, type a drink name in **Find supplies** at the end of Home, press Okay.
+  Check: the same menu opens as for the command. Closing the settings window changes no setting.
+  Log: "find:" lines as for the command; `ClosestVendorCharDB` has no new setting.
+
+No in-game check, unit tests only: more than 8 matching items (chat asks for more of the name; it needs nine cached names), a seller of the wrong pet diet leaving the pet warning open, a pick ending a running demo, a reagent found by its game-language name, no menu control on the client (chat names the nearest seller), the search from the hearthstone point in an instance, an item the client has not named yet found by link, and the other faction's sellers.
+
 ## Not covered yet
 
 - Walking distance. The addon chooses vendors by straight-line distance.

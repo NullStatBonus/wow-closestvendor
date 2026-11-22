@@ -714,6 +714,9 @@ local function start()
         end,
         playSound = function(key) A.playSound(ns.Supplies.SoundId(key)) end,
         zoneName = A.mapName,
+        itemName = A.itemName,
+        itemIcon = A.itemIcon,
+        menu = function(title, items) return A.hasMenu() and A.menu("cursor", title, items) end,
         instanceType = A.instanceType,
         anchor = anchor,
         after = A.after,
@@ -779,6 +782,10 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
     end
     if action and action[1] == "sound" then
         A.playSound(ns.Supplies.SoundId(CHAR.cfg.remindSound))
+        return
+    end
+    if action and action[1] == "find" then
+        if controller then controller.Find(action[2]) end
         return
     end
     if action and action[1] == "test" then

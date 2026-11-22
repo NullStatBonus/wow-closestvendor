@@ -452,6 +452,21 @@ eq(#lines, 0, "demo prints nothing itself (and so not the help)")
 eq(action and action[1], "demo", "demo is an action for the caller")
 eq(flat(c), was, "demo changes no setting")
 
+-- /cvn find <text>: an action carrying the text for the caller; no text prints how to use it.
+eq(has(help, "/cvn find <item link or name>"), true, "help lists find")
+c = fresh()
+was = flat(c)
+lines, action = M.Run(c, "find Moonberry Juice")
+eq(#lines, 0, "find prints nothing itself")
+eq(action and action[1], "find", "find is an action for the caller")
+eq(action and action[2], "moonberry juice", "find passes the text")
+lines, action = M.Run(c, "find |cff1eff00|Hitem:1205::::::::60:::::|h[Melon Juice]|h|r")
+eq(action and action[2]:match("item:(%d+)"), "1205", "find keeps the item id of a link")
+lines, action = M.Run(c, "find")
+eq(has(lines, "Use /cvn find <item link or name>"), true, "find without text explains")
+eq(action and action[1], "read", "find without text is read-only")
+eq(flat(c), was, "find changes no setting")
+
 -- Supplies: food, water and pet food thresholds (1 to 40), switches, test actions and the status line.
 c = fresh()
 out = M.Run(c, "food 10")

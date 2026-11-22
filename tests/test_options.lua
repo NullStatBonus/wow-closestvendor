@@ -83,6 +83,26 @@ pages.sound.args.remindSound.set(nil,"none");eq(c.remindSound,"none","one notifi
 eq(pages.supplies.args.remindSound,nil,"no second sound control on Supplies")
 eq(runs[#runs],"sound none","choosing a sound plays it")
 do
+    -- Find supplies: one standard input, last on Home, that runs /cvn find and saves nothing.
+    local f=pages.home.args.findSupplies
+    eq(f.type,"input","Find supplies is a standard text input")
+    eq(f.name,"Item name or link","the input says what to type")
+    eq(pages.home.args.findHeading.name,"Find supplies","the section is labeled Find supplies")
+    local lastControl=0
+    for k,opt in pairs(pages.home.args) do
+        if k~="findSupplies" and (opt.type=="toggle" or opt.type=="select" or opt.type=="range") and opt.order>lastControl then lastControl=opt.order end
+    end
+    eq(f.order>lastControl,true,"warning choices come before Find supplies")
+    local before,n=changed(),#runs
+    eq(f.get(),"","the box starts empty")
+    f.set(nil,"Melon Juice")
+    eq(runs[#runs],"find Melon Juice","submitting runs the find command")
+    f.set(nil,"   ")
+    f.set(nil,"")
+    eq(#runs,n+1,"empty text runs nothing")
+    eq(changed(),before,"Find supplies saves nothing and refreshes nothing")
+end
+do
     local v = pages.sound.args.remindSound.values
     eq(type(v),"function","sound choices are read when the dropdown opens")
     eq(v().whisper..","..tostring(v()["lsm:Bell"]),"Whisper ping,nil","built-ins only without sound packs")

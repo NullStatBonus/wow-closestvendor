@@ -173,6 +173,17 @@ It lists what the addon tracks, one row for each item.
 - You can dim the text and icons.
 - Nothing static needs to stay bright on screen.
 
+## Find a supply
+
+Plan a trip before anything runs low. Type `/cvn find` with an item link or part of an item name, for example `/cvn find Moonberry Juice`. The same search is the **Find supplies** box at the end of Home.
+
+- It finds food, drink, pet food and your class reagents. Typed names match the game's own item names, in any letter case. A pasted item link always works.
+- No item matches: chat says so. More than 8 items match: chat asks you to type more of the name. Two to eight items open a menu of icon and name at the mouse pointer; one item goes straight to its sellers.
+- The seller list is the same as the status window's: the closest eligible seller (marked), then up to three others, each with name, zone and distance. It follows the same faction, reputation, instance and auction house rules as a row click.
+- A known item with no known seller gets its own chat line, different from "no match".
+- Pick a seller to set the waypoint there. Looking at a list changes nothing. Press Escape to close it.
+- The addon knows vendors by category for food, drink and pet food, not item by item. For those items chat says the sellers sell that category in general and may not stock the item. Class reagents are exact.
+
 ## Dungeons, raids and battlegrounds
 
 Inside an instance, the addon waits and does not ask.
@@ -222,6 +233,7 @@ Home has every switch that decides whether the addon acts:
 - **What to watch:** bag, durability and profession warning switches and thresholds, plus the Ammo, Reagents and Supplies switches.
 - **How to act:** **Destination on another map** (Ask which one / Navigate without asking) and **Preferred target**.
 - **Where to show it:** **On-screen notice**.
+- **Find supplies:** a box at the end of Home. Type part of an item name or paste an item link, then press Okay. It runs the same search as `/cvn find` and saves nothing.
 
 Disabled controls retain their values; their descriptions explain which switch enables them.
 
@@ -304,6 +316,7 @@ Advanced explains character settings and account-wide learned places (at load, t
 /cvn set appearance.notification-style toast
 /cvn demo
 /cvn preview hud
+/cvn find Moonberry Juice
 /cvn
 /cvn config
 /cvn bags 4
@@ -404,6 +417,7 @@ These values are per character. Prior saved values override defaults. Commands a
 
 - `/cvn` opens settings on Home; `/cvn status` shows current values.
 - `/cvn config` opens the settings page.
+- `/cvn find <item link or name>` shows the nearest known sellers of a food, drink, pet food or class reagent item. Pick one to set the waypoint. With no text it prints how to use it.
 - `/closestvendor` works the same as `/cvn`.
 - Settings are saved per character. The vendors, trainers and auctioneers the addon learns are shared by the account. A character you have not used with the addon before starts from the settings you had before this was per character.
 
@@ -588,6 +602,7 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 - The addon finds your pet's diet from its family, not from text. It works in every language. A pet family the addon does not know is not watched.
 - The addon counts items in your bags, not in the bank.
 - The addon does not buy food, water or pet food for you.
+- `/cvn find` searches these items by category: the addon does not know which items a vendor stocks, so a seller may not have the exact item you typed. It lists only items the game has named for you; an item link always works.
 - The status window shows Food, Water and Pet food rows in its Supplies group. They are separate from the Conjured Food and Conjured Water rows.
 
 ### Skill levels

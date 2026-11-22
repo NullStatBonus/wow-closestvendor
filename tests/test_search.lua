@@ -220,3 +220,55 @@ H.done()
 eq(S.Fits({ 3, "Arrows", 100, 0, 0, 0, false, 1, 0, 0 }, "arrow"), true, "arrow seller fits arrows")
 eq(S.Fits({ 3, "Arrows", 100, 0, 0, 0, false, 1, 0, 0 }, "bullet"), false, "but not bullets")
 eq(S.Fits({ 2, "Smith", 100, 0, 0, 0, true, 0, 0, 0 }, "repair"), true, "repairer fits repair")
+
+-- FindItems: link, partial name, case, accents, no name, healthstone, reagents of the class only.
+do
+    local ns2 = {}
+    require("harness").locale(ns2)
+    loadfile("ClosestVendor/Reagents.lua")("ClosestVendor", ns2)
+    loadfile("ClosestVendor/Supplies.lua")("ClosestVendor", ns2)
+    loadfile("ClosestVendor/Professions.lua")("ClosestVendor", ns2)
+    loadfile("ClosestVendor/Search.lua")("ClosestVendor", ns2)
+    ns2.SupplyItems = { [1179] = 2, [1205] = 2, [117] = 1 + 4, [5509] = 256, [4599] = 1 + 16, [9999] = 2 }
+    local names = { [1179] = "Ice Cold Milk", [1205] = "Melon Juice", [117] = "Tough Jerky", [5509] = "Healthstone",
+        [4599] = "Cured Ham Steak", [17031] = "Rune of Teleportation", [17020] = "Arcane Powder" } -- 9999 has no name
+    local nameOf = function(id) return names[id] end
+    local function ids(list) local o = {} for _, m in ipairs(list) do o[#o + 1] = m.id end return table.concat(o, ",") end
+    local F = ns2.Search.FindItems
+    eq(ids(F("|cff1eff00|Hitem:1205::::::::60:::::|h[Melon Juice]|h|r", "MAGE", nameOf)), "1205", "an item link matches by its id")
+    eq(ids(F("item:1205", "MAGE", function() return "Melon Juice (local)" end)), "1205", "a link needs no matching name")
+    eq(ids(F("item:9999", "MAGE", nameOf)), "9999", "a link finds an item the client has no name for")
+    eq(F("item:9999", "MAGE", nameOf)[1].name, "9999", "an unnamed item shows its id")
+    eq(ids(F("juice", "MAGE", nameOf)), "1205", "partial name")
+    eq(ids(F("  MELON   JUICE ", "MAGE", nameOf)), "1205", "case and spaces ignored")
+    eq(ids(F("ice cold", "MAGE", nameOf)), "1179", "substring inside a name")
+    eq(ids(F("e", "MAGE", nameOf)), "17020,4599,1179,1205,17031,117", "several matches sort by name, reagents included")
+    eq(ids(F("healthstone", "MAGE", nameOf)), "", "a healthstone is not a supply item")
+    eq(ids(F("moonberry", "MAGE", nameOf)), "", "no match")
+    eq(ids(F("", "MAGE", nameOf)), "", "empty text matches nothing")
+    eq(ids(F("item:99999", "MAGE", nameOf)), "", "an unknown link matches nothing")
+    do
+        local asked = 0
+        F("item:1205", "MAGE", function(id) asked = asked + 1 return names[id] end)
+        eq(asked <= 1, true, "a link asks the game for the name of the matched item only, not the whole catalog")
+    end
+    eq(F("item:17020", "MAGE", function() return nil end)[1].name, "Arcane Powder", "an unnamed reagent shows its own name, not its id")
+    eq(ids(F("9999", "MAGE", nameOf)), "", "an item without a game name never matches by text")
+    eq(F("melon", "MAGE", nameOf)[1].kind, "supply", "a drink is a supply")
+    eq(F("melon", "MAGE", nameOf)[1].key, "water", "a drink searches water")
+    eq(F("melon", "MAGE", nameOf)[1].bits, 2, "a drink searches the drink bit")
+    eq(F("jerky", "MAGE", nameOf)[1].key, "food", "food and meat searches food")
+    eq(F("jerky", "MAGE", nameOf)[1].bits, 1, "only the food bit, not the diet")
+    eq(F("ham", "MAGE", nameOf)[1].bits, 1, "bread food searches the food bit")
+    eq(ids(F("rune of", "MAGE", nameOf)), "17031", "a class reagent matches")
+    eq(F("rune of", "MAGE", nameOf)[1].kind, "reagent", "a reagent is a reagent")
+    eq(ids(F("rune of", "ROGUE", nameOf)), "", "another class's reagent does not match")
+    ns2.SupplyItems = { [777] = 8 + 16, [778] = 4 }
+    local pet = F("fish", "MAGE", function(id) return id == 777 and "Raw Fish" or nil end)
+    eq(pet[1].key .. ":" .. pet[1].bits, "pet:24", "an item with only diet bits searches the diets")
+    ns2.SupplyItems = { [777] = 2 }
+    local accent = function(id) return id == 777 and "Jus d'Orange \195\137l\195\169" or nil end
+    local acc = F("jus", "MAGE", accent)
+    eq(#acc, 1, "plain text finds a name with accents")
+    eq(#F("\195\137L\195\137", "MAGE", accent), 1, "an accented capital matches its lowercase")
+end

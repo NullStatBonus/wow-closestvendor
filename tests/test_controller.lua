@@ -19,7 +19,7 @@ local VENDORS = {
 
 local function world(over)
     local w = { free = 10, dur = nil, combat = false, pos = { 1, 0, 0 }, calls = {}, setCount = 0, clearCount = 0,
-                prompts = {}, notes = {}, cancelCount = 0, ammoKind = nil, ammoCount = 0, logs = {}, says = {}, sounds = {}, known = {}, open = false }
+                prompts = {}, menus = {}, notes = {}, cancelCount = 0, ammoKind = nil, ammoCount = 0, logs = {}, says = {}, sounds = {}, known = {}, open = false }
     for k, v in pairs(over or {}) do w[k] = v end
     local env = {
         cfg = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true, suppliesEnabled = true, reagentsEnabled = true,
@@ -36,6 +36,9 @@ local function world(over)
         say = function(t) w.says[#w.says + 1] = t end,
         notify = (not w.noNotify) and function(t) w.notes[#w.notes + 1] = t end or nil,
         zoneName = function(id) return w.zones and w.zones[id] end,
+        itemName = function(id) return w.itemNames and w.itemNames[id] end,
+        itemIcon = function(id) return w.icons and w.icons[id] end,
+        menu = (not w.noMenu) and function(title, items) w.menus[#w.menus + 1] = { title = title, items = items }; return true end or nil,
         questionOpen = function() return w.open end,
         freeSlots = function() return w.free end,
         lowestDurability = function() return w.dur end,
@@ -1834,5 +1837,193 @@ w.c.Demo(function() doneCount = doneCount + 1 end)
 eq(doneCount, 0, "the tour runs while timers work")
 table.remove(w.timers, 1).fn()
 eq(doneCount, 1, "the second timer failed: done runs")
+
+
+-- Find: look up an item by link or name and list its known sellers ----------------------------------------
+do
+    local saved = ns.SupplyItems
+    ns.SupplyItems = { [1179] = 2, [1205] = 2, [117] = 1 + 4, [4599] = 1 + 16 }
+    local NAMES = { [1179] = "Ice Cold Milk", [1205] = "Melon Juice", [117] = "Tough Jerky", [4599] = "Cured Ham Steak",
+        [17020] = "Arcane Powder" }
+    local function finder(over)
+        local o = { itemNames = NAMES, icons = { [1179] = 132800, [1205] = 132801 } }
+        for k, v in pairs(over or {}) do o[k] = v end
+        return supply("MAGE", { food = 30, water = 30, healthstone = 0 }, nil, nil, o)
+    end
+
+    -- Nothing matches: its own line, no list, no route.
+    w = finder()
+    w.c.Find("moonberry")
+    eq(w.says[1], "No supply item matches moonberry.", "find: no match says so")
+    eq(w.logs[#w.logs], "find: no item matches", "find: no match is logged")
+    eq(#w.menus, 0, "find: no match opens no menu")
+    eq(w.setCount, 0, "find: no match sets no waypoint")
+
+    -- Too many: asked to type more; no menu.
+    local many, mnames = {}, {}
+    for i = 1, 9 do many[100 + i] = 2; mnames[100 + i] = "Juice " .. i end
+    w = finder({ itemNames = mnames })
+    ns.SupplyItems = many
+    w.c.Find("juice")
+    eq(w.says[1], "Too many items match juice. Type more of the name.", "find: more than 8 matches asks for more of the name")
+    eq(w.logs[#w.logs], "find: too many items match", "find: too many is logged")
+    eq(#w.menus, 0, "find: too many opens no menu")
+    ns.SupplyItems = { [1179] = 2, [1205] = 2, [117] = 1 + 4, [4599] = 1 + 16 }
+    local eight = {}
+    for i = 1, 8 do eight[100 + i] = 2 end
+    ns.SupplyItems = eight
+    w = finder({ itemNames = mnames })
+    w.c.Find("juice")
+    eq(#w.menus, 1, "find: exactly 8 matches still list")
+    eq(#w.menus[1].items, 8, "find: all 8 items listed")
+    ns.SupplyItems = { [1179] = 2, [1205] = 2, [117] = 1 + 4, [4599] = 1 + 16 }
+
+    -- One item, a drink: the seller list opens with the category note, and browsing pins nothing.
+    w = finder()
+    w.c.Find("melon")
+    eq(#w.menus, 1, "find: one match opens the seller list")
+    eq(w.menus[1].title, "Sellers of Melon Juice", "find: seller list title names the item")
+    eq(#w.menus[1].items, 1, "find: the one drink seller")
+    eq(w.menus[1].items[1].checked, true, "find: the nearest seller is marked")
+    eq(w.says[1], "Vendors are known by category, not by item, so these sell drink in general and may not stock Melon Juice.", "find: a supply says it is category-level")
+    eq(w.setCount, 0, "find: browsing sets no waypoint")
+    eq(#w.prompts, 0, "find: browsing asks nothing")
+    w.menus[1].items[1].func()
+    eq(w.setCount, 1, "find: choosing pins the seller")
+    eq(w.last[2], "Well", "find: the drink seller is pinned")
+
+    -- Food: the nearest of the sellers of food, others follow; the other faction is skipped.
+    w = finder()
+    w.c.Find("jerky")
+    eq(#w.menus[1].items, 2, "find: both food sellers listed")
+    local fv = {}
+    for i, v in ipairs(SV) do fv[i] = v end
+    fv[#fv + 1] = { 5, "Rival Baker", 100, 0.05, 0.1, 2, false, 0, 2, 0, 0, 1 }
+    w = finder({ buckets = { [1] = fv } })
+    w.c.Find("jerky")
+    eq(w.menus[1].items[1].text:find("Baker", 1, true) ~= nil, true, "find: the other faction's nearer seller is skipped")
+    eq(w.menus[1].items[1].text:find("Rival", 1, true), nil, "find: the other faction is never listed")
+
+    -- Recognized, but no seller of its category is known.
+    w = finder({ buckets = { [1] = { SV[1], SV[2] } } })
+    w.c.Find("melon")
+    eq(w.says[1], "Melon Juice is a known item, but no known vendor sells it yet for your faction.", "find: a recognized item with no seller says so")
+    eq(#w.menus, 0, "find: no seller opens no menu")
+
+    -- Several items: a menu of icon and name first; choosing one opens its seller list after the item menu closes.
+    w = finder()
+    w.c.Find("e")
+    eq(w.menus[1].title, "Which item?", "find: several matches ask which item")
+    eq(#w.menus[1].items, 5, "find: every matching item listed")
+    eq(w.menus[1].items[3].text, "Ice Cold Milk", "find: items sorted by name")
+    eq(w.menus[1].items[3].icon, 132800, "find: an item shows its icon")
+    eq(w.menus[1].items[4].icon, 132801, "find: each item its own icon")
+    w.menus[1].items[3].func()
+    eq(#w.menus, 1, "find: the seller list waits until the item menu has closed")
+    w.timers[1].fn()
+    eq(#w.menus, 2, "find: choosing an item opens its seller list")
+    eq(w.menus[2].title, "Sellers of Ice Cold Milk", "find: the list is for the chosen item")
+    eq(w.setCount, 0, "find: choosing an item pins nothing")
+    w = finder({ noAfter = true })
+    w.c.Find("e")
+    w.menus[1].items[3].func()
+    eq(#w.menus, 2, "find: with no timer the seller list opens at once")
+
+    -- A class reagent is exact: no category note, the seller of that reagent.
+    w = reagent({ supplies = { class = "MAGE", totals = {}, diets = nil, knows = function() return false end }, itemNames = NAMES })
+    w.c.Find("arcane powder")
+    eq(#w.says, 1, "find: a reagent says its sellers are listed, with no category note")
+    eq(w.says[1], "The sellers of Arcane Powder are listed. Pick one to set a waypoint.", "find: the reagent outcome line")
+    eq(w.menus[1].title, "Sellers of Arcane Powder", "find: reagent list")
+    eq(w.menus[1].items[1].text:find("Powder Seller", 1, true) ~= nil, true, "find: the seller of that reagent, not the nearest vendor")
+    w = reagent({ supplies = { class = "ROGUE", totals = {}, knows = function() return false end }, itemNames = NAMES })
+    w.c.Find("arcane powder")
+    eq(w.says[1], "No supply item matches arcane powder.", "find: another class's reagent is not found")
+
+    -- No menu control: the nearest seller goes to chat and nothing is pinned.
+    w = finder({ noMenu = true })
+    w.c.Find("melon")
+    eq(w.says[2], "Nearest known seller of Melon Juice: Well (60 yards).", "find: without a menu the nearest seller is in chat")
+    eq(w.setCount, 0, "find: without a menu nothing is pinned")
+    w = finder({ noMenu = true })
+    w.c.Find("e")
+    eq(w.says[1], "Several items match e. Type more of the name.", "find: without a menu several matches ask for more")
+
+    -- In an instance the list is measured from the anchor a row click uses; no position says so.
+    w = finder({ instance = "party", anchors = { hearth = { continent = 1, x = 55, y = 0, map = 100 } } })
+    w.c.Find("melon")
+    eq(w.menus[1].items[1].text, "Well (5 yards)", "find: measured from the hearthstone point in an instance")
+    w = finder({ pos = false })
+    w.c.Find("melon")
+    eq(#w.menus, 0, "find: with no position nothing opens")
+    eq(w.says[1], "No map position here (dungeons and some areas have none). Try again outside.", "find: no position says so")
+
+
+    -- Review fixes -------------------------------------------------------------------------------
+    -- A pet-food pick only counts for the pet's warning when the seller sells what the pet eats.
+    do
+        local FISH, MEAT = { 21, "Fish Seller", 100, 0.3, 0.1, 0, false, 0, 30, 0, 0, 8 }, { 22, "Meat Seller", 100, 0.5, 0.1, 0, false, 0, 50, 0, 0, 4 }
+        ns.SupplyItems = { [800] = 8, [801] = 4 }
+        local petNames = { [800] = "Raw Fish", [801] = "Raw Meat" }
+        local function hunter()
+            local h = supply("HUNTER", { food = 30, water = 30, pet = 1, healthstone = 0 }, { Meat = true },
+                nil, { buckets = { [1] = { FISH, MEAT } }, itemNames = petNames, autoAccept = false })
+            h.c.Evaluate()
+            return h
+        end
+        w = hunter()
+        eq(#w.prompts, 1, "fix 1: the low pet food question is open")
+        w.c.Find("raw fish")
+        w.menus[1].items[1].func()
+        w.c.Evaluate()
+        eq(#w.prompts, 2, "fix 1: a seller of fish does not answer a meat pet's warning, it is asked again")
+        w = hunter()
+        w.c.Find("raw meat")
+        w.menus[1].items[1].func()
+        w.c.Evaluate()
+        eq(#w.prompts, 1, "fix 1: a seller of what the pet eats answers the warning")
+        ns.SupplyItems = { [1179] = 2, [1205] = 2, [117] = 1 + 4, [4599] = 1 + 16 }
+    end
+
+    -- Picking a seller ends a running demo, so its next step cannot replace the waypoint.
+    w = finder()
+    w.c.Demo(function() end)
+    w.c.Find("melon")
+    w.menus[#w.menus].items[1].func()
+    eq(w.last[2], "Well", "fix 2: the seller is pinned")
+    local sets, clears, ranTimers = w.setCount, w.clearCount, 0
+    for _, t in ipairs(w.timers or {}) do t.fn(); ranTimers = ranTimers + 1 end
+    eq(ranTimers > 0, true, "fix 2: the demo had a step waiting")
+    eq(w.setCount .. "," .. w.clearCount, sets .. "," .. clears, "fix 2: the demo's next steps neither clear nor replace the chosen seller")
+    eq(w.last[2], "Well", "fix 2: the chosen seller stays pinned")
+
+    -- Without a menu the chat names the seller that is nearest, not the one a row click would pick.
+    do
+        local far = { 11, "Map Well", 100, 0.9, 0.1, 0, false, 0, 900, 0, 0, 2 }
+        local near = { 12, "Near Well", 200, 0.1, 0.1, 0, false, 0, 50, 0, 0, 2 }
+        w = finder({ noMenu = true, buckets = { [1] = { far, near } }, pos = { 1, 0, 0, 100 } })
+        w.c.Find("melon")
+        eq(w.says[2], "Nearest known seller of Melon Juice: Near Well (50 yards).", "fix 3: the chat fallback names the nearest seller")
+        w = finder({ buckets = { [1] = { far, near } }, pos = { 1, 0, 0, 100 } })
+        w.c.Find("melon")
+        eq(w.menus[1].items[1].text:find("Map Well", 1, true) ~= nil, true, "fix 3: the menu still marks the row-click default first")
+    end
+
+    -- A reagent found by its game-language name keeps that name when picked, even when its warning is off.
+    w = reagent({ reagents = {}, supplies = { class = "MAGE", totals = {}, knows = function() return false end },
+        itemNames = { [17020] = "Poudre Arcanique" } })
+    w.c.Find("poudre")
+    w.menus[1].items[1].func()
+    eq(w.says[#w.says], "Navigating to Powder Seller (30 yards) to buy Poudre Arcanique.", "fix 6: the notice uses the game-language name")
+
+    -- A link works whatever the name; empty text matches nothing.
+    w = finder({ itemNames = {} })
+    w.c.Find("|cff1eff00|Hitem:1205::::::::60:::::|h[Melon Juice]|h|r")
+    eq(#w.menus, 1, "find: a link finds an item the client has not named")
+    w = finder()
+    w.c.Find("   ")
+    eq(w.says[1], "No supply item matches .", "find: empty text matches nothing")
+    ns.SupplyItems = saved
+end
 
 H.done()
