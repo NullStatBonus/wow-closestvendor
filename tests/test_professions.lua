@@ -61,6 +61,18 @@ eq(P.Within(at75, known, 10, 10)[1].need, 2, "75 needs Journeyman")
 local many = { { name = "Tailoring", rank = 70, max = 75 }, { name = "Mining", rank = 73, max = 75 }, { name = "Herbalism", rank = 70, max = 75 } }
 eq(names(P.Within(many, known, 10)), "Mining:2,Herbalism:5,Tailoring:5", "ordering")
 
+-- Why a skill near its cap is not asked about, for the debug log.
+local function why(list) local t = {} for i, p in ipairs(list) do t[i] = p.name .. " " .. p.rank .. "/" .. p.max .. ": " .. p.why end return table.concat(t, "; ") end
+eq(why(P.LeftOut({ { name = "Swords", rank = 70, max = 75 } }, known, 10)), "Swords 70/75: no trainer or crafting window seen", "an unknown skill near its cap: never seen")
+eq(why(P.LeftOut({ { name = "Common", rank = 300, max = 300 } }, known, 10)), "", "an unknown skill at the last cap (a language) is not listed")
+eq(why(P.LeftOut({ { name = "Mining", rank = 295, max = 300 } }, known, 10)), "Mining 295/300: the last tier", "the last tier")
+eq(why(P.LeftOut(at225, known, 10, 40)), "Mining 225/225: Artisan: trainer tiers unknown", "Artisan without trainer tiers")
+eq(why(P.LeftOut(at225, known, 10, 40, true)), "", "Artisan with trainer tiers: asked, not left out")
+eq(why(P.LeftOut(at150, known, 10, 19)), "Mining 150/150: level 20 needed", "the level gate names the level")
+eq(why(P.LeftOut(at150, known, 10, 20)), "", "at level 20: asked, not left out")
+eq(why(P.LeftOut({ { name = "Mining", rank = 139, max = 150 }, { name = "Swords", rank = 50, max = 100 } }, known, 10, 10)), "", "far from the cap: not listed")
+eq(why(P.LeftOut(nil, known, 10)), "", "unreadable skills: nothing")
+
 -- Change detection.
 local c = P.New()
 local a = { { name = "Mining", rank = 10 }, { name = "Swords", rank = 5 } }

@@ -161,6 +161,19 @@ local moved = D.Pool(ship, ext, { [1] = { 1, "L1", 2482, 0.30, 0.20, 1, false, 0
 eq(pid(moved)[1][4], 0.30, "vendor moved on x: learned position")
 local movedY = D.Pool(ship, ext, { [1] = { 1, "L1", 2482, 0.20, 0.30, 1, false, 0, 0, 0 } })
 eq(pid(movedY)[1][5], 0.30, "vendor moved on y: learned position")
+-- Moved: the test Pool uses, also for the debug log line when a vendor's window opens.
+local E1 = { 1, "Ext1", 2482, 0.20, 0.20, 1 }
+eq(D.Moved({ 1, "L1", 2482, 0.22, 0.18 }, E1), false, "within 0.03 on both axes: the external position is kept")
+eq(D.Moved({ 1, "L1", 2482, 0.24, 0.20 }, E1), true, "over 0.03 on x: moved")
+eq(D.Moved({ 1, "L1", 2482, 0.20, 0.16 }, E1), true, "over 0.03 on y: moved")
+eq(D.Moved({ 1, "L1", 1429, 0.20, 0.20 }, E1), true, "another map: moved")
+eq(D.Moved({ 1, "L1", 2482 }, E1), false, "no learned position: never moved")
+eq(D.Moved({ 1, "L1", 1429 }, E1), false, "another map but no learned position: never moved")
+do
+    local p = D.Pool({}, { E1 }, { [1] = { 1, "L1", 1429 } })
+    local r = p[1]
+    eq(r and r[3] .. "," .. tostring(r[4]), "2482,0.2", "the pool keeps the external map and position for a learned record with none")
+end
 local other = D.Pool(ship, ext, { [1] = { 1, "L1", 1429, 0.20, 0.20, 1, false, 0, 0, 0 } })
 eq(pid(other)[1][3], 1429, "learned on another map: learned position")
 local old = D.Pool(ship, ext, { [3] = { 3, "L3", 2548, 0.4, 0.4, 0, false, 0, 0 } })

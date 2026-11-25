@@ -46,15 +46,15 @@ eq(CT.Start(ctx({}, "1.11.0")), 0, "old: no entries")
 CT.Report("k", 1)
 eq(CT.Status(), "too old", "old: loaded, but too old to register entries")
 
--- Working: four entries, registered once.
+-- Working: eight entries, registered once.
 local f = fakeCT()
 local cfg = { bagThreshold = 2 }
 CT = load(f)
-eq(CT.Start(ctx(cfg, "1.11.0")), 4, "four entries stored")
-eq(CT.Start(ctx(cfg, "1.11.0")), 4, "a second start registers nothing more")
-eq(f.calls, 4, "Entry called once per entry")
+eq(CT.Start(ctx(cfg, "1.11.0")), 8, "eight entries stored")
+eq(CT.Start(ctx(cfg, "1.11.0")), 8, "a second start registers nothing more")
+eq(f.calls, 8, "Entry called once per entry")
 eq(f.addon, "ClosestVendor", "entries belong to ClosestVendor")
-eq(logged[#logged], "checkthat: entries registered: 4", "registration logged")
+eq(logged[#logged], "checkthat: entries registered: 8", "registration logged")
 eq(f.entries.version(), 11100, "1.11.0 is 11100")
 eq(f.entries.version(), 11100, "the version answers again")
 eq(f.entries.setting("bags.threshold"), "2", "setting: the value /cvn get prints")
@@ -81,7 +81,7 @@ CT.Start({ cfg = function() return cfg end, version = function() reads = reads +
 f.entries.version(); f.entries.version()
 eq(reads, 1, "version read once at Start")
 f = fakeCT(); CT = load(f)
-eq(CT.Start({ cfg = function() return cfg end, version = function() error("no metadata", 0) end }), 4, "a version read that raises does not stop registration")
+eq(CT.Start({ cfg = function() return cfg end, version = function() error("no metadata", 0) end }), 8, "a version read that raises does not stop registration")
 eq(count(f.entries.version()), 0, "and the version is unknown")
 
 -- active: the request Triggers.Active names, with a reagent's item id; nothing when none.
@@ -97,6 +97,35 @@ eq(f.entries.active(), "reagent 17020", "active: a reagent with its item id")
 f = fakeCT(); CT = load(f)
 CT.Start({ active = function() error("no controller", 0) end })
 eq(f.entries.active(), "error: no controller", "active: an error is returned as a value")
+
+-- learned, standing, nav and external: read through the getters Core passes; nothing without them.
+eq(count(f.entries.learned("vendors")), 0, "learned: no getter, nothing")
+eq(count(f.entries.standing(5)), 0, "standing: no getter, nothing")
+eq(count(f.entries.nav()), 0, "nav: no getter, nothing")
+eq(count(f.entries.external()), 0, "external: no getter, nothing")
+local learnedDB = { vendors = { [100] = {}, [253139] = {} }, trainers = {}, auctioneers = { [9858] = {} } }
+local standing = { [253139] = false, [9858] = true }
+local navNow, navReads = "tomtom", 0
+f = fakeCT(); CT = load(f)
+CT.Start({ learned = function(kind) return learnedDB[kind] end, standing = function(id) return standing[id] end,
+           nav = function() navReads = navReads + 1; return navNow end, external = function() return "not found" end })
+eq(f.entries.learned("vendors"), 2, "learned: the number of vendors")
+eq(f.entries.learned("Trainers"), 0, "learned: zero is a number, kind case does not matter")
+eq(f.entries.learned("auctioneers"), 1, "learned: auctioneers")
+eq(f.entries.learned("vendors", 253139), true, "learned: that vendor is learned")
+eq(f.entries.learned("vendors", "253139"), true, "learned: an id typed as text")
+eq(count(f.entries.learned("vendors", 7)), 0, "learned: an unknown id returns nothing")
+eq(count(f.entries.learned("vendors", "x")), 0, "learned: an id that is not a number returns nothing")
+eq(count(f.entries.learned("bankers")), 0, "learned: an unknown kind returns nothing")
+eq(count(f.entries.learned()), 0, "learned: no kind returns nothing")
+eq(f.entries.standing(253139), false, "standing: will not trade")
+eq(f.entries.standing("9858"), true, "standing: will trade, id typed as text")
+eq(count(f.entries.standing(1)), 0, "standing: never seen returns nothing")
+eq(count(f.entries.standing("x")), 0, "standing: not a number returns nothing")
+eq(f.entries.nav(), "tomtom", "nav: the method Core keeps")
+navNow = nil
+eq(count(f.entries.nav()), 0, "nav: unknown returns nothing")
+eq(f.entries.external(), "not found", "external: what NorgannonDB gave")
 
 -- No saved-variable change: every entry leaves the settings table as it was.
 local before = {}

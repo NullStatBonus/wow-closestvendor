@@ -338,11 +338,22 @@ function A.craftProfession()
 end
 
 -- The profession trainer window that just opened: { id, name, faction, trades = { names } }, or
--- nil if it is not a profession trainer, cannot be identified, or has not loaded its services yet.
+-- nil and why ("not a profession trainer", "the game cannot tell whether it is a profession trainer"
+-- when IsTradeskillTrainer is missing or raises, "the trainer cannot be identified" or "no profession
+-- services listed yet") for the debug log.
 function A.trainer()
-    if not call("IsTradeskillTrainer", IsTradeskillTrainer) then return end
+    if type(IsTradeskillTrainer) ~= "function" then
+        fail("IsTradeskillTrainer", "missing")
+        return nil, "the game cannot tell whether it is a profession trainer"
+    end
+    local ok, is = pcall(IsTradeskillTrainer)
+    if not ok then
+        fail("IsTradeskillTrainer", is)
+        return nil, "the game cannot tell whether it is a profession trainer"
+    end
+    if not is then return nil, "not a profession trainer" end
     local id, name = A.npc()
-    if not id then return end
+    if not id then return nil, "the trainer cannot be identified" end
     local trades, seen = {}, {}
     local count = call("GetNumTrainerServices", GetNumTrainerServices) or 0
     for i = 1, count do
@@ -352,7 +363,7 @@ function A.trainer()
             trades[#trades + 1] = skill
         end
     end
-    if #trades == 0 then return end
+    if #trades == 0 then return nil, "no profession services listed yet" end
     return { id = id, name = name, faction = A.factionId("npc"), trades = trades }
 end
 

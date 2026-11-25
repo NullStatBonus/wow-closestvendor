@@ -335,6 +335,13 @@ eq(boot(trainerGame({ GetNumTrainerServices = boom })).trainer(), nil, "service 
 eq(table.concat(boot(trainerGame({ GetTrainerServiceSkillLine = function(i) if i == 1 then error("x") end return "Mining" end })).trainer().trades, ","), "Mining", "one unreadable service skipped")
 eq(boot(trainerGame({ UnitGUID = function() return "Player-0-0-0-0-0-0" end })).trainer(), nil, "not a creature")
 eq(boot({}).trainer(), nil, "nothing available")
+-- Why nothing is learned, for the debug log.
+eq(select(2, boot(trainerGame({ IsTradeskillTrainer = function() return false end })).trainer()), "not a profession trainer", "class trainer: why")
+eq(select(2, boot(trainerGame({ IsTradeskillTrainer = function() return nil end })).trainer()), "not a profession trainer", "an older client's nil: a class trainer too")
+eq(select(2, boot(trainerGame({ IsTradeskillTrainer = boom })).trainer()), "the game cannot tell whether it is a profession trainer", "check throws: unknown, its own why")
+eq(select(2, boot(trainerGame({ IsTradeskillTrainer = false })).trainer()), "the game cannot tell whether it is a profession trainer", "check missing: unknown, its own why")
+eq(select(2, boot(trainerGame({ UnitGUID = function() return "Player-0-0-0-0-0-0" end })).trainer()), "the trainer cannot be identified", "not a creature: why")
+eq(select(2, boot(trainerGame({ GetNumTrainerServices = function() return 0 end })).trainer()), "no profession services listed yet", "no services yet: why")
 
 -- popupShown.
 eq(boot({ StaticPopup_Visible = function(w) return w == "W" and "StaticPopup1" or nil end }).popupShown("W"), true, "shown")

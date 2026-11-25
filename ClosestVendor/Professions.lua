@@ -67,6 +67,30 @@ function P.Within(skills, known, threshold, level, artisan)
     return out
 end
 
+-- Why each skill within threshold points of its cap is not asked about, for the debug log: a list of
+-- { name, rank, max, why } in the skills' order. why is "no trainer or crafting window seen" (not a known
+-- profession, such as a weapon skill; only below the last cap, so languages and maxed skills are left
+-- out), "the last tier", "Artisan: trainer tiers unknown" or "level <n> needed". Arguments as for Within.
+function P.LeftOut(skills, known, threshold, level, artisan)
+    local out = {}
+    if type(skills) ~= "table" then return out end
+    for _, s in ipairs(skills) do
+        local rank, max = s.rank, s.max
+        if type(rank) == "number" and type(max) == "number" and max > 0 and rank <= max and max - rank <= threshold then
+            local why
+            if not known[s.name] then
+                if max < P.LAST_CAP then why = "no trainer or crafting window seen" end
+            elseif max >= P.LAST_CAP then why = "the last tier"
+            elseif max == P.NO_ROUTE_CAP and not artisan then why = "Artisan: trainer tiers unknown"
+            elseif type(level) == "number" and level < (P.TIER_LEVEL[max] or 0) then
+                why = ("level %d needed"):format(P.TIER_LEVEL[max])
+            end
+            if why then out[#out + 1] = { name = s.name, rank = rank, max = max, why = why } end
+        end
+    end
+    return out
+end
+
 -- Skill-change detector. Changed(skills) is true when any skill differs from the previous call or
 -- is gone (unlearned); the first readable call only stores what is there.
 function P.New()

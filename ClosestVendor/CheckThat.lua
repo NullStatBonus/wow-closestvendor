@@ -6,7 +6,10 @@
 --   CT.Start(ctx) runs from Core at PLAYER_LOGIN and registers the entries once. ctx gives functions:
 --     cfg() (this character's settings, read at call time), version() (the TOC version, read once here, so
 --     an entry call never reaches the game), log(msg) (the debug log; only Start and failures write to it),
---     active() (the warning request that is open or active and a reagent's item id, or nil).
+--     active() (the warning request that is open or active and a reagent's item id, or nil), learned(kind)
+--     (the account's learned table for "vendors", "trainers" or "auctioneers"), standing(npcId) (true,
+--     false or nil, as this character saw it), nav() (the waypoint method Core keeps, never read from the
+--     game here) and external() (what NorgannonDB gave, as the report says it).
 --   CT.Report(key, value) reports the fact [ClosestVendor] key=value. A false return is normal.
 --   A raised error from CheckThat turns the integration off for the session and keeps the reason, so
 --     /cvn log shows "CheckThat: failed: <why>" with the debug log off. An error inside an entry returns
@@ -99,6 +102,43 @@ add("active", function()
     local kind, id = ctx.active()
     if not kind then return end
     return cut(id and (kind .. " " .. tostring(id)) or kind)
+end)
+
+-- How many vendors, trainers or auctioneers the account learned (0 included); with an npc id, true when
+-- that one is learned, else nothing. An unknown kind returns nothing.
+add("learned", function(kind, id)
+    local t = type(ctx.learned) == "function" and type(kind) == "string" and ctx.learned(kind:lower())
+    if type(t) ~= "table" then return end
+    if id ~= nil then
+        id = tonumber(id)
+        if id and t[id] ~= nil then return true end
+        return
+    end
+    local n = 0
+    for _ in pairs(t) do n = n + 1 end
+    return n
+end)
+
+-- Whether this character can trade with an npc: true (Neutral or better, or its window opened), false
+-- (Unfriendly or Hostile), or nothing when it was never seen.
+add("standing", function(id)
+    id = tonumber(id)
+    if not id or type(ctx.standing) ~= "function" then return end
+    local v = ctx.standing(id)
+    if type(v) == "boolean" then return v end
+end)
+
+-- The waypoint method the addon uses now: tomtom, waypointui, native or chat.
+add("nav", function()
+    local v = type(ctx.nav) == "function" and ctx.nav()
+    if v then return cut(v) end
+end)
+
+-- What NorgannonDB gave: "found, schema <s>, <n> vendors added, <n> skipped, <n> trainers with a tier",
+-- "installed, but its data is not a supported schema" or "not found".
+add("external", function()
+    local v = type(ctx.external) == "function" and ctx.external()
+    if v then return cut(v) end
 end)
 
 local function pack(...) return { n = select("#", ...), ... } end

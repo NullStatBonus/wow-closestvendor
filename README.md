@@ -38,7 +38,7 @@ When a warning fires, the addon shows the closest vendor that fits.
   - A warlock who knows Create Healthstone and has no healthstone gets a reminder to make one.
   - The reminder shows once, until the cause is gone. It is a notification: it shows as a Toast or Warning, with the notification sound, if the on-screen notice is on.
   - The reminder waits while you are in combat or in an instance.
-- **Professions:** a profession is within the threshold (default **10**) points of its current skill limit. The addon shows the closest trainer for that profession that you opened before. It asks on every skill-up and every craft. At 225, Artisan comes next, and only a few trainers teach it. With the optional NorgannonDB addon installed, the addon knows which trainers teach which tier and routes every tier, Artisan included, only to a trainer who teaches it. Without NorgannonDB, it uses the closest trainer for Journeyman and Expert and does not route for Artisan (a click on that row says so in chat).
+- **Professions:** a profession is within the threshold (default **10**) points of its current skill limit. The addon shows the closest trainer for that profession that you opened before. It asks on every skill-up and every craft. At 225, Artisan comes next, and only a few trainers teach it. With the optional NorgannonDB addon installed, the addon knows which trainers teach which tier and routes every tier, Artisan included, only to a trainer who teaches it. Without NorgannonDB, it uses the closest trainer for Journeyman and Expert and does not route for Artisan (a click on that row near the limit says so in chat).
 
 If more than one warning is active, the addon asks one question at a time.
 The order is: repair, ammo, reagent, food, water, pet food, sell, trainer.
@@ -505,6 +505,8 @@ The legacy `test` commands are live integration tests: accepting a question can 
 - `/cvn debug on` turns on the debug log. It records decisions and failures. Durability and inventory events are not logged one by one: one line, "gear events: N folded into one check", gives the count.
   - A warning that waits names its reason once, for example "trigger held in combat: repair", "trigger held while dead: repair" or "trigger held in an instance: sell". Inside an instance the reason stays "in an instance", also during a fight there. Dead during a fight is "while dead".
   - Each change of the ammo the addon watches is logged once: "ammo watched: arrow", or "ammo not watched: ..." for a thrown weapon, a wand, no ranged weapon or the ammo warning turned off.
+  - Each vendor or trainer window logs what the addon learned from it, for example "vendor learned: Name (npc 1234), new" (or "updated", "unchanged"); a class trainer logs "trainer window: nothing learned: not a profession trainer". Targeting an NPC that will not trade with you logs its standing. At login the addon logs what it found of NorgannonDB.
+  - A merchant window logs whether it cleared your waypoint or kept a trainer waypoint. Each profession check names the skills near their limit that it does not ask about, and why ("level 20 needed", "the last tier", ...), and why it asked nothing ("a question is open"). A question with two targets logs both, with the preference that put one first.
   - Closing a merchant with a purchase question open logs "purchase question closed with the merchant: ammo" (or "reagents"). Each purchase logs what it bought: only the purchases the game took, with a "FAILED:" line for any that did not go through. A merchant window that closes an open vendor question logs "question closed: merchant opened (sell)" (or the question's kind).
 - `/cvn debug off` turns it off.
 - `/cvn log` shows a report that you can copy.
@@ -646,7 +648,7 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 - A sound-pack sound needs the addon that shares it. While that addon is off, the whisper ping plays instead, and your choice stays saved.
 - The text of the addon is English only. You can add other languages. See [docs/localization.md](docs/localization.md).
 - The addon was written and tested against fake game APIs. The in-game checks are a CheckThat test plan, `plans/closestvendor.yaml`.
-- With the CheckThat test runner installed, the addon gives it read-only values (its version, a setting) for automatic checks. Without CheckThat, nothing changes.
+- With the CheckThat test runner installed, the addon gives it read-only values for automatic checks: its version, a setting, the open warning, what the account learned, an NPC's standing, the waypoint method and what NorgannonDB gave. Without CheckThat, nothing changes.
 
 ## Problems?
 

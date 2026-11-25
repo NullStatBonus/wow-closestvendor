@@ -66,8 +66,9 @@ local function world(over)
         cancelConfirm = function() w.cancelCount = w.cancelCount + 1; w.open = w.stuckOpen or false end, -- stuckOpen: the dialog does not close
         nav = {
             Set = function(v) w.setCount = w.setCount + 1; w.last = v; if not w.nilNav then return { kind = "x" } end end,
-            Clear = function() w.clearCount = w.clearCount + 1 end,
+            Clear = function() w.clearCount = w.clearCount + 1; if w.clearFails then return false end; if w.clearUnknown then return nil end; return true end,
         },
+        now = function() return w.clock end,
     }
     for k, v in pairs(w.cfg or {}) do env.cfg[k] = v end
     w.c = ns.Controller.New(env)
@@ -2125,6 +2126,180 @@ do
     w.c.Find("   ")
     eq(w.says[1], "No supply item matches .", "find: empty text matches nothing")
     ns.SupplyItems = saved
+end
+
+-- Debug log lines for the in-game test plan (sections 6, 11, 16, 24, 26 and 27): exact text.
+do
+    local function logged(w, line) for _, m in ipairs(w.logs) do if m == line then return true end end return false end
+    local function all(w) return table.concat(w.logs, " / ") end
+    -- Two targets: both named with the rule, before the question or the automatic pin.
+    w = mapped({ autoAccept = false })
+    w.c.Evaluate()
+    eq(logged(w, "two targets: on your map Home Seller (npc 32), closest Other Seller (npc 31), prefer map"), true, "two targets, prefer map: " .. all(w))
+    w = mapped({ autoAccept = false, cfg = { vendorPrefer = "distance" } })
+    w.c.Evaluate()
+    eq(logged(w, "two targets: on your map Home Seller (npc 32), closest Other Seller (npc 31), prefer distance"), true, "two targets, prefer distance")
+    w = mapped({ cfg = { vendorMode = "auto" } })
+    w.c.Evaluate()
+    eq(logged(w, "two targets: on your map Home Seller (npc 32), closest Other Seller (npc 31), prefer map"), true, "two targets, automatic pin")
+    eq(w.logs[#w.logs - 2]:find("^two targets: ") ~= nil and w.logs[#w.logs - 1]:find("^auto: Home Seller") ~= nil, true, "two targets come just before the auto line: " .. all(w))
+    -- The auto line says which of the two it took, so a reversed preference shows.
+    eq(logged(w, "auto: Home Seller (npc 32) chosen from two candidates: the one on your map"), true, "prefer map: the one on your map: " .. all(w))
+    eq(logged(w, "accepted: Home Seller via x"), true, "and that one was accepted")
+    w = mapped({ cfg = { vendorMode = "auto", vendorPrefer = "distance" } })
+    w.c.Evaluate()
+    eq(logged(w, "auto: Other Seller (npc 31) chosen from two candidates: the closest"), true, "prefer distance: the closest: " .. all(w))
+    w = world({ free = 1, autoAccept = false })
+    w.c.Evaluate()
+    eq(has(w, "two targets: "), false, "one target: no two-targets line")
+
+    -- Skills near their cap that are not asked about.
+    w = trade({ skills = { { name = "Swords", rank = 70, max = 75 }, { name = "Mining", rank = 70, max = 75 } }, autoAccept = false })
+    w.c.OnCraft()
+    eq(logged(w, "profession check: left out: Swords 70/75 (no trainer or crafting window seen)"), true, "a weapon skill is left out: " .. all(w))
+    w = trade({ skills = mining(150, 150), level = 15 })
+    w.c.OnCraft()
+    eq(logged(w, "profession check: left out: Mining 150/150 (level 20 needed)"), true, "the level gate is logged")
+    w = trade({ skills = mining(220, 225), level = 40 })
+    w.c.OnCraft()
+    eq(logged(w, "profession check: left out: Mining 220/225 (Artisan: trainer tiers unknown)"), true, "Artisan without tiers is logged")
+    w = trade({ skills = mining(295, 300) })
+    w.c.OnCraft()
+    eq(logged(w, "profession check: left out: Mining 295/300 (the last tier)"), true, "the last tier is logged")
+    w = trade({ skills = mining(295, 300), cfg = { tradeEnabled = false } })
+    w.c.OnCraft()
+    eq(has(w, "profession check: left out"), false, "profession warning off: nothing logged")
+    w = trade()
+    w.c.OnCraft()
+    eq(has(w, "left out"), false, "a profession that is asked about is not left out")
+
+    -- Why a profession near its cap asked nothing.
+    w = trade({ autoAccept = false })
+    w.c.OnCraft(); w.c.OnCraft()
+    eq(logged(w, "profession check skipped: a question is open"), true, "open question: skip logged")
+    w = trade()
+    w.c.OnCraft(); w.c.OnCraft()
+    eq(logged(w, "profession check skipped: a Mining trainer waypoint is set"), true, "trainer waypoint: skip logged")
+    w = trade({ free = 1 })
+    w.c.Evaluate(); w.c.OnCraft()
+    eq(logged(w, "profession check skipped: the sell request is open or active"), true, "active request: skip logged")
+
+    -- The tier a trainer question needs, and what the chosen trainer teaches.
+    w = trade({ tiers = true, trainers = { [1] = TIERED }, skills = mining(145, 150), level = 20, autoAccept = false })
+    w.c.OnCraft()
+    eq(logged(w, "trainer search: Mining needs tier 3; nearest Unknown Miner (npc 32) teaches an unknown tier"), true, "tier 3: " .. all(w))
+    w = trade({ tiers = true, trainers = { [1] = TIERED }, skills = mining(220, 225), level = 40, autoAccept = false })
+    w.c.OnCraft()
+    eq(logged(w, "trainer search: Mining needs tier 4; nearest Master Miner (npc 33) teaches tier 4"), true, "tier 4")
+
+    -- A merchant window clears a vendor waypoint and keeps a trainer's.
+    w = trade()
+    w.c.OnCraft(); w.c.OnMerchantShow()
+    eq(logged(w, "waypoint kept: it leads to a Mining trainer"), true, "trainer waypoint kept at a merchant")
+    w = world({ free = 1 })
+    w.c.Evaluate(); w.c.OnMerchantShow()
+    eq(logged(w, "waypoint cleared: a merchant window opened"), true, "vendor waypoint cleared at a merchant")
+    w = world()
+    w.c.OnMerchantShow()
+    eq(has(w, "waypoint cleared") or has(w, "waypoint kept"), false, "no waypoint: nothing logged")
+
+    -- The profession's own trainer window ends the trainer waypoint.
+    w = trade()
+    w.c.OnCraft(); w.c.OnTrainerShow({ Herbalism = true })
+    eq(has(w, "trainer waypoint cleared"), false, "another profession's trainer: nothing logged")
+    w.c.OnTrainerShow({ Mining = true })
+    eq(logged(w, "trainer waypoint cleared: the Mining trainer window opened"), true, "its trainer window: cleared and logged")
+
+    -- A row click for Artisan without trainer tiers; the seller list asks quietly.
+    w = trade({ skills = mining(220, 225), level = 40 })
+    eq(w.c.Choices("trainer", "Mining"), nil, "Artisan: no seller list")
+    eq(has(w, "Artisan"), false, "the seller list logs nothing")
+    w.c.Go("trainer", "Mining")
+    eq(logged(w, "direct pin: Artisan Mining is not routed: trainer tiers unknown"), true, "Artisan refusal logged")
+
+    -- The Artisan reason only for Artisan near its cap without tiers; other refusals say their own reason.
+    w = trade({ skills = mining(100, 225), level = 40 })
+    w.c.Go("trainer", "Mining")
+    eq(has(w, "Artisan"), false, "Artisan far from its cap: not the tiers reason: " .. all(w))
+    eq(logged(w, "direct pin: profession is not near its cap"), true, "far from its cap: that reason")
+    eq(#w.says, 0, "and nothing in chat")
+    w = trade({ tiers = true, trainers = { [1] = TIERED }, skills = mining(220, 225), level = 30 })
+    w.c.Go("trainer", "Mining")
+    eq(logged(w, "direct pin: profession is not routed: level 35 needed"), true, "tiers known, level too low: the level reason: " .. all(w))
+    eq(has(w, "Artisan"), false, "and not the tiers reason")
+    w = trade({ skills = mining(295, 300) })
+    w.c.Go("trainer", "Mining")
+    eq(logged(w, "direct pin: profession is not routed: the last tier"), true, "the last tier: its own reason: " .. all(w))
+    w = trade({ skills = mining(220, 225), known = {}, level = 40 })
+    w.c.Go("trainer", "Mining")
+    eq(logged(w, "direct pin: profession is not routed: no trainer or crafting window seen"), true, "never seen: its own reason: " .. all(w))
+
+    -- A waypoint method that raises while removing: the clear is logged as FAILED.
+    w = world({ free = 1, clearFails = true })
+    w.c.Evaluate(); w.c.OnMerchantShow()
+    eq(logged(w, "FAILED: waypoint not cleared: a merchant window opened"), true, "merchant: failed clear: " .. all(w))
+    eq(has(w, "waypoint cleared: a merchant"), false, "and no cleared line")
+    w = trade({ clearFails = true })
+    w.c.OnCraft(); w.c.OnTrainerShow({ Mining = true })
+    eq(logged(w, "FAILED: trainer waypoint not cleared: the Mining trainer window opened"), true, "trainer window: failed clear")
+    eq(has(w, "trainer waypoint cleared"), false, "and no cleared line")
+    w = trade({ clearFails = true })
+    w.c.OnCraft()
+    w.skills = mining(50); w.c.OnSkillChange()
+    eq(logged(w, "FAILED: trainer waypoint not cleared: Mining is no longer near its cap"), true, "skill moved away: failed clear: " .. all(w))
+    w = trade()
+    w.c.OnCraft()
+    w.skills = mining(50); w.c.OnSkillChange()
+    eq(logged(w, "trainer waypoint cleared: Mining is no longer near its cap"), true, "skill moved away: cleared")
+    -- A waypoint method that cannot confirm the removal (Nav.Clear nil): said so, never "cleared".
+    w = world({ free = 1, clearUnknown = true })
+    w.c.Evaluate(); w.c.OnMerchantShow()
+    eq(logged(w, "waypoint clear not confirmed: a merchant window opened"), true, "merchant: unconfirmed clear: " .. all(w))
+    eq(has(w, "waypoint cleared: "), false, "and no cleared line")
+    w = trade({ clearUnknown = true })
+    w.c.OnCraft(); w.c.OnTrainerShow({ Mining = true })
+    eq(logged(w, "trainer waypoint clear not confirmed: the Mining trainer window opened"), true, "trainer window: unconfirmed clear: " .. all(w))
+    eq(has(w, "waypoint cleared: "), false, "and no cleared line")
+    w = trade({ clearUnknown = true })
+    w.c.OnCraft()
+    w.skills = mining(50); w.c.OnSkillChange()
+    eq(logged(w, "trainer waypoint clear not confirmed: Mining is no longer near its cap"), true, "skill moved away: unconfirmed clear")
+
+    -- A repeated left-out or skip line is written once, again after a change of state or 30 seconds.
+    local function count(gw, line) local n = 0 for _, m in ipairs(gw.logs) do if m == line then n = n + 1 end end return n end
+    local SW = "profession check: left out: Swords 70/75 (no trainer or crafting window seen)"
+    w = trade({ skills = { { name = "Swords", rank = 70, max = 75 }, { name = "Mining", rank = 295, max = 300 } } })
+    local BOTH = "profession check: left out: Swords 70/75 (no trainer or crafting window seen), Mining 295/300 (the last tier)"
+    w.clock = 100
+    w.c.OnCraft(); w.c.OnCraft(); w.c.OnCraft()
+    eq(count(w, BOTH), 1, "the same left-out line once: " .. all(w))
+    w.clock = 129; w.c.OnCraft()
+    eq(count(w, BOTH), 1, "not again within 30 seconds")
+    w.clock = 130; w.c.OnCraft()
+    w.clock = 131; w.c.OnCraft()
+    eq(count(w, BOTH), 2, "again after 30 seconds, then quiet again")
+    w = trade({ skills = { { name = "Swords", rank = 70, max = 75 }, { name = "Mining", rank = 70, max = 75 } }, autoAccept = false })
+    w.c.OnCraft(); w.c.OnCraft(); w.c.OnCraft()
+    eq(count(w, SW), 2, "a question shown in between: written again: " .. all(w))
+    eq(count(w, "profession check skipped: a question is open"), 1, "the same skip line once")
+    -- A skill-up alone (same skills, same reasons, new rank) writes nothing new within 30 seconds.
+    w = trade({ skills = { { name = "Swords", rank = 70, max = 75 } } })
+    w.clock = 100
+    w.c.OnSkillChange(); w.c.OnCraft()
+    w.skills = { { name = "Swords", rank = 71, max = 75 } }; w.clock = 110; w.c.OnSkillChange()
+    w.skills = { { name = "Swords", rank = 72, max = 75 } }; w.clock = 120; w.c.OnSkillChange()
+    local n = 0 for _, m in ipairs(w.logs) do if m:find("profession check: left out: ", 1, true) then n = n + 1 end end
+    eq(n, 1, "weapon skill-ups: one left-out line: " .. all(w))
+    w.skills = { { name = "Swords", rank = 72, max = 75 }, { name = "Mining", rank = 295, max = 300 } }; w.clock = 121; w.c.OnSkillChange()
+    eq(logged(w, "profession check: left out: Swords 72/75 (no trainer or crafting window seen), Mining 295/300 (the last tier)"), true, "a new skill left out: written")
+
+    -- A row click inside an instance names where the search started.
+    w = world({ instance = "party", pos = false, anchors = { hearth = HEARTH, last = LAST } })
+    w.c.Go("sell")
+    eq(logged(w, "direct pin: the search started from your hearthstone point"), true, "hearthstone anchor logged")
+    w = world({ instance = "party", pos = false, anchors = { last = LAST } })
+    w.c.Go("sell")
+    eq(logged(w, "direct pin: the search started from your last position outside"), true, "last position anchor logged")
 end
 
 H.done()
