@@ -6,7 +6,7 @@ When player-visible behavior, a setting, or a command changes, update the suppor
 
 - Cover affected features, settings, commands, and “Good to know” limits in `README.md`.
 - Update the CurseForge/Wago text in `docs/listing.md`. Update its summary when the headline behavior changes.
-- Update `docs/test-plan.md` with the relevant manual checks. Keep section numbers unique and in order.
+- Update `plans/closestvendor.yaml` with the relevant in-game checks (see CheckThat below).
 - Document every new setting in the README and include its value in the debug report.
 - The report header is built by `reportText` in `ClosestVendor/Core.lua`.
 - `tests/test_readme.lua` checks the README command list.
@@ -15,12 +15,26 @@ When player-visible behavior, a setting, or a command changes, update the suppor
 
 - Cover each new behavior with an automated test. Temporarily break the behavior, verify the test fails for the expected reason, then restore the behavior and verify it passes.
 - Run the focused test during implementation. Use `make test` for the full suite and `make check` for packaging and version checks.
-- Keep manual checks short and few. Give each check one player action, then a `Check:` line that states the expected result in words a player understands. Put the log line that proves it on a separate `Log:` line for the reviewer. Never ask the player to read or interpret a log line. Log a distinct line for each behavior the check verifies.
+- Keep player steps short and few. Give each step one player action (`action`), then an `expect` that states the result in words a player understands. Put the log line that proves it in `assertions` (or `reviewer` while it is a player step). Never ask the player to read or interpret a log line. Log a distinct line for each behavior the step verifies.
 - Give only essential setup before the action, but name everything the check depends on: a profession, an installed addon, and turning on debug logging followed by `/reload`. Avoid old versions, disabled addons, and staged characters or items.
 - Verify the result from debug logs or saved variables wherever possible. Add missing evidence in the same change.
 - Keep raw saved variables and debug output out of Git. Anonymize any fixture derived from them.
 - Each module has a `tests/test_*.lua` file.
 - Use only the commands the check needs, usually `/cvn debug on` and `/reload` before the first check and `/reload` at the end. Verify saved data in `ClosestVendorCharDB`. Mark destructive steps optional and identify behavior with no in-game check.
+
+## CheckThat
+
+CheckThat runs the in-game test plan. Write plans with the `/ct-test-plan` skill and read finished runs with `/ct-verify`. Install the skills once with `make install-skill BIN_DIR=$HOME/bin` in the CheckThat checkout, so `ct <command>` works from this repository. Never point ClosestVendor's files at a CheckThat checkout. CheckThat's docs are the contract: `docs/debug-logging.md`, `docs/features.md` ("Facts from other addons", "Entry points", "Automatic steps", "Unit-test checks") and `docs/authoring-plans.md`.
+
+- **The plan lives here.** `plans/closestvendor.yaml` is the plan of record. Change it in the same change as the log line, fact or entry it matches. Its first step checks the version under test with `op: ge`. Step `cv.s<N>.<M>` is "test plan check N.M". Never renumber or rename a step id: add a new step at the end of its section, and never reuse the id of a removed step.
+- **Prefer automatic steps.** A check proven by a log line, a fact or an entry is an `auto: true` step. Keep a player step only for what the log cannot show: drawing, sound, position, feel. Each player step follows the Testing rules above.
+- **Log lines.** Each behavior a plan checks writes one line at its decision point with the values that prove it. Log refusals and skips too, mark failures `FAILED:`, log toggles in both directions, and keep the wording stable: a reworded line is a plan change. Assert the literal text in the source (`pattern` with `%d`/`%a` for values, or `contains` on the literal part); do not retag lines to please `ct lines`. Never log character names or chat text.
+- **Facts.** Report a value with `ns.CheckThat.Report(key, value)` once, where the code decides it, never in a loop or an update handler. Report numbers as numbers.
+- **Entries.** Expose pure functions a plan should call with `CheckThat.Entry`, registered at `PLAYER_LOGIN` from `start()`, never at file scope. Each is side-effect free and returns scalars of at most 100 characters, never a character name. Cover them in the plan's `offline:` block.
+- **One integration file.** All CheckThat calls sit in `ClosestVendor/CheckThat.lua`, which reads the `CheckThat` global only through `A.checkThat()` and guards each call, so ClosestVendor works when CheckThat is missing or old. Do not add CheckThat to `OptionalDeps`: CheckThat lists ClosestVendor, so ClosestVendor loads first. `make test` and `make check` never need CheckThat.
+- **Before a tester runs a plan:** `make plan` runs `ct validate`, `ct compile` (to `build/closestvendor.ct`), `ct replay-flow`, `ct lines --addon-src ClosestVendor` and `ct offline` on `plans/closestvendor.yaml`. Then review the plan against what the card shows. Fix every finding. Read runs back with `ct collect --plan plans/closestvendor.yaml --dest evidence` (kept out of Git) before asking for more in-game steps.
+- **Contracts.** A new log format, saved variable, entry or fact key goes in `docs/contracts.md` and in the plan's `logs:` block.
+- **Stay in this repository.** Run the tools; do not edit, create or leave files in CheckThat's. Write temporary copies only to the session scratchpad and delete them. When CheckThat lacks something, file an issue (`gh issue create -R NullStatBonus/wow-checkthat`) and note it in the change, instead of patching locally.
 
 ## Conventions
 

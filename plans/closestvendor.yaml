@@ -1,0 +1,5397 @@
+ct: 1
+kind: plan
+addon: ClosestVendor
+title: ClosestVendor in-game test plan
+preamble: 'These checks cover what the automated tests cannot check: the real game.
+
+
+  Run them on WoW Forever. Run them on Classic Era when you can.
+
+
+  Run them before a release. Run them after a change to |cff99ccffAdapter.lua|r, |cff99ccffCore.lua|r,
+  |cff99ccffReport.lua|r or |cff99ccffOptions.lua|r. Run them when a new game build comes out.
+
+
+  Tick each item. Write down the client build.
+
+
+  Each check has one player action, a |cff99ccffCheck:|r line with the result a player sees, and a |cff99ccffLog:|r
+  line the reviewer reads in the debug log or |cff99ccffClosestVendorCharDB|r. A line that starts with
+  "Note" asks you to record what the game does. Those items are unknown: verify them in game.'
+logs:
+  debug:
+    global: ClosestVendorCharDB
+    path: log.entries
+    format: entries
+    cap: 300
+  facts:
+    global: CheckThatDB
+    path: global.facts
+    format: strings
+    cap: 300
+  errors:
+    global: CheckThatDB
+    path: global.errors
+    format: strings
+    quiet: true
+    cap: 100
+requirements:
+  addon-loaded:
+    text: ClosestVendor is loaded
+    probe: addon-loaded
+    name: ClosestVendor
+offline:
+  toc: wow-closest-vendor/ClosestVendor/ClosestVendor_Vanilla.toc
+  steps:
+  - event:
+      name: ADDON_LOADED
+      args:
+      - ClosestVendor
+  - event:
+      name: PLAYER_LOGIN
+  - label: The fake client gives no version, so the version entry returns nothing
+    call:
+      addon: ClosestVendor
+      entry: version
+    returns: []
+  - label: The bag threshold is 2 by default
+    call:
+      addon: ClosestVendor
+      entry: setting
+      args:
+      - bags.threshold
+    returns:
+    - '2'
+  - label: The CheckThat integration is working
+    call:
+      addon: ClosestVendor
+      entry: integration
+    returns:
+    - working
+  - label: An unknown setting key returns nothing
+    call:
+      addon: ClosestVendor
+      entry: setting
+      args:
+      - no.such.key
+    returns: []
+sections:
+- id: s0
+  title: Setup
+  steps:
+  - id: cv.s0.1
+    title: Check the ClosestVendor version
+    auto: true
+    action:
+      kind: manual
+      text: CheckThat reads the ClosestVendor version.
+    expect: The ClosestVendor version is 1.11.0 or newer. If the step fails, copy ClosestVendor 1.11.0
+      into the game again.
+    verify:
+    - assertions
+    call:
+      addon: ClosestVendor
+      entry: version
+    timeout: 30
+    assertions:
+    - kind: fact
+      source: facts
+      addon: ClosestVendor
+      key: entry.version
+      op: ge
+      value: 11100
+      label: ClosestVendor is 1.11.0 or newer
+    notes: The entry returns major*10000 + minor*100 + patch, so 1.11.0 is 11100. It reads a fact, not
+      the debug log, so it runs before debug logging is on. CheckThat too old to offer entries leaves
+      this step unverified.
+  - id: cv.s0.2
+    title: Turn on Lua errors and reload
+    action:
+      kind: manual
+      text: Type |cff99ccff/console scriptErrors 1|r, then |cff99ccff/reload|r.
+      commands:
+      - /console scriptErrors 1
+      - /reload
+    expect: No Lua error popup appears, and ClosestVendor is in the AddOns list (Esc, AddOns). Press Pass.
+    verify:
+    - player
+    reload: after_action
+  - id: cv.s0.3
+    title: 'Optional: install TomTom, and WaypointUI (WoW Forever only)'
+    action:
+      kind: manual
+      text: 'Optional: install TomTom, and WaypointUI (WoW Forever only). The Navigation and Waypoint
+        choice sections use them.'
+    expect: Both show in the AddOns list. Press Pass.
+    verify:
+    - player
+    clients:
+    - forever-camelot
+  - id: cv.s0.4
+    title: 'Ammo sections: use a ranged class with ammo equipped'
+    action:
+      kind: manual
+      text: 'Ammo sections only: use a hunter, warrior or rogue with a bow, crossbow or gun equipped and
+        some ammo in the ammo slot.'
+    expect: The ammo shows in the ammo slot. Press Pass.
+    verify:
+    - player
+  - id: cv.s0.5
+    title: Turn debug logging on
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn debug on|r, then |cff99ccff/reload|r.
+      commands:
+      - /cvn debug on
+      - /reload
+    expect: After the reload, the debug log still records that it turned on.
+    verify:
+    - assertions
+    reload: after_action
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log
+      source: debug
+      contains: debug log turned on
+      scope: attempt
+      label: The debug log records that it turned on
+  intro: 'Install: copy |cff99ccffClosestVendor/|r into the AddOns folder and start the game. Every item
+    is pass/fail. The tester checks the expected result. The reviewer checks the log lines. After the
+    last check, type |cff99ccff/reload|r again so the game saves the log. The reviewer reads |cff99ccffClosestVendorCharDB|r
+    in |cff99ccffWTF/Account/<account>/<realm>/<character>/SavedVariables/ClosestVendor.lua|r and |cff99ccffClosestVendorDB|r
+    in |cff99ccffWTF/Account/<account>/SavedVariables/ClosestVendor.lua|r.
+    A section that says "Setup" lists what only that section needs, such as a class, a profession or an
+    addon.'
+- id: s1
+  title: Settings page and commands
+  steps:
+  - id: cv.s1.1
+    title: Open Esc, Options, AddOns, Closest Vendor and look at Home
+    action:
+      kind: manual
+      text: Open Esc, Options, AddOns, |cffffd100Closest Vendor|r and look at Home.
+    expect: 'Home lists the Warnings in order: Bag space, Durability and Professions (each a checkbox
+      and a slider), then Ammo, Reagents and Supplies (a checkbox only). Press Pass.'
+    verify:
+    - player
+  - id: cv.s1.2
+    title: Look at the pages below Home
+    action:
+      kind: manual
+      text: Look at the pages below Home.
+    expect: The pages are Restock, Navigation, Appearance, Advanced and About. Restock holds Ammo, Reagents
+      and Supplies. Appearance holds the Notifications, Status window and Sound tabs. Press Pass.
+    verify:
+    - player
+  - id: cv.s1.3
+    title: Open the Ammo page as a Hunter
+    action:
+      kind: manual
+      text: Open the Ammo page as a Hunter.
+    expect: Below the ammo slider are Buy ammo, Ask before buying and the arrow and bullet dropdowns.
+      Press Pass.
+    verify:
+    - player
+  - id: cv.s1.4
+    title: Open the Reagents page as a reagent class (for example a Mage)
+    action:
+      kind: manual
+      text: Open the Reagents page as a class that uses reagents (for example a Mage).
+    expect: Under the slider is one checkbox for each reagent of your class. Press Pass.
+    verify:
+    - player
+  - id: cv.s1.5
+    title: Move a slider, then enter /cvn
+    action:
+      kind: manual
+      text: Move a slider, then enter |cff99ccff/cvn|r.
+      commands:
+      - /cvn
+    expect: '|cff99ccff/cvn|r shows the new slider number. Press Pass.'
+    verify:
+    - player
+  - id: cv.s1.6
+    title: Enter /cvn ammo 500 and reopen the page
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn ammo 500|r and reopen the page.
+      commands:
+      - /cvn ammo 500
+    expect: The ammo slider is at 500. Press Pass.
+    verify:
+    - player
+  - id: cv.s1.7
+    title: Clear a checkbox
+    action:
+      kind: manual
+      text: Clear a checkbox.
+    expect: Its slider is greyed out and that trigger stops asking. Press Pass.
+    verify:
+    - player
+  - id: cv.s1.8
+    title: Enter /cvn config
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn config|r.
+      commands:
+      - /cvn config
+    expect: The settings page opens. Press Pass.
+    verify:
+    - player
+  - id: cv.s1.9
+    title: Enter /cvn
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn|r.
+      commands:
+      - /cvn
+    expect: It prints readable lines with no stray symbols or missing text. Press Pass.
+    verify:
+    - player
+  - id: cv.s1.10
+    title: Enter /cvn help
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn help|r.
+      commands:
+      - /cvn help
+    expect: It prints readable lines with no stray symbols or missing text. Press Pass.
+    verify:
+    - player
+  - id: cv.s1.11
+    title: Change settings with /cvn and on the page, then reload
+    action:
+      kind: manual
+      text: Change settings on the page and with the Closest Vendor slash command. Type |cff99ccff/reload|r.
+      commands:
+      - /reload
+    expect: The settings stay. Press Pass.
+    verify:
+    - player
+    reload: after_action
+  - id: cv.s1.12
+    title: Change settings again and restart the game
+    action:
+      kind: manual
+      text: Change settings again and restart the game.
+    expect: The settings stay. Press Pass.
+    verify:
+    - player
+- id: s2
+  title: The question
+  steps:
+  - id: cv.s2.1
+    title: Enter /cvn test sell
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn test sell|r.
+      commands:
+      - /cvn test sell
+    expect: A question shows a vendor name and a zone. Press Pass.
+    verify:
+    - player
+    - assertions
+    - reviewer
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'test command: sell'
+    reviewer: 'The log has "test command: sell". The original plan also expected "reminder: test", but
+      Controller.lua logs that line only for "/cvn test remind", so it is not asserted here.'
+  - id: cv.s2.2
+    title: Enter /cvn test repair
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn test repair|r.
+      commands:
+      - /cvn test repair
+    expect: A question shows a vendor name and a zone. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"test command: repair".'
+  - id: cv.s2.3
+    title: As a Hunter, type /cvn test arrows, then /cvn test bullets
+    action:
+      kind: manual
+      text: As a Hunter, type |cff99ccff/cvn test arrows|r, then |cff99ccff/cvn test bullets|r.
+      commands:
+      - /cvn test arrows
+      - /cvn test bullets
+    expect: The last question shows a vendor name and a zone. The reviewer confirms both tests ran. Press
+      Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"test command: arrows" and "test command: bullets".'
+  - id: cv.s2.4
+    title: Enter /cvn test sell and click Yes
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn test sell|r and click |cffffd100Yes|r.
+      commands:
+      - /cvn test sell
+    expect: A waypoint to the vendor is set (see the Navigation section). Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <vendor> via <provider>".'
+  - id: cv.s2.5
+    title: Enter /cvn test sell, click No, then enter it again and press Esc
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn test sell|r and click |cffffd100No|r, then enter it again and press Esc.
+      commands:
+      - /cvn test sell
+    expect: Nothing happens after either answer. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question declined: sell".'
+  - id: cv.s2.6
+    title: Fill your bags to the threshold, then change your bags again
+    action:
+      kind: manual
+      text: Fill your bags to the threshold (default 2 free slots or fewer), then change your bags again.
+    expect: The sell question appears once and does not repeat. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'one "question shown: sell" line.'
+  - id: cv.s2.7
+    title: Wear one item below the durability threshold (default 20%)
+    action:
+      kind: manual
+      text: Wear one item below the durability threshold (default 20%).
+    expect: The repair question appears once. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: repair".'
+  - id: cv.s2.8
+    title: Click Yes on the repair question
+    action:
+      kind: manual
+      text: Click |cffffd100Yes|r on the repair question.
+    expect: Navigation starts to the vendor named in the question. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <vendor> via <provider>".'
+  - id: cv.s2.9
+    title: Click No on a real question, then sell or repair
+    action:
+      kind: manual
+      text: Click |cffffd100No|r on a real question, then sell or repair.
+    expect: The addon does not ask again until the condition clears, then the question comes back. Press
+      Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question declined: sell".'
+  - id: cv.s2.10
+    title: Open a question, then sell or repair while it is open
+    action:
+      kind: manual
+      text: Open a question, then sell or repair while it is open.
+    expect: The question closes by itself. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"request released:" line.'
+  - id: cv.s2.11
+    title: Make the repair and the sell condition true together
+    action:
+      kind: manual
+      text: Make the repair and the sell condition true together.
+    expect: The repair question comes first. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: repair" comes before any sell question.'
+  - id: cv.s2.12
+    title: Meet a condition during combat
+    action:
+      kind: manual
+      text: Meet a condition during combat.
+    expect: No question appears in combat. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: '"trigger" line with combat=true.'
+    assertions:
+    - kind: log
+      source: debug
+      contains: combat=true
+      diagnostic: true
+  - id: cv.s2.13
+    title: End combat with the condition still true
+    action:
+      kind: manual
+      text: End combat with the condition still true.
+    expect: The question appears after combat ends. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: '"trigger" line with combat=false.'
+    assertions:
+    - kind: log
+      source: debug
+      contains: combat=false
+      diagnostic: true
+- id: s3
+  title: Navigation
+  steps:
+  - id: cv.s3.1
+    title: With TomTom, trigger a question and click Yes
+    action:
+      kind: manual
+      text: With TomTom, trigger a question and click |cffffd100Yes|r.
+    expect: The arrow points at the vendor. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <vendor> via <provider>".'
+  - id: cv.s3.2
+    title: On WoW Forever with WaypointUI, trigger a question and click Yes
+    action:
+      kind: manual
+      text: On WoW Forever with WaypointUI, trigger a question and click |cffffd100Yes|r.
+    expect: The destination shows. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <vendor> via <provider>".'
+  - id: cv.s3.3
+    title: On WoW Forever with neither addon, trigger a question and click Yes
+    action:
+      kind: manual
+      text: On WoW Forever with neither addon, trigger a question and click |cffffd100Yes|r.
+    expect: The map waypoint shows and is tracked. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <vendor> via <provider>".'
+  - id: cv.s3.4
+    title: On Classic Era with neither addon, trigger a question and click Yes
+    action:
+      kind: manual
+      text: On Classic Era with neither addon, trigger a question and click |cffffd100Yes|r.
+    expect: A chat line shows the vendor, the zone and the coordinates. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <vendor> via <provider>".'
+  - id: cv.s3.5
+    title: With TomTom, set a waypoint and open any vendor window
+    action:
+      kind: manual
+      text: With TomTom, set a waypoint and open any vendor window.
+    expect: The arrow goes away. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"merchant window opened".'
+  - id: cv.s3.6
+    title: With WaypointUI, set a waypoint and arrive at the vendor
+    action:
+      kind: manual
+      text: With WaypointUI, set a waypoint and arrive at the vendor.
+    expect: The destination goes away. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"merchant window opened".'
+  - id: cv.s3.7
+    title: Enter /cvn log
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: The report names the navigation method used. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'the report line "navigation: <provider> (preference <choice>)".'
+- id: s4
+  title: Vendors and learning
+  steps:
+  - id: cv.s4.1
+    title: Open a repair vendor the addon does not know, then test repair
+    action:
+      kind: manual
+      text: Open a repair vendor the addon does not know (a new WoW Forever zone, for example Mount Hyjal
+        or Zephras Isle). Then enter |cff99ccff/cvn test repair|r.
+      commands:
+      - /cvn test repair
+    expect: The question names that vendor. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"merchant window opened" and "question shown:" naming that vendor.'
+  - id: cv.s4.2
+    title: Open an ammo vendor the addon does not know, as a Hunter
+    action:
+      kind: manual
+      text: Open an ammo vendor the addon does not know, as a Hunter. Then enter |cff99ccff/cvn test arrows|r.
+      commands:
+      - /cvn test arrows
+    expect: The question names that vendor. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"merchant window opened" and "question shown:" naming that vendor.'
+  - id: cv.s4.3
+    title: Open a general vendor the addon does not know
+    action:
+      kind: manual
+      text: Open a general vendor the addon does not know. Then enter |cff99ccff/cvn test sell|r.
+      commands:
+      - /cvn test sell
+    expect: The question names that vendor. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"merchant window opened" and "question shown:" naming that vendor.'
+  - id: cv.s4.4
+    title: Open a vendor that will not trade with you (Unfriendly or Hostile)
+    action:
+      kind: manual
+      text: Open a vendor that will not trade with you (Unfriendly or Hostile). Then enter |cff99ccff/cvn
+        test sell|r.
+      commands:
+      - /cvn test sell
+    expect: The question does not name that vendor. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"standing: npc <id> will not trade (Unfriendly or Hostile)".'
+- id: s5
+  title: Ammo
+  steps:
+  - id: cv.s5.1
+    title: As a Hunter, equip a bow with fewer arrows than the threshold
+    action:
+      kind: manual
+      text: As a Hunter, equip a bow with fewer arrows than the threshold.
+    expect: The arrows question appears. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: arrows".'
+  - id: cv.s5.2
+    title: As a Hunter, equip a gun with fewer bullets than the threshold
+    action:
+      kind: manual
+      text: As a Hunter, equip a gun with fewer bullets than the threshold.
+    expect: The bullets question appears. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: bullets".'
+  - id: cv.s5.3
+    title: As a Hunter, shoot ammo down to the threshold
+    action:
+      kind: manual
+      text: As a Hunter, shoot ammo down to the threshold.
+    expect: The question appears when you cross the threshold. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"event BAG_UPDATE_DELAYED", "event UNIT_INVENTORY_CHANGED" and "event PLAYER_EQUIPMENT_CHANGED"
+      lines show which events fired as the count dropped.'
+  - id: cv.s5.4
+    title: As a Hunter, equip a bow with only bullets in the ammo slot
+    action:
+      kind: manual
+      text: As a Hunter, equip a bow with only bullets in the ammo slot.
+    expect: The addon counts it as no ammo and asks. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"trigger" line with the ammo value.'
+  - id: cv.s5.5
+    title: As a Rogue or Warrior, equip a thrown weapon
+    action:
+      kind: manual
+      text: As a Rogue or Warrior, equip a thrown weapon.
+    expect: The addon never asks about ammo. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: no "question shown:" line for ammo.
+  - id: cv.s5.6
+    title: As a Mage, Priest or Warlock, equip a wand
+    action:
+      kind: manual
+      text: As a Mage, Priest or Warlock, equip a wand.
+    expect: The addon never asks about ammo. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: no "question shown:" line for ammo.
+- id: s6
+  title: Professions
+  steps:
+  - id: cv.s6.1
+    title: Open a profession trainer, then enter /cvn log
+    action:
+      kind: manual
+      text: Open a profession trainer, then enter |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: 'The report lists the profession trainer (|cff99ccfftrainers: 1 learned|r and the profession).
+      Press Pass.'
+    verify:
+    - player
+    - reviewer
+    reviewer: '"trainer window opened" and "trainer services:" line.'
+  - id: cv.s6.2
+    title: Open a class trainer, then enter /cvn log
+    action:
+      kind: manual
+      text: Open a class trainer, then enter |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: The report records nothing for the class trainer. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"trainer window opened" with no "trainer services:" line.'
+  - id: cv.s6.3
+    title: Reach the profession threshold and gather
+    action:
+      kind: manual
+      text: Reach the threshold (default 10 points from the limit, for example 65/75 Mining) and gather.
+    expect: The trainer question appears on the skill-up. It names the profession, the points left and
+      the trainer. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: trainer for <profession>".'
+  - id: cv.s6.4
+    title: Click Yes on the trainer question
+    action:
+      kind: manual
+      text: Click |cffffd100Yes|r on the trainer question.
+    expect: A waypoint to the trainer is set. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <trainer> via <provider>".'
+  - id: cv.s6.5
+    title: Craft near the limit with a tradeskill window open and no skill-up
+    action:
+      kind: manual
+      text: Craft near the limit with a tradeskill window open, with no skill-up.
+    expect: The trainer question still appears after the craft. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"a craft finished".'
+  - id: cv.s6.6
+    title: Answer No to the trainer question, then craft again
+    action:
+      kind: manual
+      text: Answer |cffffd100No|r to the trainer question, then craft again.
+    expect: The question appears again. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question declined: trainer".'
+  - id: cv.s6.7
+    title: Leave the trainer question open, then craft again
+    action:
+      kind: manual
+      text: Leave the trainer question open, then craft again.
+    expect: The question does not show a second time. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'one "question shown: trainer" line.'
+  - id: cv.s6.8
+    title: Reach the tier limit (for example 75/75)
+    action:
+      kind: manual
+      text: Reach the tier limit (for example 75/75).
+    expect: The addon still asks. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: trainer" at the tier limit.'
+  - id: cv.s6.9
+    title: Reach the final tier (300/300)
+    action:
+      kind: manual
+      text: Reach the final tier (300/300).
+    expect: The addon never asks. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'no "question shown: trainer" line.'
+  - id: cv.s6.10
+    title: With a trainer waypoint set, open a vendor window
+    action:
+      kind: manual
+      text: With a trainer waypoint set, open a vendor window.
+    expect: The waypoint stays. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: no "trainer waypoint cleared:" line.
+  - id: cv.s6.11
+    title: With a trainer waypoint set, open that profession's trainer window
+    action:
+      kind: manual
+      text: With a trainer waypoint set, open that profession's trainer window.
+    expect: The waypoint goes away. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"trainer waypoint cleared:".'
+  - id: cv.s6.12
+    title: Use a profession whose trainer or crafting window you never opened
+    action:
+      kind: manual
+      text: Use a profession whose trainer or crafting window you never opened.
+    expect: The addon stays silent. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: no "question shown:" line.
+  - id: cv.s6.13
+    title: Use a weapon skill near its limit
+    action:
+      kind: manual
+      text: Use a weapon skill near its limit.
+    expect: The addon stays silent. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: no "question shown:" line.
+  - id: cv.s6.14
+    title: Use a known profession that has no trainer on this continent
+    action:
+      kind: manual
+      text: Use a known profession that has no trainer on this continent.
+    expect: One chat line appears, once. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"no known trainer for <profession>" once.'
+  - id: cv.s6.15
+    title: Open a tradeskill window. Enter /cvn log
+    action:
+      kind: manual
+      text: Open a tradeskill window. Enter |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: The report lists the profession under the professions seen. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"trainers: N learned, professions seen: <list>" in the report.'
+  - id: cv.s6.16
+    title: Enter /cvn trade 25 and open the settings page
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn trade 25|r and open the settings page.
+      commands:
+      - /cvn trade 25
+    expect: The Professions slider shows 25. Press Pass.
+    verify:
+    - player
+  - id: cv.s6.17
+    title: Enter /cvn trade off and open the settings page
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn trade off|r and open the settings page.
+      commands:
+      - /cvn trade off
+    expect: The Professions checkbox is cleared. Press Pass.
+    verify:
+    - player
+- id: s7
+  title: Report and debug log
+  steps:
+  - id: cv.s7.1
+    title: Turn the log off, then type /cvn log
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn debug off|r, then |cff99ccff/cvn log|r.
+      commands:
+      - /cvn debug off
+      - /cvn log
+    expect: A window opens with the version, game build, locale, navigation method, vendor counts and
+      settings, and it says how to turn the log on. Press Pass.
+    verify:
+    - player
+  - id: cv.s7.2
+    title: Enter /cvn debug on, trigger a question, then enter /cvn log
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn debug on|r. Trigger a question. Enter |cff99ccff/cvn log|r.
+      commands:
+      - /cvn debug on
+      - /cvn log
+    expect: The log lists the events, the decision with the bag, durability and ammo values behind it,
+      the vendor found, and whether the question was shown and accepted. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"debug log turned on", "trigger", "question shown:" and "accepted:" lines.'
+    notes: Run turns the log on and opens the window at once. Trigger the question, then type /cvn log again.
+  - id: cv.s7.3
+    title: With the log window open, press Ctrl+C
+    action:
+      kind: manual
+      text: With the log window open, press Ctrl+C.
+    expect: The text is selected and Ctrl+C copies all of it. Press Pass.
+    verify:
+    - player
+  - id: cv.s7.4
+    title: With the log window open, press Esc
+    action:
+      kind: manual
+      text: With the log window open, press Esc.
+    expect: The window closes. Press Pass.
+    verify:
+    - player
+  - id: cv.s7.5
+    title: 'Optional: type /cvn log clear and cancel'
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn log clear|r and cancel.
+      commands:
+      - /cvn log clear
+    expect: The entries stay. Press Pass.
+    verify:
+    - player
+    notes: 'Skip during a CheckThat run: clearing the log erases evidence for earlier steps.'
+  - id: cv.s7.6
+    title: 'Optional: type /cvn log clear and confirm'
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn log clear|r and confirm.
+      commands:
+      - /cvn log clear
+    expect: The entries are gone. Press Pass.
+    verify:
+    - player
+    notes: 'Skip during a CheckThat run: clearing the log erases evidence for earlier steps.'
+  - id: cv.s7.7
+    title: Enter /cvn debug off
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn debug off|r.
+      commands:
+      - /cvn debug off
+    expect: The log stops recording. Press Pass.
+    verify:
+    - player
+    - assertions
+    - reviewer
+    reviewer: '"debug log turned off" is the last line.'
+    assertions:
+    - kind: log
+      source: debug
+      contains: debug log turned off
+      scope: attempt
+      label: The debug log records that it turned off
+  - id: cv.s7.8
+    title: Turn debug logging back on
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn debug on|r, then |cff99ccff/reload|r.
+      commands:
+      - /cvn debug on
+      - /reload
+    expect: After the reload, the debug log still records that it turned on.
+    verify:
+    - assertions
+    reload: after_action
+    auto: true
+    timeout: 120
+    notes: The later sections read the debug log, so it goes back on before them.
+    assertions:
+    - kind: log
+      source: debug
+      contains: debug log turned on
+      scope: attempt
+      label: The debug log records that it turned on
+- id: s8
+  title: Safety
+  steps:
+  - id: cv.s8.1
+    title: Enter a dungeon, then leave it
+    action:
+      kind: manual
+      text: Enter a dungeon, then leave it.
+    expect: Inside, no error, no question and no waypoint. After leaving, normal behavior returns. Press
+      Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"instance: <old> -> <new>" lines and, inside, "profession check skipped: in an instance".'
+  - id: cv.s8.2
+    title: Enter a battleground, then leave it
+    action:
+      kind: manual
+      text: Enter a battleground, then leave it.
+    expect: Inside, no error, no question and no waypoint. After leaving, normal behavior returns. Press
+      Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"instance: <old> -> <new>" lines.'
+  - id: cv.s8.3
+    title: Enable TomTom after a login without it, then reload
+    action:
+      kind: manual
+      text: Optional. Enable TomTom after a login without it, then enter |cff99ccff/reload|r.
+      commands:
+      - /reload
+    expect: No error. Press Pass.
+    verify:
+    - player
+    reload: after_action
+  - id: cv.s8.4
+    title: Enable WaypointUI after a login without it, then reload
+    action:
+      kind: manual
+      text: Optional. Enable WaypointUI after a login without it, then enter |cff99ccff/reload|r.
+      commands:
+      - /reload
+    expect: No error. Press Pass.
+    verify:
+    - player
+    reload: after_action
+  - id: cv.s8.5
+    title: Optional, on a client where a game function is missing
+    action:
+      kind: manual
+      text: Optional, on a client where a game function is missing.
+    expect: The addon keeps working. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"game call failed: <name>" once.'
+- id: s9
+  title: Languages
+  steps:
+  - id: cv.s9.1
+    title: Use a non-English client
+    action:
+      kind: manual
+      text: Use a non-English client.
+    expect: The addon sentences are in English. Spell and zone names are the game's. Press Pass.
+    verify:
+    - player
+  - id: cv.s9.2
+    title: Install a translation file (see docs/localization.md). Enter /cvn
+    action:
+      kind: manual
+      text: Install a translation file (see docs/localization.md). Enter |cff99ccff/cvn|r.
+      commands:
+      - /cvn
+    expect: The output shows the translation. Press Pass.
+    verify:
+    - player
+  - id: cv.s9.3
+    title: With the translation file installed, trigger a question
+    action:
+      kind: manual
+      text: With the translation file installed, trigger a question.
+    expect: The question shows the translation. Press Pass.
+    verify:
+    - player
+  - id: cv.s9.4
+    title: With the translation file installed, open the settings page
+    action:
+      kind: manual
+      text: With the translation file installed, open the settings page.
+    expect: The page shows the translation. Press Pass.
+    verify:
+    - player
+- id: s10
+  title: Buying ammo
+  steps:
+  - id: cv.s10.1
+    title: With /cvn buy auto and a partly filled quiver, open an ammo vendor
+    action:
+      kind: manual
+      text: With |cff99ccff/cvn buy auto|r (the default) and a partly filled quiver, open an ammo vendor.
+      commands:
+      - /cvn buy auto
+    expect: The addon buys until the quiver is full with no dialog. One chat line gives the count and
+      the cost, and the count matches the room left. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy:" lines with the item, price, space and money.'
+  - id: cv.s10.2
+    title: Open an ammo vendor with a full quiver
+    action:
+      kind: manual
+      text: Open an ammo vendor with a full quiver.
+    expect: The addon buys nothing. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: less than one purchase of room".'
+  - id: cv.s10.3
+    title: Open an ammo vendor with no quiver or ammo pouch
+    action:
+      kind: manual
+      text: Open an ammo vendor with no quiver or ammo pouch.
+    expect: The addon buys nothing. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: less than one purchase of room".'
+  - id: cv.s10.4
+    title: Open an ammo vendor with a thrown weapon equipped
+    action:
+      kind: manual
+      text: Open an ammo vendor with a thrown weapon equipped.
+    expect: The addon buys nothing. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: no bow, crossbow or gun equipped, or its ammo cannot be read".'
+  - id: cv.s10.5
+    title: Open a vendor that sells no ammo
+    action:
+      kind: manual
+      text: Open a vendor that sells no ammo.
+    expect: The addon buys nothing and stays silent. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: merchant sells no".'
+  - id: cv.s10.6
+    title: Enter /cvn buy ask, open an ammo vendor and do not click
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn buy ask|r. Open an ammo vendor and do not click.
+      commands:
+      - /cvn buy ask
+    expect: A dialog shows the count and the price. Nothing is bought. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy:" plan line.'
+  - id: cv.s10.7
+    title: With the dialog open, click No
+    action:
+      kind: manual
+      text: With the dialog open, click |cffffd100No|r.
+    expect: Nothing is bought. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy:" plan line.'
+  - id: cv.s10.8
+    title: With the dialog open, click Yes
+    action:
+      kind: manual
+      text: With the dialog open, click |cffffd100Yes|r.
+    expect: The addon buys the ammo. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy:" plan line.'
+  - id: cv.s10.9
+    title: Enter /cvn buy off. Open an ammo vendor
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn buy off|r. Open an ammo vendor.
+      commands:
+      - /cvn buy off
+    expect: The addon buys nothing. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: off".'
+  - id: cv.s10.10
+    title: At a vendor with several arrow grades, set arrows to best
+    action:
+      kind: manual
+      text: At a vendor that sells several arrow grades, enter |cff99ccff/cvn arrows best|r and open the
+        vendor.
+      commands:
+      - /cvn arrows best
+    expect: It buys the highest grade your level allows. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: best item".'
+  - id: cv.s10.11
+    title: Enter /cvn arrows cheapest and open the same vendor
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn arrows cheapest|r and open the same vendor.
+      commands:
+      - /cvn arrows cheapest
+    expect: It buys the cheapest grade. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: cheapest item".'
+  - id: cv.s10.12
+    title: Enter /cvn arrows equipped and open the same vendor
+    action:
+      kind: manual
+      text: Enter |cff99ccff/cvn arrows equipped|r and open the same vendor.
+      commands:
+      - /cvn arrows equipped
+    expect: It buys the ammo in your ammo slot. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: equipped item".'
+  - id: cv.s10.13
+    title: Set the arrow and the bullet setting to different values
+    action:
+      kind: manual
+      text: Set the arrow and the bullet setting to different values. Open an ammo vendor with a bow equipped.
+    expect: The addon follows the arrow setting. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy:" line naming the arrow item.'
+  - id: cv.s10.14
+    title: With the same settings, open an ammo vendor with a gun equipped
+    action:
+      kind: manual
+      text: With the same settings, open an ammo vendor with a gun equipped.
+    expect: The addon follows the bullet setting. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy:" line naming the bullet item.'
+  - id: cv.s10.15
+    title: Use equipped with ammo this vendor does not sell
+    action:
+      kind: manual
+      text: Use |cff99ccffequipped|r with ammo this vendor does not sell.
+    expect: The addon buys nothing and a chat line says so. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: no <kind> offer for mode equipped".'
+  - id: cv.s10.16
+    title: Have too little gold for a full purchase
+    action:
+      kind: manual
+      text: Have too little gold for a full purchase.
+    expect: The addon buys only what you can afford and the chat line says so. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: cannot afford one purchase".'
+  - id: cv.s10.17
+    title: Have almost no gold
+    action:
+      kind: manual
+      text: Have almost no gold.
+    expect: Chat says "You cannot afford any ammo here." Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: cannot afford one purchase".'
+  - id: cv.s10.18
+    title: Use a quiver that holds a different grade of ammo
+    action:
+      kind: manual
+      text: Use a quiver that holds a different grade of ammo.
+    expect: The addon does not overbuy. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy:" line showing the space.'
+  - id: cv.s10.19
+    title: Open the settings page
+    action:
+      kind: manual
+      text: Open the settings page.
+    expect: The Arrows and Bullets dropdowns match |cff99ccff/cvn|r. Press Pass.
+    verify:
+    - player
+  intro: Use a Hunter with a bow (or a gun) and a quiver (or ammo pouch).
+- id: s11
+  title: Targets on another map
+  steps:
+  - id: cv.s11.1
+    title: Trigger the question when a vendor on another map is closer
+    action:
+      kind: manual
+      text: Trigger the question where a vendor on another map is closer than the vendor on your map.
+    expect: The question lists both vendors, each with zone and distance in yards. It has three buttons.
+      Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: ".'
+  - id: cv.s11.2
+    title: Check the button order with /cvn prefer map (the default)
+    action:
+      kind: manual
+      text: Check the order of the buttons with |cff99ccff/cvn prefer map|r (the default).
+      commands:
+      - /cvn prefer map
+    expect: The first button is the vendor on your map. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: ".'
+  - id: cv.s11.3
+    title: Click the first button
+    action:
+      kind: manual
+      text: Click the first button.
+    expect: The waypoint goes to the vendor on your map. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <vendor> via <provider>".'
+  - id: cv.s11.4
+    title: Repeat the question, then click the second button
+    action:
+      kind: manual
+      text: Repeat the question, then click the second button.
+    expect: The waypoint goes to the closer vendor on the other map. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <vendor> via <provider>".'
+  - id: cv.s11.5
+    title: Repeat the question, then click Cancel
+    action:
+      kind: manual
+      text: Repeat the question, then click Cancel.
+    expect: No waypoint is set. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question declined: ".'
+  - id: cv.s11.6
+    title: Repeat the question, then press Esc
+    action:
+      kind: manual
+      text: Repeat the question, then press Esc.
+    expect: No waypoint is set. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question declined: ".'
+  - id: cv.s11.7
+    title: Type /cvn prefer distance and trigger the question
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn prefer distance|r and trigger the question.
+      commands:
+      - /cvn prefer distance
+    expect: The closer vendor is now the first button. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: ".'
+  - id: cv.s11.8
+    title: Trigger the question where the closest vendor is on your map
+    action:
+      kind: manual
+      text: Stand where the closest vendor is on your own map and trigger the question.
+    expect: You get the plain Yes / No question, naming that vendor. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: ".'
+  - id: cv.s11.9
+    title: Stand on a map with no known vendor and trigger the question
+    action:
+      kind: manual
+      text: Stand on a map with no known vendor and trigger the question.
+    expect: You get the plain Yes / No question, naming the closest vendor on another map. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: ".'
+  - id: cv.s11.10
+    title: Type /cvn choice auto and trigger the question with prefer map
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn choice auto|r and trigger the question with |cff99ccffprefer map|r.
+      commands:
+      - /cvn choice auto
+    expect: No question opens. The waypoint goes at once to the vendor on your map. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"auto: <vendor> (npc <id>) chosen from two candidates".'
+  - id: cv.s11.11
+    title: With choice auto, type /cvn prefer distance and trigger the question
+    action:
+      kind: manual
+      text: With |cff99ccff/cvn choice auto|r, type |cff99ccff/cvn prefer distance|r and trigger the question.
+      commands:
+      - /cvn choice auto
+      - /cvn prefer distance
+    expect: No question opens. The waypoint goes at once to the closer vendor. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"auto: <vendor> (npc <id>) chosen from two candidates".'
+  - id: cv.s11.12
+    title: Trigger an automatic waypoint with two candidates
+    action:
+      kind: manual
+      text: Trigger an automatic waypoint with two candidates.
+    expect: One chat line and the same on-screen text name the target with zone and distance in yards,
+      and the other choice. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"auto: <vendor> (npc <id>) chosen from two candidates".'
+  - id: cv.s11.13
+    title: Trigger an automatic waypoint
+    action:
+      kind: manual
+      text: Trigger an automatic waypoint.
+    expect: The notification sound plays once. Press Pass.
+    verify:
+    - player
+  - id: cv.s11.14
+    title: Trigger an automatic waypoint and watch the on-screen text
+    action:
+      kind: manual
+      text: Trigger an automatic waypoint and watch the on-screen text.
+    expect: The text stays about five seconds, high and centered, then goes. Press Pass.
+    verify:
+    - player
+  - id: cv.s11.15
+    title: Set a second waypoint while the on-screen text shows
+    action:
+      kind: manual
+      text: Set a second waypoint while the on-screen text shows.
+    expect: The new text replaces the old one and the time restarts. Press Pass.
+    verify:
+    - player
+  - id: cv.s11.16
+    title: Cause a game error, for example try an action that fails
+    action:
+      kind: manual
+      text: Cause a game error, for example try an action that fails.
+    expect: The error text looks the same and lasts as long as usual. Press Pass.
+    verify:
+    - player
+  - id: cv.s11.17
+    title: Type /cvn notice off and trigger an automatic waypoint
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn notice off|r and trigger an automatic waypoint.
+      commands:
+      - /cvn notice off
+    expect: The on-screen text does not show. The chat line stays. Press Pass.
+    verify:
+    - player
+  - id: cv.s11.18
+    title: Type /cvn notice on and trigger an automatic waypoint
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn notice on|r and trigger an automatic waypoint.
+      commands:
+      - /cvn notice on
+    expect: The on-screen text comes back. Press Pass.
+    verify:
+    - player
+  - id: cv.s11.19
+    title: Type /cvn notice off, then open the settings page
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn notice off|r, then open the settings page.
+      commands:
+      - /cvn notice off
+    expect: The notice checkbox is cleared. Press Pass.
+    verify:
+    - player
+  - id: cv.s11.20
+    title: With /cvn choice auto, trigger with only one candidate
+    action:
+      kind: manual
+      text: With |cff99ccff/cvn choice auto|r, trigger with only one candidate.
+      commands:
+      - /cvn choice auto
+    expect: The single candidate gets a waypoint at once. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"auto: ".'
+  - id: cv.s11.21
+    title: With /cvn choice auto, trigger while in combat
+    action:
+      kind: manual
+      text: With |cff99ccff/cvn choice auto|r, trigger while in combat.
+      commands:
+      - /cvn choice auto
+    expect: No waypoint is set. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"trigger" shows combat=true.'
+  - id: cv.s11.22
+    title: Trigger the trainer question with choice set to ask
+    action:
+      kind: manual
+      text: With a profession near its cap, trigger the trainer question under |cff99ccff/cvn choice ask|r.
+      commands:
+      - /cvn choice ask
+    expect: The trainer question opens, as it does for vendors. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: trainer for <profession>".'
+  - id: cv.s11.23
+    title: Trigger the trainer question with choice set to auto
+    action:
+      kind: manual
+      text: With a profession near its cap, trigger the trainer question under |cff99ccff/cvn choice auto|r.
+      commands:
+      - /cvn choice auto
+    expect: No question opens. The waypoint goes at once to the trainer. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"auto: ".'
+  - id: cv.s11.24
+    title: Stand in a city and trigger the question
+    action:
+      kind: manual
+      text: Stand in a city and trigger the question.
+    expect: The vendor on "your map" is a vendor inside the city. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: ".'
+  - id: cv.s11.25
+    title: Open the settings page
+    action:
+      kind: manual
+      text: Open the settings page.
+    expect: The two target dropdowns show the same values as |cff99ccff/cvn choice|r and |cff99ccff/cvn
+      prefer|r. Press Pass.
+    verify:
+    - player
+  - id: cv.s11.26
+    title: Type /cvn
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn|r.
+      commands:
+      - /cvn
+    expect: It shows both target settings. Press Pass.
+    verify:
+    - player
+  - id: cv.s11.27
+    title: Type /cvn log
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: The report lists the target choice settings and which target the addon showed or set. Press
+      Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: " or "auto: ".'
+  intro: Stand near a zone edge, where the closest vendor is across the border. Type |cff99ccff/cvn test
+    sell|r (or |cff99ccff/cvn test repair|r) to repeat the question.
+- id: s12
+  title: Reagents
+  steps:
+  - id: cv.s12.1
+    title: Type /cvn
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn|r.
+      commands:
+      - /cvn
+    expect: 'It shows "Reagents: on, trigger at 5 or fewer". Press Pass.'
+    verify:
+    - player
+  - id: cv.s12.2
+    title: Type /cvn log
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: The report lists the reagents you expect for the spells you know. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'reagents: on, class <class>, threshold 5, watching: ..., switched off: none.'
+  - id: cv.s12.3
+    title: 'Optional: a low-level mage who does not know Portals'
+    action:
+      kind: manual
+      text: Optional, a low-level mage who does not know Portals. Type |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: The report does not list a reagent for a spell you do not know (no Rune of Portals). Press
+      Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'reagents: ... watching:.'
+  - id: cv.s12.4
+    title: Learn Portals as the same mage, then show the log without a reload
+    action:
+      kind: manual
+      text: Optional, the same mage. Learn Portals, then type |cff99ccff/cvn log|r without a reload.
+      commands:
+      - /cvn log
+    expect: The report now lists Rune of Portals. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'reagents: ... watching:.'
+  - id: cv.s12.5
+    title: Use a druid who knows Rebirth rank 3
+    action:
+      kind: manual
+      text: Use a druid who knows Rebirth rank 3. Type |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: The report lists Ashwood Seed only, not the rank 1 and 2 seeds. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'reagents: ... watching:.'
+  - id: cv.s12.6
+    title: Use a priest who knows Prayer of Fortitude rank 2
+    action:
+      kind: manual
+      text: Use a priest who knows Prayer of Fortitude rank 2. Type |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: The report lists Sacred Candle, not Holy Candle. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'reagents: ... watching:.'
+  - id: cv.s12.7
+    title: Carry 6 Runes of Teleportation
+    action:
+      kind: manual
+      text: Carry 6 Runes of Teleportation.
+    expect: No question opens. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'no "question shown: reagent" line.'
+  - id: cv.s12.8
+    title: Cast Teleport until 5 Runes of Teleportation are left
+    action:
+      kind: manual
+      text: Cast Teleport until 5 Runes of Teleportation are left.
+    expect: One question opens. It names the reagent, the count and "sells <reagent>" for a vendor that
+      sells it. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: reagent Rune of Teleportation".'
+  - id: cv.s12.9
+    title: Click Yes on that question
+    action:
+      kind: manual
+      text: Click |cffffd100Yes|r on that question.
+    expect: The waypoint is set to that vendor. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <vendor> via <provider>".'
+  - id: cv.s12.10
+    title: Put reagents in the bank, then type /cvn log
+    action:
+      kind: manual
+      text: Put reagents in the bank, then type |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: The report does not count the banked reagents. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'reagents: ... watching: shows the count without them.'
+  - id: cv.s12.11
+    title: Open a reagent question, then open a vendor that sells the reagent
+    action:
+      kind: manual
+      text: Open a reagent question, then open a vendor that sells the reagent.
+    expect: The question and the waypoint go away. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"merchant window opened" and "request released: reagent".'
+  - id: cv.s12.12
+    title: Open a reagent question, then open any other merchant
+    action:
+      kind: manual
+      text: Open a reagent question, then open any other merchant.
+    expect: The question and the waypoint go away. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"merchant window opened" and "request released: reagent".'
+  - id: cv.s12.13
+    title: Get two reagents low (Arcane Powder and Rune of Teleportation)
+    action:
+      kind: manual
+      text: Get two reagents low, for example Arcane Powder and Rune of Teleportation.
+    expect: One question shows. The second appears only after you answer it. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'one "question shown: reagent" line, the second after the answer.'
+  - id: cv.s12.14
+    title: Have a reagent low and gear worn below the repair threshold
+    action:
+      kind: manual
+      text: Have a reagent low and gear worn below the repair threshold.
+    expect: The repair question comes first, then the reagent question. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: " lines in that order.'
+  - id: cv.s12.15
+    title: Have a reagent low and full bags
+    action:
+      kind: manual
+      text: Have a reagent low and full bags.
+    expect: The reagent question comes before the sell question. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: " lines in that order.'
+  - id: cv.s12.16
+    title: Type /cvn reagent 10, then /cvn
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn reagent 10|r, then |cff99ccff/cvn|r.
+      commands:
+      - /cvn reagent 10
+      - /cvn
+    expect: '|cff99ccff/cvn|r shows the trigger at 10 or fewer. Press Pass.'
+    verify:
+    - player
+    - reviewer
+    reviewer: 'reagents: ... threshold 10.'
+  - id: cv.s12.17
+    title: Type /cvn reagent 10, then open the settings page
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn reagent 10|r, then open the settings page.
+      commands:
+      - /cvn reagent 10
+    expect: The reagent slider shows 10. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'reagents: ... threshold 10.'
+  - id: cv.s12.18
+    title: Type /cvn reagents
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn reagents|r.
+      commands:
+      - /cvn reagents
+    expect: The list shows your class reagents, all on. Press Pass.
+    verify:
+    - player
+  - id: cv.s12.19
+    title: Type /cvn reagent off arcane powder and get it low
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn reagent off arcane powder|r and get Arcane Powder low.
+      commands:
+      - /cvn reagent off arcane powder
+    expect: No question opens for that reagent. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'reagents: ... switched off: Arcane Powder.'
+  - id: cv.s12.20
+    title: Type /cvn reagent on arcane powder and get it low
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn reagent on arcane powder|r and get Arcane Powder low.
+      commands:
+      - /cvn reagent on arcane powder
+    expect: The question comes back. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: reagent ".'
+  - id: cv.s12.21
+    title: Open the settings page
+    action:
+      kind: manual
+      text: Open the settings page.
+    expect: It lists only your class reagents, with checkboxes that match |cff99ccff/cvn reagents|r. Press
+      Pass.
+    verify:
+    - player
+  - id: cv.s12.22
+    title: Clear "Reagents" in Warnings and get a reagent low
+    action:
+      kind: manual
+      text: Clear "Reagents" in Warnings and get a reagent low.
+    expect: No reagent question opens. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'no "question shown: reagent" line.'
+  - id: cv.s12.23
+    title: Use a hunter, a warrior or a warlock (any one)
+    action:
+      kind: manual
+      text: Use a hunter, a warrior or a warlock (any one). Type |cff99ccff/cvn reagents|r.
+      commands:
+      - /cvn reagents
+    expect: The settings page shows no reagent checkboxes, and the command says there are none. Press
+      Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'reagents: ... watching: none.'
+  - id: cv.s12.24
+    title: Use a hunter, a warrior or a warlock (any one) and play normally
+    action:
+      kind: manual
+      text: Use a hunter, a warrior or a warlock (any one) and play normally.
+    expect: No reagent question ever appears. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'reagents: ... watching: none.'
+  - id: cv.s12.25
+    title: Type /cvn test reagent
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn test reagent|r.
+      commands:
+      - /cvn test reagent
+    expect: It asks about the first watched reagent, whatever the count. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"test command: reagent".'
+  - id: cv.s12.26
+    title: Type /cvn test reagent with nothing watched
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn test reagent|r with nothing watched.
+      commands:
+      - /cvn test reagent
+    expect: Chat says nothing is watched. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"test command: reagent".'
+  - id: cv.s12.27
+    title: Open a reagent vendor you never opened, then get the reagent low
+    action:
+      kind: manual
+      text: Open a reagent vendor you have not opened before (a druid or priest supplier), then get that
+        reagent low.
+    expect: The question can name the new vendor. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: reagent " names that vendor.'
+  - id: cv.s12.28
+    title: Open a shipped reagent vendor, then get that reagent low
+    action:
+      kind: manual
+      text: Open a shipped reagent vendor, then get that reagent low.
+    expect: The question can still name the shipped vendor. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: reagent " names that vendor.'
+  - id: cv.s12.29
+    title: Type /cvn choice auto and get a reagent low
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn choice auto|r and get a reagent low.
+      commands:
+      - /cvn choice auto
+    expect: The waypoint is set at once. Chat and screen read "Navigating to <vendor> (<zone>, N yards)
+      to buy <reagent>." Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"auto: ".'
+  - id: cv.s12.30
+    title: Trigger an automatic waypoint for ammo
+    action:
+      kind: manual
+      text: Trigger an automatic waypoint for ammo.
+    expect: The text says "... to buy ammo." Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"auto: ".'
+  - id: cv.s12.31
+    title: Trigger an automatic waypoint for repair
+    action:
+      kind: manual
+      text: Trigger an automatic waypoint for repair.
+    expect: The text says "... to repair your gear." Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"auto: ".'
+  - id: cv.s12.32
+    title: Trigger an automatic waypoint for selling
+    action:
+      kind: manual
+      text: Trigger an automatic waypoint for selling.
+    expect: The text says "... to sell items and free bag space." Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"auto: ".'
+  - id: cv.s12.33
+    title: Trigger an automatic waypoint for a trainer
+    action:
+      kind: manual
+      text: Trigger an automatic waypoint for a trainer.
+    expect: The text says "... to train <profession>." Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"auto: ".'
+  - id: cv.s12.34
+    title: Pick 5 to 10 shipped reagent vendors in cities and camps
+    action:
+      kind: manual
+      text: Pick 5 to 10 shipped reagent vendors in cities and camps. Set the waypoint, go there and open
+        each.
+    expect: Each vendor stands where the waypoint says and sells the reagent. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"merchant window opened".'
+  intro: 'Use a character whose class has reagents: mage, rogue, priest, paladin, shaman or druid. This
+    section checks the spell and item IDs in the real client. No in-game check, unit tests only: no class
+    has both ammo and reagents (ammo versus reagents priority).'
+- id: s13
+  title: Status window, instances and auction house
+  steps:
+  - id: cv.s13.1
+    title: Open settings with a slash command
+    action:
+      kind: manual
+      text: Open settings with a slash command.
+    expect: The settings tree opens (standalone fallback in the Settings and appearance acceptance section).
+      Press Pass.
+    verify:
+    - player
+  - id: cv.s13.2
+    title: Open settings with the cog
+    action:
+      kind: manual
+      text: Open settings with the cog.
+    expect: It opens the same ordered tree. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.3
+    title: Open settings from Options > AddOns
+    action:
+      kind: manual
+      text: Open settings from Options > AddOns.
+    expect: It opens the same ordered tree. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.4
+    title: Open the Home page
+    action:
+      kind: manual
+      text: Open the Home page.
+    expect: It keeps all warning switches and the bag, durability and profession thresholds. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.5
+    title: Open the Appearance page
+    action:
+      kind: manual
+      text: Open the Appearance page.
+    expect: It has a Status window section. Lock position comes first, then independent scale, background
+      and text controls, a color picker action and six group visibility selectors (Ammo, Reagents, Supplies,
+      Bags, Durability, Professions). Press Pass.
+    verify:
+    - player
+  - id: cv.s13.6
+    title: Use a class without ammo or reagents
+    action:
+      kind: manual
+      text: Use a class without ammo or reagents.
+    expect: Those groups are disabled with an explanation, and their item controls do not act. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.7
+    title: Set every row to the default and have nothing low
+    action:
+      kind: manual
+      text: Set every row to the default and have nothing low.
+    expect: The status window is not shown. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.8
+    title: Bring your bags to the threshold
+    action:
+      kind: manual
+      text: Bring your bags to the threshold.
+    expect: The status window appears with Bag space in red. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.9
+    title: Free your bags after that
+    action:
+      kind: manual
+      text: Free your bags after that.
+    expect: The window hides and never shows empty. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.10
+    title: Type /cvn hud row bags always
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn hud row bags always|r.
+      commands:
+      - /cvn hud row bags always
+    expect: Bag space shows, and is not red above the threshold. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: 'status window: ... rows: bags: always in /cvn log.'
+    assertions:
+    - kind: log
+      source: debug
+      contains: /cvn log
+      diagnostic: true
+  - id: cv.s13.11
+    title: Type /cvn hud row bags never and get bags low
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn hud row bags never|r and get bags low.
+      commands:
+      - /cvn hud row bags never
+    expect: Bag space stays hidden. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: 'status window: ... rows: bags: never in /cvn log.'
+    assertions:
+    - kind: log
+      source: debug
+      contains: /cvn log
+      diagnostic: true
+  - id: cv.s13.12
+    title: Type /cvn hud row bags low
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn hud row bags low|r.
+      commands:
+      - /cvn hud row bags low
+    expect: Bag space follows the default again. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: 'status window: ... rows:  in /cvn log.'
+    assertions:
+    - kind: log
+      source: debug
+      contains: /cvn log
+      diagnostic: true
+  - id: cv.s13.13
+    title: Type /cvn hud row Professions always (any case)
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn hud row Professions always|r (any case).
+      commands:
+      - /cvn hud row Professions always
+    expect: Every profession line shows. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'status window: ... rows: .'
+  - id: cv.s13.14
+    title: Type /cvn hud row reagents never, then /cvn
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn hud row reagents never|r, then |cff99ccff/cvn|r.
+      commands:
+      - /cvn hud row reagents never
+      - /cvn
+    expect: Every reagent line hides, and |cff99ccff/cvn|r lists the changed groups. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'status window: ... rows: .'
+  - id: cv.s13.15
+    title: Change the Professions dropdown on a two-profession character
+    action:
+      kind: manual
+      text: Use a character with two professions. Change the Professions dropdown on the settings page.
+    expect: Both profession lines move together. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'status window: ... rows: professions: ....'
+  - id: cv.s13.16
+    title: Look at the ammo row as a hunter with a ranged weapon
+    action:
+      kind: manual
+      text: Optional, a hunter with a ranged weapon. Look at the ammo row.
+    expect: It shows Arrows or Bullets, and the count matches your bags. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.17
+    title: Look at a reagent row
+    action:
+      kind: manual
+      text: Look at a reagent row.
+    expect: It shows a count that matches your bags. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.18
+    title: Look at a profession row near its cap
+    action:
+      kind: manual
+      text: Look at a profession row near its cap.
+    expect: It shows skill/max. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.19
+    title: Look at the Bag space and Durability rows
+    action:
+      kind: manual
+      text: Look at the Bag space and Durability rows.
+    expect: The numbers match your bags and gear. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.20
+    title: Use a warlock. Set Reagents to Always
+    action:
+      kind: manual
+      text: Use a warlock. Set Reagents to Always.
+    expect: The Soul Shards row shows, and the count matches your bags. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.21
+    title: Use a rogue. Set Reagents to Always
+    action:
+      kind: manual
+      text: Use a rogue. Set Reagents to Always.
+    expect: The Blinding Powder row shows, and the count matches your bags. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.22
+    title: Use a mage. Set Reagents to Always
+    action:
+      kind: manual
+      text: Use a mage. Set Reagents to Always.
+    expect: The Conjured Food and Water rows show, and each count sums all ranks. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.23
+    title: As a warlock, set Reagents to Only when low
+    action:
+      kind: manual
+      text: Use a warlock. Set Reagents to Only when low.
+    expect: The Soul Shards row is hidden and never red. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.24
+    title: Buy or use ammo
+    action:
+      kind: manual
+      text: Buy or use ammo.
+    expect: The ammo row updates. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.25
+    title: Use a reagent
+    action:
+      kind: manual
+      text: Use a reagent.
+    expect: The reagent row updates. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.26
+    title: Sell items
+    action:
+      kind: manual
+      text: Sell items.
+    expect: The Bag space row updates. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.27
+    title: Repair your gear
+    action:
+      kind: manual
+      text: Repair your gear.
+    expect: The Durability row updates. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.28
+    title: Get a skill-up
+    action:
+      kind: manual
+      text: Get a skill-up.
+    expect: The profession row updates. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.29
+    title: Drag the title
+    action:
+      kind: manual
+      text: Drag the title.
+    expect: The window moves. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: ClosestVendorCharDB.hud holds the position.
+    assertions:
+    - kind: log
+      source: debug
+      contains: ClosestVendorCharDB.hud
+      diagnostic: true
+  - id: cv.s13.30
+    title: Drag the title, then type /reload
+    action:
+      kind: manual
+      text: Drag the title, then type |cff99ccff/reload|r.
+      commands:
+      - /reload
+    expect: The window stays where you put it. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reload: after_action
+    reviewer: ClosestVendorCharDB.hud holds the position.
+    assertions:
+    - kind: log
+      source: debug
+      contains: ClosestVendorCharDB.hud
+      diagnostic: true
+  - id: cv.s13.31
+    title: Drag the title, then restart the game
+    action:
+      kind: manual
+      text: Drag the title, then restart the game.
+    expect: The window stays where you put it. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: ClosestVendorCharDB.hud holds the position.
+    assertions:
+    - kind: log
+      source: debug
+      contains: ClosestVendorCharDB.hud
+      diagnostic: true
+  - id: cv.s13.32
+    title: Shift-drag anywhere on the window
+    action:
+      kind: manual
+      text: Shift-drag anywhere on the window.
+    expect: The window moves. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.33
+    title: Drag a row without Shift
+    action:
+      kind: manual
+      text: Drag a row without Shift.
+    expect: The window does not move. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.34
+    title: Release a drag over a row
+    action:
+      kind: manual
+      text: Release a drag over a row.
+    expect: The release does not click the row. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.35
+    title: Type /cvn hud lock, then drag the title and Shift-drag
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn hud lock|r, then drag the title and Shift-drag.
+      commands:
+      - /cvn hud lock
+    expect: Neither drag moves the window. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.36
+    title: Type /cvn hud unlock, then drag the title and Shift-drag
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn hud unlock|r, then drag the title and Shift-drag.
+      commands:
+      - /cvn hud unlock
+    expect: Both drags move the window again. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.37
+    title: Move the window, then type /cvn hud reset
+    action:
+      kind: manual
+      text: Move the window, then type |cff99ccff/cvn hud reset|r.
+      commands:
+      - /cvn hud reset
+    expect: The window returns to its default position. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"status window position reset".'
+  - id: cv.s13.38
+    title: Type /cvn hud scale 150
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn hud scale 150|r.
+      commands:
+      - /cvn hud scale 150
+    expect: The window is 1.5 times larger. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: 'status window: ... scale 150% in /cvn log.'
+    assertions:
+    - kind: log
+      source: debug
+      contains: /cvn log
+      diagnostic: true
+  - id: cv.s13.39
+    title: Type /cvn hud scale 150, then open the settings page
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn hud scale 150|r, then open the settings page.
+      commands:
+      - /cvn hud scale 150
+    expect: The scale slider shows 150. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: 'status window: ... scale 150% in /cvn log.'
+    assertions:
+    - kind: log
+      source: debug
+      contains: /cvn log
+      diagnostic: true
+  - id: cv.s13.40
+    title: Move the window to a corner, then change the UI scale
+    action:
+      kind: manual
+      text: Move the window far to a corner, then change the UI scale in Video settings.
+    expect: The window stays on screen, or |cff99ccff/cvn hud reset|r brings it back. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.41
+    title: Click the cog button
+    action:
+      kind: manual
+      text: Click the cog button.
+    expect: The Closest Vendor Home page opens. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.42
+    title: Look at the cog button
+    action:
+      kind: manual
+      text: Look at the cog button.
+    expect: It shows a cog. The fallback is an asterisk, never a blank or a missing-texture square. The
+      window background shows with no error message. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.43
+    title: Under /cvn choice ask, click a low Bag space row
+    action:
+      kind: manual
+      text: Under |cff99ccff/cvn choice ask|r, click a low Bag space row.
+      commands:
+      - /cvn choice ask
+    expect: The waypoint goes to the closest vendor at once with no question. Chat and screen say "Navigating
+      to ... to sell ...". Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"direct pin: <kind>".'
+  - id: cv.s13.44
+    title: Under /cvn choice auto, click a low Bag space row
+    action:
+      kind: manual
+      text: Under |cff99ccff/cvn choice auto|r, click a low Bag space row.
+      commands:
+      - /cvn choice auto
+    expect: The waypoint goes to the closest vendor at once, the same as in ask mode. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"direct pin: <kind>".'
+  - id: cv.s13.45
+    title: In combat, click a low Bag space row
+    action:
+      kind: manual
+      text: In combat, click a low Bag space row.
+    expect: The waypoint goes to the closest vendor at once. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"direct pin: <kind>".'
+  - id: cv.s13.46
+    title: Optional, a hunter. Click a low ammo row
+    action:
+      kind: manual
+      text: Optional, a hunter. Click a low ammo row.
+    expect: The waypoint goes at once to the closest vendor. Chat and screen say "Navigating to ... to
+      buy ammo." Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"direct pin: <kind>".'
+  - id: cv.s13.47
+    title: Click a low reagent row
+    action:
+      kind: manual
+      text: Click a low reagent row.
+    expect: The waypoint goes at once to the closest vendor. Chat and screen say "Navigating to ... to
+      buy ...". Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"direct pin: <kind>".'
+  - id: cv.s13.48
+    title: Click a low Durability row
+    action:
+      kind: manual
+      text: Click a low Durability row.
+    expect: The waypoint goes at once to the closest vendor. Chat and screen say "Navigating to ... to
+      repair ...". Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"direct pin: <kind>".'
+  - id: cv.s13.49
+    title: Click a profession row within its threshold
+    action:
+      kind: manual
+      text: Click a profession row within its threshold.
+    expect: The waypoint goes at once to the closest trainer. Chat and screen say "Navigating to ... to
+      train ...". Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"direct pin: <kind>".'
+  - id: cv.s13.50
+    title: Open a question, then click a row
+    action:
+      kind: manual
+      text: Open a question, then click a row.
+    expect: The question closes and the waypoint is set. The addon does not ask again. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"direct pin: ". The line "request put back: <kind> (a click replaced it)" does not appear.'
+  - id: cv.s13.51
+    title: After a row click, trigger an unrelated trigger
+    action:
+      kind: manual
+      text: After a row click, trigger an unrelated trigger.
+    expect: The waypoint stays. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.52
+    title: After a row click, open a merchant window
+    action:
+      kind: manual
+      text: After a row click, open a merchant window.
+    expect: The waypoint clears. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"merchant window opened".'
+  - id: cv.s13.53
+    title: Click a display-only row
+    action:
+      kind: manual
+      text: Click a display-only row.
+    expect: Nothing happens. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.54
+    title: Click a profession row with no known trainer
+    action:
+      kind: manual
+      text: Click a profession row with no known trainer.
+    expect: Chat says no trainer is known. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"no known trainer for <profession>".'
+  - id: cv.s13.55
+    title: 'Fresh install: type /cvn'
+    action:
+      kind: manual
+      text: 'Fresh install: type |cff99ccff/cvn|r.'
+      commands:
+      - /cvn
+    expect: 'It says "background 80% of color #000000, text and icons 100%". The window background is
+      pure black at 80 percent. Press Pass.'
+    verify:
+    - player
+    - reviewer
+    reviewer: 'report header "status window: ..., opacity 80%, color #000000, text opacity 100%".'
+  - id: cv.s13.56
+    title: 'Type /cvn hud opacity 0, then /cvn hud color #ffffff'
+    action:
+      kind: manual
+      text: 'Type |cff99ccff/cvn hud opacity 0|r, then |cff99ccff/cvn hud color #ffffff|r.'
+      commands:
+      - /cvn hud opacity 0
+      - '/cvn hud color #ffffff'
+    expect: Only the title, the cog and the line text show. There is no fill, border or faint rectangle,
+      even with white selected. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.57
+    title: With opacity 0, drag the window by its title and click a line
+    action:
+      kind: manual
+      text: With opacity 0, drag the window by its title and click a line.
+    expect: Drag and click still work. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.58
+    title: Open the settings page and move the text opacity slider to its lowest
+    action:
+      kind: manual
+      text: Open the settings page and move the text opacity slider to its lowest.
+    expect: The slider stops at 20. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.59
+    title: Type /cvn hud textopacity 40, then cause a new line
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn hud textopacity 40|r, then cause a line that was not shown before.
+      commands:
+      - /cvn hud textopacity 40
+    expect: The title, the cog and every line are dim, including the new line. The background keeps its
+      own opacity. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.60
+    title: Change the status window background color and confirm
+    action:
+      kind: manual
+      text: Open Appearance > Status window > Background color, change the wheel and confirm.
+    expect: The background updates live and keeps the color. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.61
+    title: Open the same color wheel, change it and cancel
+    action:
+      kind: manual
+      text: Open the same color wheel, change it and cancel.
+    expect: The background returns to the original color. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.62
+    title: Type /cvn hud color, change the wheel and cancel
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn hud color|r, change the wheel and cancel.
+      commands:
+      - /cvn hud color
+    expect: The background returns to the original color. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.63
+    title: Optional, on a client where the game color picker is missing
+    action:
+      kind: manual
+      text: Optional, on a client where the game color picker is missing. Open the Background color page.
+    expect: The page explains that the picker is missing and shows no dead control. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.64
+    title: 'Optional: type /cvn hud color #101820, then black'
+    action:
+      kind: manual
+      text: 'Optional, on the same client. Type |cff99ccff/cvn hud color #101820|r, then |cff99ccff/cvn
+        hud color black|r.'
+      commands:
+      - '/cvn hud color #101820'
+      - /cvn hud color black
+    expect: The background ends black after the second command. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.65
+    title: 'OLED check: set opacity 0 and text opacity 40 for a minute'
+    action:
+      kind: manual
+      text: 'OLED check: set opacity 0 and text opacity 40, then leave the window over a dark area for
+        a minute.'
+    expect: Nothing static is bright. There is no border and no fixed fill. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.66
+    title: Show one low line in the window
+    action:
+      kind: manual
+      text: Show one low line in the window.
+    expect: The low line has red text, a red warning symbol and a visible Low label. Lines that are not
+      low use neutral text. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.67
+    title: Set opacity, color and text opacity, show the log, then reload
+    action:
+      kind: manual
+      text: Set opacity, color and text opacity. Type |cff99ccff/cvn log|r, then |cff99ccff/reload|r.
+      commands:
+      - /cvn log
+      - /reload
+    expect: After the reload, the opacity, color and text opacity values are unchanged. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reload: after_action
+    reviewer: 'report header "status window: ..., opacity N%, color #rrggbb, text opacity N%".'
+  - id: cv.s13.68
+    title: Zone into a dungeon
+    action:
+      kind: manual
+      text: Zone into a dungeon.
+    expect: Nothing changes on screen. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"instance: none -> party".'
+  - id: cv.s13.69
+    title: Zone into a raid
+    action:
+      kind: manual
+      text: Zone into a raid.
+    expect: Nothing changes on screen. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"instance: none -> raid".'
+  - id: cv.s13.70
+    title: Zone into a battleground
+    action:
+      kind: manual
+      text: Zone into a battleground (Warsong Gulch, Arathi Basin or Alterac Valley).
+    expect: Nothing changes on screen. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"instance: none -> pvp".'
+  - id: cv.s13.71
+    title: Leave the instance and go outdoors
+    action:
+      kind: manual
+      text: Leave the instance and go outdoors.
+    expect: Nothing changes on screen. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"instance: ... -> none".'
+  - id: cv.s13.72
+    title: Fill your bags to the threshold inside a battleground
+    action:
+      kind: manual
+      text: Fill your bags to the threshold inside a battleground.
+    expect: No sell question shows. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'no "question shown: " line while inside.'
+  - id: cv.s13.73
+    title: Leave the battleground with full bags
+    action:
+      kind: manual
+      text: Leave the battleground with full bags.
+    expect: The sell question shows once. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"trigger ..." line for bags after the "instance: pvp -> none" line.'
+  - id: cv.s13.74
+    title: Wear gear below the repair threshold in a dungeon, then leave
+    action:
+      kind: manual
+      text: Wear gear below the repair threshold in a dungeon, then leave the dungeon.
+    expect: The repair question shows once after you leave. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"trigger repair ..." line after the "instance: party -> none" line.'
+  - id: cv.s13.75
+    title: Walk outside, enter a dungeon and click a row
+    action:
+      kind: manual
+      text: Walk outside, enter a dungeon and click a row.
+    expect: Chat says the waypoint search starts from your last position outside. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"row click: ..." line.'
+  - id: cv.s13.76
+    title: Type /cvn anchor last and click a row inside a dungeon
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn anchor last|r and click a row inside a dungeon.
+      commands:
+      - /cvn anchor last
+    expect: Chat says the search starts from your last position outside. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"row click: ..." line.'
+  - id: cv.s13.77
+    title: Type /cvn anchor hearth and click a row inside a dungeon
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn anchor hearth|r and click a row inside a dungeon.
+      commands:
+      - /cvn anchor hearth
+    expect: Chat says the search starts from your hearthstone point. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"row click: ..." line.'
+  - id: cv.s13.78
+    title: Click a row inside a battleground with either anchor setting
+    action:
+      kind: manual
+      text: Click a row inside a battleground with either anchor setting.
+    expect: The search starts from your last outdoor position. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"row click: ..." line.'
+  - id: cv.s13.79
+    title: Optional, with TomTom installed, click a row inside an instance
+    action:
+      kind: manual
+      text: Optional, with TomTom installed, click a row inside an instance.
+    expect: If TomTom refuses the waypoint, chat says so. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.80
+    title: On WoW Forever, type /dump GetBindLocation()
+    action:
+      kind: manual
+      text: On WoW Forever, type |cff99ccff/dump GetBindLocation()|r.
+    expect: Chat prints a place name. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.81
+    title: On Classic Era, type /dump GetBindLocation()
+    action:
+      kind: manual
+      text: On Classic Era, type |cff99ccff/dump GetBindLocation()|r.
+    expect: Chat prints a place name. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.82
+    title: Bind your hearthstone at a new inn, then relog or change zone
+    action:
+      kind: manual
+      text: Bind your hearthstone at a new inn, then relog or change zone.
+    expect: Nothing changes on screen. The reviewer confirms the new hearthstone point from the log, written
+      only when the name changed. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"hearthstone point learned: <inn>".'
+  - id: cv.s13.83
+    title: On a new character, set anchor hearth and enter a dungeon
+    action:
+      kind: manual
+      text: On a new character with no known hearthstone point, type |cff99ccff/cvn anchor hearth|r and
+        enter a dungeon.
+      commands:
+      - /cvn anchor hearth
+    expect: The addon searches from your last position outside. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.84
+    title: Type /cvn anchor hearth, then /cvn anchor last
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn anchor hearth|r, then |cff99ccff/cvn anchor last|r.
+      commands:
+      - /cvn anchor hearth
+      - /cvn anchor last
+    expect: The "Search from, inside an instance" dropdown shows the choice from the last command. Press
+      Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'report line "instance anchor: ...".'
+  - id: cv.s13.85
+    title: On a fresh install, type /cvn ah on, then /cvn ah off
+    action:
+      kind: manual
+      text: 'Fresh install: type |cff99ccff/cvn ah on|r, then |cff99ccff/cvn ah off|r.'
+      commands:
+      - /cvn ah on
+      - /cvn ah off
+    expect: The "Route to the auction house" checkbox is cleared after both commands. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'report line "auction house routing: off".'
+  - id: cv.s13.86
+    title: With routing on, click a tradeable row near a city auction house
+    action:
+      kind: manual
+      text: Turn routing on, stand near a major city auction house and click a tradeable row (a reagent
+        or Bag space).
+    expect: The waypoint goes to the auctioneer. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"direct pin: auctioneer <name> (npc N) is closer".'
+  - id: cv.s13.87
+    title: With routing on, click a tradeable row where a vendor is closer
+    action:
+      kind: manual
+      text: With routing on, click a tradeable row from a spot where a vendor is closer than the auction
+        house.
+    expect: The waypoint goes to the vendor. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'no "direct pin: auctioneer" line.'
+  - id: cv.s13.88
+    title: With routing on, click a row inside an instance
+    action:
+      kind: manual
+      text: With routing on, click a row inside an instance.
+    expect: The waypoint goes to a vendor, not the auction house. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'no "direct pin: auctioneer" line.'
+  - id: cv.s13.89
+    title: Open an auction house you never opened, then show the log
+    action:
+      kind: manual
+      text: WoW Forever only. Open an auction house you have never opened, then type |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: The auction house window opens. The reviewer confirms the addon learned it. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: 'report line "auctioneers: N shipped, N learned" with learned one higher; ClosestVendorDB.auctioneers
+      has the auctioneer.'
+    assertions:
+    - kind: log
+      source: debug
+      contains: ClosestVendorDB.auctioneers
+      diagnostic: true
+    clients:
+    - forever-camelot
+  - id: cv.s13.90
+    title: Type /cvn log, then /reload
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn log|r, then |cff99ccff/reload|r.
+      commands:
+      - /cvn log
+      - /reload
+    expect: Nothing changes on screen after the reload. The reviewer confirms the learned auctioneer survives.
+      Press Pass.
+    verify:
+    - player
+    - reviewer
+    reload: after_action
+    reviewer: 'report line "auctioneers: ... learned" before the reload keeps the same count in the report
+      after the reload.'
+  - id: cv.s13.91
+    title: Walk to a shipped auctioneer and click a tradeable row
+    action:
+      kind: manual
+      text: Walk to a shipped auctioneer (any of the 28 with coordinates) and click a tradeable row with
+        routing on.
+    expect: The waypoint points at where the auctioneer stands. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"direct pin: auctioneer <name> (npc N) is closer".'
+  - id: cv.s13.92
+    title: On a fresh install, type /cvn, then open a reagent vendor
+    action:
+      kind: manual
+      text: 'Fresh install: type |cff99ccff/cvn|r, then open a reagent vendor.'
+      commands:
+      - /cvn
+    expect: 'Chat says "Reagent buying: off, asks first, up to 20 of each". The addon buys nothing. Press
+      Pass.'
+    verify:
+    - player
+    - reviewer
+    reviewer: 'report line "reagent buying: off, asks first, up to 20 of each"; "reagent buy: off".'
+  - id: cv.s13.93
+    title: Open the settings page, Reagents
+    action:
+      kind: manual
+      text: Open the settings page, Reagents.
+    expect: Below the reagent checkboxes are Buy reagents, Ask before buying reagents and an amount slider
+      (0 to 100, default 20). Press Pass.
+    verify:
+    - player
+  - id: cv.s13.94
+    title: On the Reagents page, turn Buy reagents off
+    action:
+      kind: manual
+      text: On the Reagents page, turn Buy reagents off.
+    expect: The other two controls are greyed out. Turning it on makes them usable again. Press Pass.
+    verify:
+    - player
+  - id: cv.s13.95
+    title: Type /cvn reagentbuy on, then ask, then 35
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn reagentbuy on|r, then |cff99ccff/cvn reagentbuy ask|r, then |cff99ccff/cvn
+        reagentbuy 35|r.
+      commands:
+      - /cvn reagentbuy on
+      - /cvn reagentbuy ask
+      - /cvn reagentbuy 35
+    expect: After all three commands, the checkbox is on, the Ask checkbox is on and the slider shows
+      35. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'report line "reagent buying: ...".'
+  - id: cv.s13.96
+    title: As a Hunter, Warrior or Warlock, open the settings page, Reagents
+    action:
+      kind: manual
+      text: As a Hunter, Warrior or Warlock, open the settings page, Reagents.
+    expect: All three controls are greyed out with "Your class does not use reagents." Press Pass.
+    verify:
+    - player
+  - id: cv.s13.97
+    title: As a Hunter, Warrior or Warlock, type /cvn reagentbuy on
+    action:
+      kind: manual
+      text: As a Hunter, Warrior or Warlock, type |cff99ccff/cvn reagentbuy on|r.
+      commands:
+      - /cvn reagentbuy on
+    expect: Chat says "Your class does not use reagents." Press Pass.
+    verify:
+    - player
+  - id: cv.s13.98
+    title: Type /cvn reagentbuy on and /cvn reagentbuy auto
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn reagentbuy on|r and |cff99ccff/cvn reagentbuy auto|r. Carry 7 Arcane Powder
+        and 0 Runes of Teleportation. Open the vendor on WoW Forever.
+      commands:
+      - /cvn reagentbuy on
+      - /cvn reagentbuy auto
+    expect: You end with exactly 20 of each. One chat line names both reagents with counts and the cost,
+      and the bag counts and money spent match it. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: target 20, money ..., plan: ..., cost ..., short: ..." once.'
+  - id: cv.s13.99
+    title: Repeat the same purchase on Classic Era
+    action:
+      kind: manual
+      text: Repeat the same purchase on Classic Era.
+    expect: You end with exactly 20 of each, the same as on WoW Forever. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: target 20, money ..., plan: ..., cost ..., short: ..." once.'
+  - id: cv.s13.100
+    title: After that purchase, close the vendor and open it again
+    action:
+      kind: manual
+      text: After that purchase, close the vendor and open it again.
+    expect: The addon buys nothing and shows no chat line. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'no new "reagent buy: ... plan:" line.'
+  - id: cv.s13.101
+    title: Type /cvn reagentbuy ask, open the vendor and do not click
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn reagentbuy ask|r. Open the vendor and do not click.
+      commands:
+      - /cvn reagentbuy ask
+    expect: A dialog lists the reagents, the counts and the total price. Nothing is bought. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: target ..., plan: ..." line once.'
+  - id: cv.s13.102
+    title: With the dialog showing, click No or press Esc
+    action:
+      kind: manual
+      text: With the dialog showing, click |cffffd100No|r or press Esc.
+    expect: The addon buys nothing. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: no purchase line follows.
+  - id: cv.s13.103
+    title: Open the vendor again and click Yes
+    action:
+      kind: manual
+      text: Open the vendor again and click |cffffd100Yes|r.
+    expect: The addon buys the listed reagents. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: target ..., plan: ..." line.'
+  - id: cv.s13.104
+    title: As a Rogue with a bow, type /cvn buy ask and open a vendor
+    action:
+      kind: manual
+      text: As a Rogue with a bow, type |cff99ccff/cvn buy ask|r. Open a vendor that sells arrows and
+        Flash Powder.
+      commands:
+      - /cvn buy ask
+    expect: Both dialogs show. Neither replaces the other. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: ..." and "reagent buy: ..." lines.'
+  - id: cv.s13.105
+    title: Type /cvn reagentbuy 0, then open the vendor
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn reagentbuy 0|r, then open the vendor.
+      commands:
+      - /cvn reagentbuy 0
+    expect: The addon buys nothing and shows no dialog. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: amount is 0".'
+  - id: cv.s13.106
+    title: Have less gold than one reagent costs, then open the vendor
+    action:
+      kind: manual
+      text: Have less gold than one reagent costs, then open the vendor.
+    expect: Chat says "You cannot afford any reagents here." Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: target ..., short: ..." line.'
+  - id: cv.s13.107
+    title: Have gold for only part of the list, then open the vendor
+    action:
+      kind: manual
+      text: Have gold for only part of the list, then open the vendor.
+    expect: The addon buys that part in table order, and the chat line ends with "(all you could afford)".
+      Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: target ..., plan: ..." line.'
+  - id: cv.s13.108
+    title: Fill ordinary bags completely, then open the reagent vendor
+    action:
+      kind: manual
+      text: Fill ordinary bags with no free slot and no partial stack of the reagent (quivers, soul bags
+        and profession bags do not count). Open the vendor.
+    expect: Chat says "Your bags have no room for reagents." Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: target ..., plan: ..." line.'
+  - id: cv.s13.109
+    title: Free one bag slot, then open the vendor
+    action:
+      kind: manual
+      text: Free one bag slot, then open the vendor.
+    expect: The addon buys what fits and the chat line ends with "(all that fits in your bags)". Press
+      Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: target ..., plan: ..." line.'
+  - id: cv.s13.110
+    title: Keep a partial reagent stack in a full bag, then open the vendor
+    action:
+      kind: manual
+      text: Keep a partial stack of the reagent in a full bag, then open the vendor.
+    expect: The addon tops up that stack. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: target ..., plan: ..." line.'
+  - id: cv.s13.111
+    title: Turn off one reagent on the Reagents page, then open the vendor
+    action:
+      kind: manual
+      text: Turn off one reagent on the Reagents page, then open the vendor.
+    expect: The addon does not buy that reagent. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: target ..., plan: ..." line without that item.'
+  - id: cv.s13.112
+    title: As a low-level mage, open a vendor that sells Rune of Portals
+    action:
+      kind: manual
+      text: As a low-level mage, open a vendor that sells Rune of Portals, a reagent for a spell you do
+        not know.
+    expect: The addon does not buy it. It never buys Soul Shards, Blinding Powder or conjured items. Press
+      Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: target ..., plan: ..." line without those items.'
+  - id: cv.s13.113
+    title: As a Rogue with gold for ammo only, open a vendor selling both
+    action:
+      kind: manual
+      text: As a Rogue, type |cff99ccff/cvn buy auto|r and |cff99ccff/cvn reagentbuy auto|r. Have gold
+        for the ammo only, then open a vendor that sells both.
+      commands:
+      - /cvn buy auto
+      - /cvn reagentbuy auto
+    expect: The addon buys the ammo and no Flash Powder. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: ..." then "reagent buy: ... short: ..." line.'
+  - id: cv.s13.114
+    title: Open a vendor with the reagent dialog, then close the vendor window
+    action:
+      kind: manual
+      text: Optional. Open a vendor with the reagent dialog showing, then close the vendor window before
+        you answer.
+    expect: The dialog stays, and |cffffd100Yes|r buys nothing. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: purchase dropped: the merchant window changed" or "reagent buy: bags or money
+      unknown at Yes".'
+  intro: 'Use a mage who knows Arcane Brilliance and Teleport, and a reagent vendor. Write down the client
+    build. The addon decides these from game calls the fake-API tests cannot reach. The settings layout
+    has no in-game check: unit tests cover saved values and disabled controls.'
+- id: s14
+  title: Food, water and pet food
+  steps:
+  - id: cv.s14.1
+    title: As a Warrior, carry 5 or fewer food items and test food
+    action:
+      kind: manual
+      text: As a Warrior, carry 5 or fewer food items (cooked, looted or conjured all count). Type |cff99ccff/cvn
+        test food|r.
+      commands:
+      - /cvn test food
+    expect: The addon asks about the closest vendor that sells food. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: supply ..., <vendor> (npc N), N left".'
+  - id: cv.s14.2
+    title: As a Warrior, type /cvn test water
+    action:
+      kind: manual
+      text: As a Warrior, type |cff99ccff/cvn test water|r.
+      commands:
+      - /cvn test water
+    expect: Chat says "Your class does not use water." No question shows. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"test command: ...".'
+  - id: cv.s14.3
+    title: As a Rogue, type /cvn test water
+    action:
+      kind: manual
+      text: As a Rogue, type |cff99ccff/cvn test water|r.
+      commands:
+      - /cvn test water
+    expect: Chat says "Your class does not use water." No question shows. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"test command: ...".'
+  - id: cv.s14.4
+    title: As a Priest, carry 5 or fewer drinks
+    action:
+      kind: manual
+      text: As a Priest, carry 5 or fewer drinks.
+    expect: The addon asks about the closest vendor that sells drink. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: supply ..., <vendor> (npc N), N left".'
+  - id: cv.s14.5
+    title: Answer Yes to the drink question
+    action:
+      kind: manual
+      text: Answer Yes to the drink question.
+    expect: The closest drink vendor gets pinned. No sell question follows. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <vendor> via <provider>".'
+  - id: cv.s14.6
+    title: Type /cvn choice auto and lower food again
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn choice auto|r and lower food again.
+      commands:
+      - /cvn choice auto
+    expect: One chat line and the on-screen notice show, like other triggers. No question shows. Press
+      Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <vendor> via <provider>" with no "question shown" line.'
+  - id: cv.s14.7
+    title: As a Hunter with no pet out, type /cvn test petfood
+    action:
+      kind: manual
+      text: As a Hunter with no pet out, type |cff99ccff/cvn test petfood|r.
+      commands:
+      - /cvn test petfood
+    expect: Chat says "There is no pet to feed." No question shows. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"test command: ...".'
+  - id: cv.s14.8
+    title: As a Hunter, call a pet and let its food run low
+    action:
+      kind: manual
+      text: As a Hunter, call a pet and let its food run low.
+    expect: The addon asks about the closest vendor that sells food your pet eats. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: supply ..., <vendor> (npc N), N left".'
+  - id: cv.s14.9
+    title: Dismiss the pet, then call a pet with a different diet
+    action:
+      kind: manual
+      text: Dismiss the pet, then call a pet with a different diet.
+    expect: With the pet dismissed there is no pet food warning. With the new pet, the warning counts
+      what that pet eats. Press Pass.
+    verify:
+    - player
+  - id: cv.s14.10
+    title: Use a pet that eats meat or fish where no known vendor sells it
+    action:
+      kind: manual
+      text: Use a pet that eats only meat or fish in a place where no known vendor sells it.
+    expect: One chat line shows and no dialog. Press Pass.
+    verify:
+    - player
+  - id: cv.s14.11
+    title: As a Hunter, trigger the pet food question for a pet
+    action:
+      kind: manual
+      text: As a Hunter, trigger the pet food question for a pet.
+    expect: The question names the diets that the pet family eats. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: supply ...".'
+  - id: cv.s14.12
+    title: As a Mage with Conjure Food, turn notices on and carry little food
+    action:
+      kind: manual
+      text: As a Mage who knows Conjure Food, type |cff99ccff/cvn notice on|r, then carry 5 or fewer food
+        items.
+      commands:
+      - /cvn notice on
+    expect: Chat says "You are low on food (2 left). Cast Conjure Food to make more." and the same text
+      shows on screen. The addon asks about no vendor. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reminder: food (N)".'
+  - id: cv.s14.13
+    title: As a Mage who knows Conjure Water, carry 5 or fewer drinks
+    action:
+      kind: manual
+      text: As a Mage who knows Conjure Water, carry 5 or fewer drinks.
+    expect: Chat says the same kind of line for water, also on screen. The addon asks about no vendor.
+      Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reminder: water (N)".'
+  - id: cv.s14.14
+    title: As that Mage, let food and drink both run low at once
+    action:
+      kind: manual
+      text: As that Mage, let food and drink both run low at once.
+    expect: Two chat lines show and one sound plays. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reminder: food (N)" and "reminder: water (N)".'
+  - id: cv.s14.15
+    title: Stay low on food, raise the count above the threshold, then lower it
+    action:
+      kind: manual
+      text: Stay low on food, then raise the count above the threshold and lower it again.
+    expect: The reminder shows once while you stay low, and shows again after the second drop. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reminder: food (N)" once per drop.'
+  - id: cv.s14.16
+    title: As a Mage without the spell, carry 5 or fewer food items
+    action:
+      kind: manual
+      text: As a Mage without the spell, carry 5 or fewer food items.
+    expect: The addon asks about a vendor like other classes. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: supply ...".'
+  - id: cv.s14.17
+    title: As a Warlock who knows Create Healthstone, carry no healthstone
+    action:
+      kind: manual
+      text: As a Warlock who knows Create Healthstone, carry no healthstone.
+    expect: Chat says "You have no healthstone. Cast Create Healthstone to make one." Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reminder: healthstone (0)".'
+  - id: cv.s14.18
+    title: As that Warlock, carry a healthstone of any rank
+    action:
+      kind: manual
+      text: As that Warlock, carry a healthstone of any rank.
+    expect: No reminder shows. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'no "reminder: healthstone" line.'
+  - id: cv.s14.19
+    title: As a Mage, type /cvn test remind
+    action:
+      kind: manual
+      text: As a Mage, type |cff99ccff/cvn test remind|r.
+      commands:
+      - /cvn test remind
+    expect: A test reminder shows and a sound plays. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reminder: test".'
+  - id: cv.s14.20
+    title: As a Warlock, type /cvn test remind
+    action:
+      kind: manual
+      text: As a Warlock, type |cff99ccff/cvn test remind|r.
+      commands:
+      - /cvn test remind
+    expect: A test reminder shows and a sound plays. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reminder: test".'
+  - id: cv.s14.21
+    title: As a Warrior, type /cvn test remind
+    action:
+      kind: manual
+      text: As a Warrior, type |cff99ccff/cvn test remind|r.
+      commands:
+      - /cvn test remind
+    expect: Chat says "This is a test reminder. Only mages and warlocks get real ones." and a sound plays.
+      Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reminder: test".'
+  - id: cv.s14.22
+    title: In combat, type /cvn test remind
+    action:
+      kind: manual
+      text: In combat, type |cff99ccff/cvn test remind|r.
+      commands:
+      - /cvn test remind
+    expect: The sound plays in combat. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reminder: test".'
+  - id: cv.s14.23
+    title: Start a reminder condition in combat or in an instance
+    action:
+      kind: manual
+      text: Start a reminder condition in combat or in an instance.
+    expect: The reminder waits, then shows when combat or the instance ends. The sound plays then, once,
+      and not again while the reminder stays shown. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reminder: food (N)" after the combat or instance ends.'
+  - id: cv.s14.24
+    title: Type /cvn sound
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn sound|r.
+      commands:
+      - /cvn sound
+    expect: Chat lists the current sound and the choices whisper, ping, invite, ready and none. Press
+      Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'report line "supplies: ..., notification sound <name>".'
+  - id: cv.s14.25
+    title: Type /cvn sound ping, invite and ready
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn sound ping|r, |cff99ccff/cvn sound invite|r and |cff99ccff/cvn sound ready|r.
+      commands:
+      - /cvn sound ping
+      - /cvn sound invite
+      - /cvn sound ready
+    expect: The ready sound plays last, and |cff99ccff/cvn|r shows ready as the chosen name. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'report line "supplies: ..., notification sound <name>".'
+  - id: cv.s14.26
+    title: Type /cvn sound none, then /cvn test remind
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn sound none|r, then |cff99ccff/cvn test remind|r.
+      commands:
+      - /cvn sound none
+      - /cvn test remind
+    expect: Nothing plays, and the reminder still shows in chat. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reminder: test".'
+  - id: cv.s14.27
+    title: As a Warrior, let a vendor question show for food, then say Yes
+    action:
+      kind: manual
+      text: As a Warrior, let a vendor question show for food, then say Yes.
+    expect: No notification sound when the question shows. The map pin makes its own sound when you say
+      Yes. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: supply ..." then "accepted: ...".'
+  - id: cv.s14.28
+    title: As a Warlock, open the settings page, Supplies
+    action:
+      kind: manual
+      text: As a Warlock, open the settings page, Supplies.
+    expect: Supplies sits after Reagents. It shows |cffffd100Healthstone reminder|r and the rows your
+      class can use. It has no sound control. Press Pass.
+    verify:
+    - player
+  - id: cv.s14.29
+    title: As a Warrior, open the settings page, Supplies
+    action:
+      kind: manual
+      text: As a Warrior, open the settings page, Supplies.
+    expect: It shows only rows a Warrior can use, and no |cffffd100Healthstone reminder|r. Press Pass.
+    verify:
+    - player
+  - id: cv.s14.30
+    title: Pick each choice in the Notification sound dropdown
+    action:
+      kind: manual
+      text: Open Appearance, Sound tab, and pick each choice in the |cffffd100Notification sound|r dropdown.
+    expect: The dropdown offers Whisper ping, Minimap ping, Group invite, Ready check and None. Each choice
+      plays at once. Press Pass.
+    verify:
+    - player
+  - id: cv.s14.31
+    title: Type /cvn ammo off, then lower food
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn ammo off|r, then lower food.
+      commands:
+      - /cvn ammo off
+    expect: Food questions and reminders still work, and the Supplies controls stay enabled. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: supply ...".'
+  - id: cv.s14.32
+    title: Clear the Supplies checkbox in Warnings
+    action:
+      kind: manual
+      text: Clear the |cffffd100Supplies|r checkbox in Warnings (or type |cff99ccff/cvn supplies off|r).
+      commands:
+      - /cvn supplies off
+    expect: 'No food, water or pet food question, reminder or low row shows. The checkbox is cleared and
+      |cff99ccff/cvn|r shows "Supply warnings: off". Press Pass.'
+    verify:
+    - player
+    - reviewer
+    reviewer: 'report line "supplies: ...".'
+  - id: cv.s14.33
+    title: Type /cvn supplies on
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn supplies on|r.
+      commands:
+      - /cvn supplies on
+    expect: The warnings work again with the thresholds you had. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'report line "supplies: ...".'
+  - id: cv.s14.34
+    title: Type /cvn food off, then lower food and water
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn food off|r, then lower food and water.
+      commands:
+      - /cvn food off
+    expect: No food question shows. The water question still shows. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'report line "supplies: ...; food off (5)".'
+  - id: cv.s14.35
+    title: Type /cvn water off, then lower food and water
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn water off|r, then lower food and water.
+      commands:
+      - /cvn water off
+    expect: No water question shows. The food question still shows. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'report line "supplies: ..., water off (5)".'
+  - id: cv.s14.36
+    title: As a Hunter, type /cvn petfood off, then lower pet food and food
+    action:
+      kind: manual
+      text: As a Hunter, type |cff99ccff/cvn petfood off|r, then lower pet food and food.
+      commands:
+      - /cvn petfood off
+    expect: No pet food question shows. The food question still shows. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'report line "supplies: ..., pet food off (5)".'
+  - id: cv.s14.37
+    title: Type /cvn food 10 and carry 10 food items, then 11
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn food 10|r and carry 10 food items, then 11.
+      commands:
+      - /cvn food 10
+    expect: The addon asks at 10 and not at 11. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: supply ..." at 10 only.'
+  - id: cv.s14.38
+    title: Move a slider on the Supplies page
+    action:
+      kind: manual
+      text: Move a slider on the Supplies page.
+    expect: '|cff99ccff/cvn|r shows the new value. Press Pass.'
+    verify:
+    - player
+    - reviewer
+    reviewer: 'report line "supplies: ...".'
+  - id: cv.s14.39
+    title: Carry plenty of food, then type /cvn test food
+    action:
+      kind: manual
+      text: Carry plenty of food, then type |cff99ccff/cvn test food|r.
+      commands:
+      - /cvn test food
+    expect: The question shows now, whatever the count. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"test command: ...".'
+  - id: cv.s14.40
+    title: Open a baker or a water vendor that the addon does not ship
+    action:
+      kind: manual
+      text: Open a baker or a water vendor that the addon does not ship.
+    expect: Nothing changes on screen. The reviewer confirms the addon learned it, and that it is now
+      a target for food or water. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: ClosestVendorDB.learned has the vendor with supplies.
+    assertions:
+    - kind: log
+      source: debug
+      contains: ClosestVendorDB.learned
+      diagnostic: true
+  - id: cv.s14.41
+    title: With reagents and food both low, answer the questions
+    action:
+      kind: manual
+      text: With reagents and food both low, answer the questions.
+    expect: The questions come in the order repair, ammo, reagent, food, water, pet food, sell, trainer.
+      Reagent comes before food. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: ..." lines in that order.'
+  - id: cv.s14.42
+    title: Open a merchant while food is low
+    action:
+      kind: manual
+      text: Open a merchant while food is low.
+    expect: The addon buys nothing. It does not buy food, water or pet food in this version. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"merchant window opened" with no purchase line.'
+  - id: cv.s14.43
+    title: Open the status window settings and set supplies to always
+    action:
+      kind: manual
+      text: Open the status window settings and type |cff99ccff/cvn hud row supplies always|r.
+      commands:
+      - /cvn hud row supplies always
+    expect: 'A |cffffd100Show: Supplies|r dropdown sits between Reagents and Bag space and shows Always.
+      Press Pass.'
+    verify:
+    - player
+  - id: cv.s14.44
+    title: As a Warrior, look at the status window with Supplies set to Always
+    action:
+      kind: manual
+      text: As a Warrior, look at the status window with Supplies set to Always.
+    expect: A Food row shows and no Water row. Press Pass.
+    verify:
+    - player
+  - id: cv.s14.45
+    title: As a Priest, look at the status window with Supplies set to Always
+    action:
+      kind: manual
+      text: As a Priest, look at the status window with Supplies set to Always.
+    expect: A Food row and a Water row show. Press Pass.
+    verify:
+    - player
+  - id: cv.s14.46
+    title: As a Hunter with a pet out, show Supplies set to Always
+    action:
+      kind: manual
+      text: As a Hunter with a pet out, look at the status window with Supplies set to Always.
+    expect: A Pet food row shows. Press Pass.
+    verify:
+    - player
+  - id: cv.s14.47
+    title: Set Supplies to Only when low and carry plenty of food
+    action:
+      kind: manual
+      text: Set Supplies to Only when low and carry plenty of food.
+    expect: No supply row shows. Press Pass.
+    verify:
+    - player
+  - id: cv.s14.48
+    title: Drop food to 5 or fewer
+    action:
+      kind: manual
+      text: Drop food to 5 or fewer.
+    expect: The Food row shows in red at the same time as the warning. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"trigger ..." line for food.'
+  - id: cv.s14.49
+    title: Type /cvn food off, then keep food at 5 or fewer
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn food off|r, then keep food at 5 or fewer.
+      commands:
+      - /cvn food off
+    expect: The Food row is not red. Press Pass.
+    verify:
+    - player
+  - id: cv.s14.50
+    title: Type /cvn ammo off instead, then keep food at 5 or fewer
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn ammo off|r instead, then keep food at 5 or fewer.
+      commands:
+      - /cvn ammo off
+    expect: The Food row is still red. Press Pass.
+    verify:
+    - player
+  - id: cv.s14.51
+    title: As a Hunter, call a pet, then dismiss it, then call a different pet
+    action:
+      kind: manual
+      text: As a Hunter, call a pet, then dismiss it, then call a different pet.
+    expect: The Pet food row appears and goes away, and the count changes to the new pet's food. Press
+      Pass.
+    verify:
+    - player
+  - id: cv.s14.52
+    title: Click the Food row
+    action:
+      kind: manual
+      text: Click the Food row.
+    expect: The closest food seller is pinned at once with no question. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"row click: ..." then "accepted: <vendor> via <provider>".'
+  - id: cv.s14.53
+    title: Click the Food row in combat
+    action:
+      kind: manual
+      text: Click the Food row in combat.
+    expect: The closest food seller is pinned at once with no question. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"row click: ..." then "accepted: <vendor> via <provider>".'
+  - id: cv.s14.54
+    title: As a Mage, set Reagents to Always and look at the window
+    action:
+      kind: manual
+      text: As a Mage, set Reagents to Always and look at the window.
+    expect: The Conjured Food and Conjured Water rows and the Food and Water rows are separate and do
+      not conflict. Press Pass.
+    verify:
+    - player
+  - id: cv.s14.55
+    title: Set Supplies to Never
+    action:
+      kind: manual
+      text: Set Supplies to Never.
+    expect: No supply rows show. Press Pass.
+    verify:
+    - player
+  intro: 'Use |cff99ccff/cvn|r to check the line "Supplies: food on (5), water on (5), pet food on (5),
+    healthstone reminder on".'
+- id: s15
+  title: Settings per character
+  steps:
+  - id: cv.s15.1
+    title: On character A, change bags and sound, then log in character B
+    action:
+      kind: manual
+      text: On character A, type |cff99ccff/cvn bags 30|r and |cff99ccff/cvn sound ping|r, then move the
+        status window. Log in character B on the same account, look, then log back in on A.
+      commands:
+      - /cvn bags 30
+      - /cvn sound ping
+    expect: B showed its own values and window position, not 30, ping or A's position. Back on A, press
+      Pass.
+    verify:
+    - player
+  - id: cv.s15.2
+    title: On A, open a merchant the addon does not know
+    action:
+      kind: manual
+      text: On A, open a merchant the addon does not know. Log in B, trigger a sell warning near it, then
+        log back in on A.
+    expect: B was directed to that merchant. Back on A, press Pass.
+    verify:
+    - player
+  - id: cv.s15.3
+    title: Log in a character that never used the addon, with earlier settings
+    action:
+      kind: manual
+      text: Log in a character that never used the addon, on an account with earlier settings.
+    expect: It starts with those earlier settings. Press Pass.
+    verify:
+    - player
+- id: s16
+  title: Profession level gate
+  steps:
+  - id: cv.s16.1
+    title: Below level 20 with a profession at 150/150, change a skill or craft
+    action:
+      kind: manual
+      text: Below level 20 with a profession at 150/150, change a skill or craft.
+    expect: No trainer question shows. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'no "question shown: trainer for <profession>" line.'
+  - id: cv.s16.2
+    title: Below level 20, set Professions to Always in the status window
+    action:
+      kind: manual
+      text: Below level 20, set Professions to Always in the status window.
+    expect: The profession row shows but is not red. Press Pass.
+    verify:
+    - player
+  - id: cv.s16.3
+    title: Reach level 20 and change a skill or craft
+    action:
+      kind: manual
+      text: Reach level 20 and change a skill or craft.
+    expect: The trainer question appears. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: trainer for <profession>".'
+- id: s17
+  title: Waypoint choice
+  steps:
+  - id: cv.s17.1
+    title: Type /cvn nav
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn nav|r.
+      commands:
+      - /cvn nav
+    expect: 'Chat shows Waypoint: Automatic and the choices. Press Pass.'
+    verify:
+    - player
+  - id: cv.s17.2
+    title: With TomTom, type /cvn nav native, then test sell, answer Yes
+    action:
+      kind: manual
+      text: With TomTom loaded, type |cff99ccff/cvn nav native|r, then |cff99ccff/cvn test sell|r and
+        answer Yes.
+      commands:
+      - /cvn nav native
+      - /cvn test sell
+    expect: The game's own waypoint shows, with no TomTom arrow. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <seller> via <provider>" names the native provider.'
+  - id: cv.s17.3
+    title: With TomTom, type /cvn nav tomtom, then test sell, answer Yes
+    action:
+      kind: manual
+      text: With TomTom loaded, type |cff99ccff/cvn nav tomtom|r, then |cff99ccff/cvn test sell|r and
+        answer Yes.
+      commands:
+      - /cvn nav tomtom
+      - /cvn test sell
+    expect: A TomTom arrow shows. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <seller> via <provider>" names TomTom.'
+  - id: cv.s17.4
+    title: Without WaypointUI, type /cvn nav waypointui, then test sell
+    action:
+      kind: manual
+      text: Without WaypointUI installed, type |cff99ccff/cvn nav waypointui|r, then |cff99ccff/cvn test
+        sell|r and answer Yes.
+      commands:
+      - /cvn nav waypointui
+      - /cvn test sell
+    expect: A waypoint still appears, using the usual order. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <seller> via <provider>" names a provider that is installed.'
+  - id: cv.s17.5
+    title: Open the settings page
+    action:
+      kind: manual
+      text: Open the settings page.
+    expect: A Waypoint dropdown under Navigation has the same four choices. Press Pass.
+    verify:
+    - player
+- id: s18
+  title: Fewer reads and late item data
+  steps:
+  - id: cv.s18.1
+    title: In a group, dismiss and summon pets with another hunter or warlock
+    action:
+      kind: manual
+      text: In a group with another hunter or warlock, have them dismiss and summon their pet several
+        times. Then dismiss and summon your own pet. Type |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: The report is not filled with lines for their pet. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: no event UNIT_PET party1 lines; event UNIT_PET player lines for your own pet.
+    assertions:
+    - kind: log
+      source: debug
+      contains: event UNIT_PET party1
+      absent: true
+      diagnostic: true
+    - kind: log
+      source: debug
+      contains: event UNIT_PET player
+      diagnostic: true
+  - id: cv.s18.2
+    title: Turn off four supply reminders, then change your bags
+    action:
+      kind: manual
+      text: Turn off food, water, pet food and the healthstone reminder, then change your bags.
+    expect: Nothing is asked, and other warnings still work. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: no "reminder:" lines for the four switched-off kinds.
+  - id: cv.s18.3
+    title: Open a reagent merchant right after a fresh login
+    action:
+      kind: manual
+      text: Optional (hard to cause). With reagent buying on, open a merchant that sells your reagent
+        right after a fresh login.
+    expect: The purchase question appears once, possibly a moment after the window opens. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"merchant window opened", then one "question shown" line for the reagent.'
+- id: s19
+  title: NorgannonDB
+  steps:
+  - id: cv.s19.1
+    title: Without NorgannonDB, type /cvn log
+    action:
+      kind: manual
+      text: Without NorgannonDB, type |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: Vendors work as before. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"NorgannonDB: not found".'
+  - id: cv.s19.2
+    title: On WoW Forever with NorgannonDB, log in and show the log
+    action:
+      kind: manual
+      text: WoW Forever with NorgannonDB installed. Log in and type |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: Nothing to see in game. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"NorgannonDB: found, schema 1.5" with a number of vendors added.'
+  - id: cv.s19.3
+    title: On WoW Forever, test sell in Riverglades and Zephras Isle
+    action:
+      kind: manual
+      text: WoW Forever. Stand in Riverglades, with bags nearly full, and type |cff99ccff/cvn test sell|r.
+        Repeat in Zephras Isle.
+      commands:
+      - /cvn test sell
+    expect: A vendor in that zone is named and the pin points to a real vendor. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: ..." names the vendor.'
+  - id: cv.s19.4
+    title: Open the vendor you were sent to
+    action:
+      kind: manual
+      text: Open the vendor you were sent to.
+    expect: The next pin uses where the vendor stood when you opened it, if that differs. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"merchant window opened".'
+  - id: cv.s19.5
+    title: Disable NorgannonDB and type /reload
+    action:
+      kind: manual
+      text: Disable NorgannonDB and type |cff99ccff/reload|r.
+      commands:
+      - /reload
+    expect: No errors show. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reload: after_action
+    reviewer: '"NorgannonDB: not found".'
+- id: s20
+  title: Settings and appearance acceptance
+  steps:
+  - id: cv.s20.1
+    title: Type /cvn, then /cvn help, then /cvn status
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn|r, then |cff99ccff/cvn help|r, then |cff99ccff/cvn status|r.
+      commands:
+      - /cvn
+      - /cvn help
+      - /cvn status
+    expect: The first opens Home, the second prints the purpose and commands in chat, the third prints
+      the current values. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.2
+    title: Open settings with each command, the cog and game Options
+    action:
+      kind: manual
+      text: Open settings with |cff99ccff/cvn settings|r, |cff99ccff/cvn config|r, |cff99ccff/cvn options|r,
+        the cog and game Options, one after another.
+      commands:
+      - /cvn settings
+      - /cvn config
+      - /cvn options
+    expect: One settings tree opens each time, Home first, with pages Home, Restock, Navigation, Appearance,
+      Advanced and About. No duplicate category and no error. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.3
+    title: Change a settings page value, then change it with /cvn set
+    action:
+      kind: manual
+      text: Change a value on a settings page, then with |cff99ccff/cvn set|r.
+      commands:
+      - /cvn set
+    expect: The open control and the live window both show the new value. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.5
+    title: Turn off a feature switch and a buying switch
+    action:
+      kind: manual
+      text: Turn off a feature switch and a buying switch.
+    expect: The dependent controls keep their values and say what they need. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.6
+    title: 'Warrior and mage (or hunter or warlock): open Supplies and Reagents'
+    action:
+      kind: manual
+      text: 'Warrior and mage (or hunter or warlock): open Supplies and Reagents.'
+    expect: Each class sees only the controls that apply to it. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.7
+    title: Open Background color, pick a color, then cancel
+    action:
+      kind: manual
+      text: Open Background color, pick a color, then cancel.
+    expect: The original color comes back. Without a color picker, the page says so and points to |cff99ccff/cvn
+      hud color|r. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.8
+    title: Reload a character with a saved Warning style and notice off
+    action:
+      kind: manual
+      text: On a fresh install, open Appearance. Then reload a character with a saved Warning style and
+        notice off.
+    expect: Toast is the default on the fresh install. The saved character keeps Warning and notice off.
+      Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: /cvn log shows the effective style and the notice state.
+    assertions:
+    - kind: log
+      source: debug
+      contains: /cvn log
+      diagnostic: true
+  - id: cv.s20.9
+    title: Select Warning, then Toast, and trigger a notice each time
+    action:
+      kind: manual
+      text: Select Warning, then Toast, and trigger a notice each time (|cff99ccff/cvn test sell|r).
+      commands:
+      - /cvn test sell
+    expect: Exactly one style shows the target, zone, yards and reason. A newer notice replaces the old
+      one. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: /cvn log shows the effective style.
+    assertions:
+    - kind: log
+      source: debug
+      contains: /cvn log
+      diagnostic: true
+  - id: cv.s20.10
+    title: Turn On-screen notice off, change the style, then trigger a notice
+    action:
+      kind: manual
+      text: Turn On-screen notice off, change the style, then trigger a notice.
+    expect: Chat still shows the notice, and changing the style does not turn notices on. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: /cvn log shows notice enabled false.
+    assertions:
+    - kind: log
+      source: debug
+      contains: /cvn log
+      diagnostic: true
+  - id: cv.s20.11
+    title: 'Optional, in a disposable copy: remove the Ace libraries'
+    action:
+      kind: manual
+      text: 'Optional, in a disposable copy: remove the Ace libraries.'
+    expect: The standalone settings still open, or the addon says settings are unavailable. Commands and
+      play continue. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.12
+    title: 'Optional: load a character saved by the previous version'
+    action:
+      kind: manual
+      text: Load a character saved by the previous version, with custom thresholds, buying choices, colors
+        and window position.
+    expect: Every value is kept, and learned vendors are still there. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: ClosestVendorCharDB holds the values; ClosestVendorDB holds the learned vendors.
+    assertions:
+    - kind: log
+      source: debug
+      contains: ClosestVendorCharDB
+      diagnostic: true
+    - kind: log
+      source: debug
+      contains: ClosestVendorDB
+      diagnostic: true
+    notes: Needs a character saved by the previous version. Skip when you have none.
+  - id: cv.s20.13
+    title: Open each settings page without reading the README
+    action:
+      kind: manual
+      text: Open each settings page without reading the README.
+    expect: You can say what each page does, and the text explaining a choice comes before the choice.
+      Press Pass.
+    verify:
+    - player
+  - id: cv.s20.14
+    title: Show the status window and a warning with a very long name
+    action:
+      kind: manual
+      text: Show the status window and a warning. Use a very long vendor, zone or item name.
+    expect: No essential text and no button label is cut off. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.15
+    title: Hover an item in the window, then a tooltip from another addon
+    action:
+      kind: manual
+      text: Hover an item in the window, then a tooltip from another addon.
+    expect: Item-quality titles stay readable and the other tooltip keeps its content and frame. Press
+      Pass.
+    verify:
+    - player
+  - id: cv.s20.16
+    title: Set a real waypoint with notice off, then run /cvn demo
+    action:
+      kind: manual
+      text: First set a real waypoint (accept a sell question) and turn On-screen notice off. Then type
+        |cff99ccff/cvn demo|r and wait for the tour to end.
+      commands:
+      - /cvn demo
+    expect: The tour steps through route, question, food or water, arrows, a row click, reminder, each
+      with your style and sound. At the end your earlier waypoint is back and no setting changed. Press
+      Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"demo: ..." lines for each step, "demo: over", "demo: previous waypoint restored".'
+  - id: cv.s20.17
+    title: Type /cvn demo twice quickly
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn demo|r twice quickly.
+      commands:
+      - /cvn demo
+    expect: Only the newer tour runs, and its first notification replaces the old one. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"demo: stopped".'
+  - id: cv.s20.18
+    title: During a tour, click a status window row
+    action:
+      kind: manual
+      text: During a tour, click a status window row.
+    expect: The tour stops, your previous waypoint comes back, and the row routes with its own notification.
+      Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"demo: stopped".'
+  - id: cv.s20.19
+    title: Type /cvn preview notice, then click a status window row
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn preview notice|r, then click a status window row.
+      commands:
+      - /cvn preview notice
+    expect: The live notification replaces the sample. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.20
+    title: Type /cvn preview toast while Warning is selected
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn preview toast|r while Warning is selected.
+      commands:
+      - /cvn preview toast
+    expect: The toast shows, and the saved style stays Warning. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.21
+    title: Type /cvn preview nothing, then /cvn preview reminder
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn preview nothing|r, then (not a mage or warlock) |cff99ccff/cvn preview
+        reminder|r.
+      commands:
+      - /cvn preview nothing
+      - /cvn preview reminder
+    expect: Chat lists the valid kinds, then says the reminder is unavailable for your class. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.22
+    title: Click Move in settings, drag a surface off screen, click Done
+    action:
+      kind: manual
+      text: Click Move with settings open, drag a surface past the screen edge, and click Done. Then |cff99ccff/reload|r.
+      commands:
+      - /reload
+    expect: Done keeps the position inside the screen, and it stays after |cff99ccff/reload|r. The placeholder
+      and Done/Cancel sit above settings. Press Pass.
+    verify:
+    - player
+    reload: after_action
+  - id: cv.s20.23
+    title: Click Move, drag the surface, and press Escape
+    action:
+      kind: manual
+      text: Click Move, drag the surface, and press Escape.
+    expect: The old position comes back. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.24
+    title: Lock the status window, then try the title and Shift-drag
+    action:
+      kind: manual
+      text: Lock the status window, then try the title and Shift-drag.
+    expect: Both do nothing. Row clicks still work. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.25
+    title: Reset a position, then start Move again
+    action:
+      kind: manual
+      text: Reset a position, then start Move again.
+    expect: Only the position changes, and no old placeholder hides the Move buttons. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.26
+    title: Set background opacity to 0, then 80, then 100
+    action:
+      kind: manual
+      text: Set background opacity to 0, then 80, then 100.
+    expect: At 0 no fill, border or accent shows. Text and icons still dim on their own. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.27
+    title: Set addon scale to 150 for the window and the toast
+    action:
+      kind: manual
+      text: Set addon scale to 150 for the window and the toast.
+    expect: Both scale, with no clipped text. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.28
+    title: In combat, open settings, a preview and Move
+    action:
+      kind: manual
+      text: In combat, open settings, a preview and Move.
+    expect: No error, and anything unavailable says why. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.29
+    title: With TomTom or WaypointUI disabled, type /cvn preview notice
+    action:
+      kind: manual
+      text: With TomTom or WaypointUI disabled, type |cff99ccff/cvn preview notice|r.
+      commands:
+      - /cvn preview notice
+    expect: No error, and the notice still shows. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.30
+    title: 'Optional: type /cvn log clear, cancel it, then confirm it'
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn log|r, then |cff99ccff/cvn log clear|r and cancel, then |cff99ccff/cvn
+        log clear|r and confirm.
+      commands:
+      - /cvn log
+      - /cvn log clear
+    expect: The report is copyable. Cancel keeps the log. Confirm empties only the log. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: the report header shows style, notice state, appearance, toast position and character scope.
+    notes: 'Skip during a CheckThat run: clearing the log erases evidence for earlier steps.'
+  - id: cv.s20.31
+    title: Look at the Toast controls, then set Style to Warning
+    action:
+      kind: manual
+      text: 'Appearance, Notifications tab: look at the Toast controls, then set Style to Warning.'
+    expect: Toast Move shows, with no lock. With Warning the Toast controls hide and a note says why.
+      Press Pass.
+    verify:
+    - player
+  - id: cv.s20.32
+    title: Change the notification Sound, then type /cvn sound
+    action:
+      kind: manual
+      text: Change the notification Sound, then type |cff99ccff/cvn sound|r.
+      commands:
+      - /cvn sound
+    expect: Chat reports the sound. With None, every notification is silent. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.33
+    title: Open all pages and Appearance tabs at normal and 150% UI scale
+    action:
+      kind: manual
+      text: Open all pages and Appearance tabs at normal and 150% UI scale, in standalone and game Options.
+        Resize the window, then close and reopen.
+    expect: Controls fill full rows, headings have space, long labels stay readable, every action is reachable
+      by scrolling, and the size stays for the session. Each page starts at 600×460 with its introduction
+      above its first section. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.34
+    title: Open About beside KeepThat at matching scale
+    action:
+      kind: manual
+      text: Open About beside KeepThat at matching scale.
+    expect: The addon name is large and the version small and grey, with a one-sentence purpose and one
+      command per row with grey explanations. Press Pass.
+    verify:
+    - player
+  - id: cv.s20.35
+    title: Open /cvn log beside /kt log
+    action:
+      kind: manual
+      text: Open |cff99ccff/cvn log|r beside |cff99ccff/kt log|r.
+      commands:
+      - /cvn log
+    expect: Both have the standard frame, a title, a copy hint, scrollable selectable read-only text,
+      and reopen with current data. Press Pass.
+    verify:
+    - player
+  intro: 'Setup: Classic Era and WoW Forever at matching UI scale. Install Closest Vendor and KeepThat:
+    the About and log checks compare with KeepThat. Install CheckThat to record a run. Write down the
+    client build and addon version from |cff99ccff/cvn log|r.'
+- id: s21
+  title: Reputation standing
+  steps:
+  - id: cv.s21.1
+    title: Trigger a sell warning near a clan quartermaster
+    action:
+      kind: manual
+      text: On a character that opened a clan quartermaster's window (Gorhak in Magram Village or Molkar
+        in Gelkis Village), then on another character that never saw it, trigger a sell warning nearby.
+    expect: The second character is not sent to the quartermaster. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: ..." names a vendor other than the quartermaster.'
+  - id: cv.s21.2
+    title: Trigger a warning that routes to an unfriendly clan quartermaster
+    action:
+      kind: manual
+      text: Unfriendly with that clan, target or mouse over the quartermaster, then trigger a warning
+        that would route there.
+    expect: No route goes to the quartermaster. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"standing: npc <id> will not trade (Unfriendly or Hostile)"'
+  - id: cv.s21.3
+    title: Unfriendly with that clan, type /cvn log
+    action:
+      kind: manual
+      text: Unfriendly with that clan, type |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: Nothing to see in game. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"standing (this character): N vendors trade, N will not"'
+  - id: cv.s21.4
+    title: Raise reputation to Neutral and target the quartermaster again
+    action:
+      kind: manual
+      text: Raise reputation to Neutral and target the quartermaster again.
+    expect: It can be offered again. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"standing: npc <id> will trade".'
+- id: s22
+  title: AddOns list icon and pages
+  steps:
+  - id: cv.s22.1
+    title: Select Closest Vendor in the game's AddOns list on both clients
+    action:
+      kind: manual
+      text: Open the game's AddOns list (Menu > AddOns) on Classic Era and WoW Forever and select Closest
+        Vendor.
+    expect: The badge icon shows by the name; Restock, Navigation, Appearance, Advanced and About are
+      listed under it; selecting it shows Home. Press Pass.
+    verify:
+    - player
+  - id: cv.s22.2
+    title: Change Restock > Ammo in the AddOns list, then open settings
+    action:
+      kind: manual
+      text: In that list, change a value on Restock > Ammo, then type |cff99ccff/cvn settings|r.
+      commands:
+      - /cvn settings
+    expect: The changed value shows in the settings window. Press Pass.
+    verify:
+    - player
+- id: s23
+  title: Safe questions
+  steps:
+  - id: cv.s23.1
+    title: Leave the ammo question open and close the merchant
+    action:
+      kind: manual
+      text: 'Hunter, with ammo "ask first" on: open an ammo merchant, leave the question open and close
+        the merchant.'
+    expect: The question closes and nothing is bought. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"purchase dropped: the merchant window changed"'
+  - id: cv.s23.2
+    title: Leave the reagent question open and close the merchant
+    action:
+      kind: manual
+      text: 'Mage, with reagent "ask first" on: open a reagent merchant, leave the question open and close
+        the merchant.'
+    expect: The question closes and nothing is bought. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"purchase dropped: the merchant window changed"'
+  - id: cv.s23.3
+    title: With the ammo question open, cause a route question
+    action:
+      kind: manual
+      text: With the ammo question open, cause a route question.
+    expect: The route question does not replace the ammo question. Press Pass.
+    verify:
+    - player
+  - id: cv.s23.4
+    title: With gear below the threshold and full bags, answer No to repair
+    action:
+      kind: manual
+      text: With gear below the threshold and bags full, answer No to the repair question, or press Escape
+        on it.
+    expect: The sell question appears within a moment. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question declined: repair".'
+  - id: cv.s23.5
+    title: After that, wait a few minutes without repairing
+    action:
+      kind: manual
+      text: After that, wait a few minutes without repairing.
+    expect: The repair question is not asked again until you repair. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: no new "question shown" line for repair.
+  - id: cv.s23.6
+    title: Need repair with full bags where no repairer is known
+    action:
+      kind: manual
+      text: With bags full and repair needed, where no repairer is known on the continent.
+    expect: The sell question is asked. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"no known vendor for repair on this continent".'
+  - id: cv.s23.7
+    title: Die with gear just above the threshold so death drops it below
+    action:
+      kind: manual
+      text: Die with gear just above the threshold so death drops it below. Resurrect at the corpse or
+        a spirit healer.
+    expect: No question while dead or a ghost; the repair question appears once alive. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"trigger repair" appears only after the resurrection.'
+  - id: cv.s23.8
+    title: Repeat, but accept a resurrection from another player before releasing
+    action:
+      kind: manual
+      text: Repeat, but accept a resurrection from another player before releasing.
+    expect: The repair question appears once alive. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"trigger repair" appears after the resurrection.'
+  - id: cv.s23.9
+    title: With the sell question showing, drop gear below the threshold
+    action:
+      kind: manual
+      text: With the sell question showing, let gear drop below the threshold and answer No to repair.
+    expect: The sell question is asked again. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question declined: repair", then "question shown" for the sell.'
+  intro: Use |cff99ccff/cvn choice ask|r so questions show.
+- id: s24
+  title: Zone changes, hearth, partial merchants and standing
+  steps:
+  - id: cv.s24.1
+    title: With the sell question open, enter a dungeon
+    action:
+      kind: manual
+      text: With the sell question open, enter a dungeon.
+    expect: The question closes and nothing is asked inside. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question withdrawn: the player changed zone".'
+  - id: cv.s24.2
+    title: Leave that dungeon
+    action:
+      kind: manual
+      text: Leave that dungeon.
+    expect: The sell question is asked again. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: ..." for the sell.'
+  - id: cv.s24.3
+    title: With the repair question open, ride into the next zone
+    action:
+      kind: manual
+      text: With the repair question open, ride into the next zone.
+    expect: The question is asked again, naming the closest repairer of the new zone. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question withdrawn: the player changed zone", then "question shown: ..." for repair.'
+  - id: cv.s24.4
+    title: With a question open, start combat, then click Yes
+    action:
+      kind: manual
+      text: With a question open, start combat, then click Yes.
+    expect: The question stays and Yes still sets the waypoint. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <seller> via <provider>".'
+  - id: cv.s24.5
+    title: Set your hearthstone at an innkeeper, then walk into a dungeon
+    action:
+      kind: manual
+      text: Set your hearthstone at an innkeeper, then walk into a dungeon. Type |cff99ccff/cvn anchor
+        hearth|r and click a row.
+      commands:
+      - /cvn anchor hearth
+    expect: The row searches near the inn. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: '"hearthstone point learned: <inn>"; /cvn log names the inn as the hearthstone point.'
+    assertions:
+    - kind: log
+      source: debug
+      contains: /cvn log
+      diagnostic: true
+  - id: cv.s24.6
+    title: Decline an innkeeper bind, bind elsewhere, then click a row
+    action:
+      kind: manual
+      text: Optional. Talk to an innkeeper and decline the bind, then bind elsewhere without the addon
+        seeing it (or |cff99ccff/reload|r between). Enter a dungeon and click a row.
+      commands:
+      - /reload
+    expect: Dungeon searches use your last position outside. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reload: after_action
+    reviewer: /cvn log shows the new hearthstone point by name only.
+    assertions:
+    - kind: log
+      source: debug
+      contains: /cvn log
+      diagnostic: true
+  - id: cv.s24.7
+    title: After a fresh login, open a known ammo vendor straight away
+    action:
+      kind: manual
+      text: After a fresh login, open a known ammo vendor straight away.
+    expect: The vendor still counts as an ammo vendor. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"merchant window opened"; a "not fully loaded" line may show, with what was known kept.'
+  - id: cv.s24.8
+    title: Unfriendly with Steamwheedle, click a reagent row near Booty Bay
+    action:
+      kind: manual
+      text: Unfriendly with the Steamwheedle Cartel, target the Booty Bay auctioneer, turn on |cff99ccff/cvn
+        ah on|r, and click a reagent row nearby.
+      commands:
+      - /cvn ah on
+    expect: It does not route to that auctioneer. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"standing: npc <id> will not trade (Unfriendly or Hostile)".'
+- id: s25
+  title: Translated labels and the trainer probe
+  steps:
+  - id: cv.s25.1
+    title: On a non-English client, trigger the pet food question as a hunter
+    action:
+      kind: manual
+      text: 'Non-English client: as a hunter with a pet, trigger the pet food question.'
+    expect: The question names the diets in that language. Press Pass.
+    verify:
+    - player
+  - id: cv.s25.2
+    title: 'Non-English client: open the Reagents page'
+    action:
+      kind: manual
+      text: 'Non-English client: open the Reagents page.'
+    expect: The reagent checkboxes show the game's item names. Press Pass.
+    verify:
+    - player
+  - id: cv.s25.3
+    title: Open a profession trainer, then type /cvn log
+    action:
+      kind: manual
+      text: Open a profession trainer, then type |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: The trainer window shows its usual list, unchanged by the addon. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"trainer services: N listed; filters ..." and one "  service:" line per entry with level
+      and skill requirements.'
+- id: s26
+  title: Artisan without NorgannonDB
+  steps:
+  - id: cv.s26.1
+    title: Without NorgannonDB, change a skill with a profession at 215-225
+    action:
+      kind: manual
+      text: Without NorgannonDB, with a profession at 215-225 of 225 (level 35 or more), change a skill
+        or craft.
+    expect: No trainer question comes. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'no "question shown: trainer for <profession>" line.'
+  - id: cv.s26.2
+    title: Then click the profession row
+    action:
+      kind: manual
+      text: Then click the profession row.
+    expect: The row is not red; chat says Artisan is taught by only a few trainers and no waypoint is
+      set. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'no "question shown: trainer for <profession>" line.'
+  - id: cv.s26.3
+    title: With a profession at 145 of 150, change a skill or craft
+    action:
+      kind: manual
+      text: With a profession at 145 of 150 (level 20 or more), change a skill or craft.
+    expect: The trainer question still comes. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: trainer for <profession>".'
+- id: s27
+  title: Trainer tiers with NorgannonDB
+  steps:
+  - id: cv.s27.1
+    title: Type /cvn log
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: Nothing to see in game. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: the NorgannonDB line counts "trainers with a tier".
+  - id: cv.s27.2
+    title: At 145 of 150, change a skill near a Journeyman trainer
+    action:
+      kind: manual
+      text: At 145 of 150 (level 20+), near a Journeyman Blacksmith and further from an Expert or Artisan
+        Blacksmith, change a skill.
+    expect: The question names the Expert or Artisan Blacksmith, not the Journeyman. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: trainer for <profession>, <trainer> ...".'
+  - id: cv.s27.3
+    title: At 220 of 225 (level 35+), change a skill
+    action:
+      kind: manual
+      text: At 220 of 225 (level 35+), change a skill.
+    expect: The question names a Master trainer (for example Brikk Keencraft in Booty Bay for Blacksmithing).
+      Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: trainer for <profession>, <trainer> ...".'
+  - id: cv.s27.4
+    title: Then click the profession row
+    action:
+      kind: manual
+      text: Then click the profession row.
+    expect: The row is red and the click routes to that Master trainer. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"direct pin: ..."'
+  - id: cv.s27.5
+    title: 'Non-English client: trigger the trainer question'
+    action:
+      kind: manual
+      text: 'Non-English client: trigger the trainer question.'
+    expect: It uses the game's profession name and the trainer's localized name. Press Pass.
+    verify:
+    - player
+  - id: cv.s27.6
+    title: Disable NorgannonDB and /reload
+    action:
+      kind: manual
+      text: Disable NorgannonDB and |cff99ccff/reload|r.
+      commands:
+      - /reload
+    expect: The behavior from the Artisan without NorgannonDB section returns. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reload: after_action
+    reviewer: '"NorgannonDB: not found".'
+  intro: WoW Forever with NorgannonDB installed.
+- id: s28
+  title: Sound-pack sounds
+  steps:
+  - id: cv.s28.1
+    title: Without such an addon, open Appearance > Sound
+    action:
+      kind: manual
+      text: Without such an addon, open Appearance > Sound.
+    expect: Only Whisper ping, Minimap ping, Group invite, Ready check and None are listed. Press Pass.
+    verify:
+    - player
+  - id: cv.s28.2
+    title: With the pack, open Appearance > Sound and choose a pack sound
+    action:
+      kind: manual
+      text: With the pack, open Appearance > Sound and choose a pack sound.
+    expect: Pack sounds follow the built-in ones, each marked "(sound pack)"; choosing one plays it. Press
+      Pass.
+    verify:
+    - player
+  - id: cv.s28.3
+    title: Type /cvn sound <name> with a pack sound name in lower case
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn sound <name>|r with a pack sound name in lower case.
+      commands:
+      - /cvn sound <name>
+    expect: The pack sound is chosen. Press Pass.
+    verify:
+    - player
+  - id: cv.s28.4
+    title: Type /cvn sound banana
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn sound banana|r.
+      commands:
+      - /cvn sound banana
+    expect: Chat lists the choices with a count of pack sounds. Press Pass.
+    verify:
+    - player
+  - id: cv.s28.5
+    title: Type /cvn test remind
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn test remind|r.
+      commands:
+      - /cvn test remind
+    expect: The chosen sound plays. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"test command: remind".'
+  - id: cv.s28.6
+    title: Disable the pack, then reload
+    action:
+      kind: manual
+      text: Disable the pack, then |cff99ccff/reload|r.
+      commands:
+      - /reload
+    expect: After the reload, the Sound tab still shows the chosen name. Press Pass.
+    verify:
+    - player
+    reload: after_action
+  - id: cv.s28.7
+    title: Type /cvn test remind with the pack off
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn test remind|r.
+      commands:
+      - /cvn test remind
+    expect: The whisper ping plays. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"test command: remind".'
+  - id: cv.s28.8
+    title: Enable the pack, then reload
+    action:
+      kind: manual
+      text: Enable the pack, then |cff99ccff/reload|r.
+      commands:
+      - /reload
+    expect: After the reload, the Sound tab shows the chosen name. Press Pass.
+    verify:
+    - player
+    reload: after_action
+  - id: cv.s28.9
+    title: Type /cvn test remind with the pack on
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn test remind|r.
+      commands:
+      - /cvn test remind
+    expect: The chosen sound plays again. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"test command: remind".'
+  intro: Needs any addon that shares sounds, for example a SharedMedia pack.
+- id: s29
+  title: About page
+  steps:
+  - id: cv.s29.1
+    title: Open About
+    action:
+      kind: manual
+      text: Open About.
+    expect: About shows the name, version and purpose sentence and no command list. Press Pass.
+    verify:
+    - player
+  - id: cv.s29.2
+    title: Type /cvn help
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn help|r.
+      commands:
+      - /cvn help
+    expect: Help lists the commands. Press Pass.
+    verify:
+    - player
+- id: s30
+  title: Other sellers
+  steps:
+  - id: cv.s30.1
+    title: Type /cvn hud row durability always and hover the row arrow
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn hud row durability always|r. Hover the arrow at the right end of the durability
+        row.
+      commands:
+      - /cvn hud row durability always
+    expect: The tooltip says "Other repair vendors". Press Pass.
+    verify:
+    - player
+  - id: cv.s30.2
+    title: Click that arrow
+    action:
+      kind: manual
+      text: Click that arrow.
+    expect: A menu opens at the arrow with the first entry marked and up to three more with zone and yards;
+      the waypoint does not change. Press Pass.
+    verify:
+    - player
+  - id: cv.s30.3
+    title: Pick the second entry
+    action:
+      kind: manual
+      text: Pick the second entry.
+    expect: The menu closes, the waypoint moves there and chat says "Navigating to ...". Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"chosen pin: <kind>, <seller>".'
+  - id: cv.s30.4
+    title: Open the menu again and press Escape
+    action:
+      kind: manual
+      text: Open the menu again and press Escape.
+    expect: The menu closes and the waypoint stays. Press Pass.
+    verify:
+    - player
+  - id: cv.s30.5
+    title: Click the row outside the arrow
+    action:
+      kind: manual
+      text: Click the row outside the arrow.
+    expect: The waypoint goes to the marked seller. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"direct pin: <kind>".'
+  - id: cv.s30.6
+    title: Shrink the window to its smallest with a low row showing
+    action:
+      kind: manual
+      text: Shrink the window to its smallest (scale 50%, short rows) with a low row showing.
+    expect: The arrow does not cover the text and looks right. Press Pass.
+    verify:
+    - player
+  - id: cv.s30.7
+    title: With the window unlocked, Shift-click and drag from the arrow
+    action:
+      kind: manual
+      text: With the window unlocked, Shift-click and drag from the arrow.
+    expect: Shift-click does nothing and the drag does not move the window. Press Pass.
+    verify:
+    - player
+  - id: cv.s30.8
+    title: Lock the window and click the arrow
+    action:
+      kind: manual
+      text: Lock the window and click the arrow.
+    expect: The arrow still opens the menu. Press Pass.
+    verify:
+    - player
+  - id: cv.s30.9
+    title: Look at a row with only one known seller
+    action:
+      kind: manual
+      text: Look at a row with only one known seller.
+    expect: It has no arrow. Press Pass.
+    verify:
+    - player
+  - id: cv.s30.10
+    title: In a contested zone with both camps, open the menu
+    action:
+      kind: manual
+      text: In a contested zone with an Alliance and a Horde camp (for example Stranglethorn Vale), open
+        the menu.
+    expect: None of the other faction is listed. Press Pass.
+    verify:
+    - player
+  - id: cv.s30.11
+    title: As a Hunter, type /cvn ah on and pick an auctioneer from the menu
+    action:
+      kind: manual
+      text: Hunter. Type |cff99ccff/cvn ah on|r, open the ammo row menu and pick an auctioneer.
+      commands:
+      - /cvn ah on
+    expect: The list can show one auctioneer; picking it says "at the auction house". Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"chosen pin: ..." for the pick.'
+  - id: cv.s30.12
+    title: Open the menu of a profession row near its cap
+    action:
+      kind: manual
+      text: Open the menu of a profession row near its cap.
+    expect: The list shows only trainers that teach the next tier. Press Pass.
+    verify:
+    - player
+  intro: Any level; Stormwind or Orgrimmar has several repair vendors. Run on Classic Era and WoW Forever.
+- id: s31
+  title: Merchant purchases
+  steps:
+  - id: cv.s31.1
+    title: As a Hunter with asking on, buy arrows by hand, then click Yes
+    action:
+      kind: manual
+      text: Hunter, ammo buying on, "ask first" on (|cff99ccff/cvn buy ask|r). Open an arrow vendor, buy
+        some arrows by hand, then click Yes.
+      commands:
+      - /cvn buy ask
+    expect: It buys only the room left, and chat names that amount. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: ..." plan line, then no "nothing left to buy".'
+  - id: cv.s31.2
+    title: Repeat, but fill the quiver by hand before Yes
+    action:
+      kind: manual
+      text: Repeat, but fill the quiver by hand before Yes.
+    expect: Nothing is bought and chat has no "Bought" line. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: nothing left to buy".'
+  - id: cv.s31.3
+    title: As a Mage with reagent buying on, buy some by hand, then click Yes
+    action:
+      kind: manual
+      text: Mage, reagent buying on, asking on, amount 20 (|cff99ccff/cvn reagentbuy on|r, |cff99ccff/cvn
+        reagentbuy 20|r). Open a reagent vendor, buy some by hand, then click Yes.
+      commands:
+      - /cvn reagentbuy on
+      - /cvn reagentbuy 20
+    expect: It buys only what brings you to 20. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: target 20, ... plan: ...".'
+  - id: cv.s31.4
+    title: As a Hunter with asking off, open an arrow vendor
+    action:
+      kind: manual
+      text: Hunter, asking off (|cff99ccff/cvn buy auto|r). Open an arrow vendor.
+      commands:
+      - /cvn buy auto
+    expect: Arrows are bought without a question. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"ammo buy: ..." plan line.'
+  - id: cv.s31.5
+    title: As a Mage with asking off, open a reagent vendor
+    action:
+      kind: manual
+      text: Mage, asking off (|cff99ccff/cvn reagentbuy auto|r). Open a reagent vendor.
+      commands:
+      - /cvn reagentbuy auto
+    expect: Reagents are bought without a question. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"reagent buy: ..." plan line.'
+  - id: cv.s31.6
+    title: 'Optional: open an unvisited arrow vendor after a fresh login'
+    action:
+      kind: manual
+      text: Optional (hard to cause). Hunter, |cff99ccff/cvn arrows best|r, right after a fresh login,
+        open an arrow vendor you have not visited this session, with nothing in the ammo slot.
+      commands:
+      - /cvn arrows best
+    expect: One purchase happens. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: 'no "ammo buy: merchant sells no" line before it.'
+  intro: Needs a hunter with a quiver and a class with reagents (for example a mage). Run on Classic Era
+    and WoW Forever.
+- id: s32
+  title: Warning flow
+  steps:
+  - id: cv.s32.1
+    title: With the repair question open, click a low reagent or food row
+    action:
+      kind: manual
+      text: With the repair question open, click a low reagent or food row in the status window.
+    expect: The repair question closes and the row's vendor is pinned. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"direct pin: ..."'
+  - id: cv.s32.2
+    title: Open a vendor's window afterward
+    action:
+      kind: manual
+      text: Open a vendor's window afterward.
+    expect: The repair question comes back. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question shown: repair".'
+  - id: cv.s32.3
+    title: With the repair question open, click a row that is not low
+    action:
+      kind: manual
+      text: With the repair question open, click a row that is not low.
+    expect: That vendor is pinned and the repair question comes back at the next check. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"direct pin: ..."'
+  - id: cv.s32.4
+    title: Then move an item in your bags and answer No to the repair question
+    action:
+      kind: manual
+      text: Then move an item in your bags and answer No to the repair question.
+    expect: The next low warning is asked. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question declined: repair".'
+  - id: cv.s32.5
+    title: 'Optional: with the trainer question open near the cap, enter a dungeon'
+    action:
+      kind: manual
+      text: Optional. With a profession near its cap (|cff99ccff/cvn trade 300|r, then craft once) and
+        the trainer question open, enter a dungeon.
+      commands:
+      - /cvn trade 300
+    expect: The question closes. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question withdrawn: the player changed zone".'
+  - id: cv.s32.6
+    title: 'Hunter with ammo and repair questions open: answer No to both'
+    action:
+      kind: manual
+      text: 'Hunter with bags full and ammo low and the ammo question open: wear gear below the durability
+        threshold. Answer No to repair, then No to ammo.'
+    expect: The repair question replaces the ammo question; then the sell question comes. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"question declined: repair", "question declined: ammo", then "question shown" for the sell.'
+  - id: cv.s32.7
+    title: 'Hunter with low arrows and bullets: equip a gun'
+    action:
+      kind: manual
+      text: 'Hunter with low arrows and low bullets, arrow question open or arrow vendor pinned: equip
+        a gun.'
+    expect: The arrow question or pin ends and the bullet question is asked. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"request released: ..." then "question shown: ..." for bullets.'
+  - id: cv.s32.8
+    title: Call a pet that does not eat meat while a meat vendor is pinned
+    action:
+      kind: manual
+      text: 'Hunter with low pet food and a meat vendor pinned: call a pet that does not eat meat.'
+    expect: The meat pin ends and a vendor for the new pet's food is asked. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"request released: ..." then "question shown: ..." for the new food.'
+  intro: Use |cff99ccff/cvn choice ask|r so questions show. Lower a threshold or wear gear down to make
+    a warning fire.
+- id: s33
+  title: Places and waypoints
+  steps:
+  - id: cv.s33.1
+    title: Bind your hearthstone again at your current inn
+    action:
+      kind: manual
+      text: 'Classic Era and WoW Forever. Setup: your hearthstone is already bound to an inn; stand at
+        that inn''s innkeeper. Bind your hearthstone there again.'
+    expect: Nothing changes on screen. The reviewer confirms this from the log. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: 'hearth has continent, x and y; log has "hearthstone point learned: <inn>".'
+    assertions:
+    - kind: log
+      source: debug
+      contains: hearth
+      diagnostic: true
+    - kind: log
+      source: debug
+      contains: continent
+      diagnostic: true
+  - id: cv.s33.2
+    title: Put your own waypoint on the map and run the demo
+    action:
+      kind: manual
+      text: 'WoW Forever only (Classic Era has no game waypoint). First put your own waypoint on the map.
+        Then type |cff99ccff/cvn nav native|r (needed when TomTom or WaypointUI is installed) and |cff99ccff/cvn
+        demo|r, and wait about a minute for the tour to end.'
+      commands:
+      - /cvn nav native
+      - /cvn demo
+    expect: Your waypoint is on the map again, where you put it. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"demo: your game waypoint restored, not tracked".'
+    notes: After the check, set the waypoint method back to your usual choice.
+    clients:
+    - forever-camelot
+  - id: cv.s33.3
+    title: 'Optional: click a profession row, then unlearn the profession'
+    action:
+      kind: manual
+      text: 'Optional, on an alt only (unlearning loses the skill). Setup: the alt has a profession and
+        the addon knows a trainer for it; the status window shows the profession row (|cff99ccff/cvn hud
+        row professions always|r). Click the profession row to set a waypoint to the trainer, then unlearn
+        that profession.'
+      commands:
+      - /cvn hud row professions always
+    expect: The trainer waypoint goes away. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"trainer waypoint cleared: <profession> was unlearned".'
+  intro: 'The reviewer reads |cff99ccffClosestVendorCharDB|r in |cff99ccffWTF/Account/<account>/<realm>/<character>/SavedVariables/ClosestVendor.lua|r.
+    No in-game check, unit tests only: the seller list that changes before you pick, a tracked game waypoint
+    after the demo, a game waypoint the game refuses, and the failed timer.'
+- id: s34
+  title: Patches 1.9.4 and 1.9.5
+  steps:
+  - id: cv.s34.1
+    title: Type /cvn settings status-window
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn settings status-window|r.
+      commands:
+      - /cvn settings status-window
+    expect: The settings window opens on Appearance, on the Status window tab. Press Pass.
+    verify:
+    - player
+  - id: cv.s34.2
+    title: Type /cvn settings notifications
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn settings notifications|r.
+      commands:
+      - /cvn settings notifications
+    expect: The settings window opens on Appearance, on the Notifications tab. Press Pass.
+    verify:
+    - player
+  - id: cv.s34.3
+    title: Play for two minutes with gear that wears, then show the log
+    action:
+      kind: manual
+      text: Play for two minutes with gear that wears (fight or wait for a durability tick), then type
+        |cff99ccff/cvn log|r.
+      commands:
+      - /cvn log
+    expect: The report is short and readable, with no line for each durability event. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"gear events: N folded into one check" lines.'
+  - id: cv.s34.4
+    title: After the /reload at the end
+    action:
+      kind: manual
+      text: After the |cff99ccff/reload|r at the end.
+      commands:
+      - /reload
+    expect: Nothing to see in game. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reload: after_action
+    reviewer: ClosestVendorDB has no hearth, lastOutside, professions or log key.
+    assertions:
+    - kind: log
+      source: debug
+      contains: ClosestVendorDB
+      diagnostic: true
+    - kind: log
+      source: debug
+      contains: hearth
+      diagnostic: true
+    - kind: log
+      source: debug
+      contains: lastOutside
+      diagnostic: true
+    - kind: log
+      source: debug
+      contains: professions
+      diagnostic: true
+  - id: cv.s34.5
+    title: Bind your hearthstone at a new inn, then reload at once
+    action:
+      kind: manual
+      text: 'Classic Era only. Setup: bind your hearthstone at an inn you are not bound to, then type
+        |cff99ccff/reload|r at once.'
+      commands:
+      - /reload
+    expect: Nothing changes on screen. The reviewer confirms this from the saved file. Press Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reload: after_action
+    reviewer: ClosestVendorCharDB.hearth has x and y for that inn.
+    assertions:
+    - kind: log
+      source: debug
+      contains: ClosestVendorCharDB.hearth
+      diagnostic: true
+    clients:
+    - classic-era
+  - id: cv.s34.6
+    title: Open a merchant while low durability gear wears
+    action:
+      kind: manual
+      text: Low durability on gear that wears (or wait for a tick). Open a merchant at the same moment.
+    expect: No repair question stays on screen. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"merchant window opened" comes before any "trigger" line for repair.'
+  intro: 'The reviewer reads |cff99ccffClosestVendorCharDB|r and |cff99ccffClosestVendorDB|r in |cff99ccffWTF/Account/<account>/<realm>/<character>/SavedVariables/ClosestVendor.lua|r.
+    No in-game check, unit tests only: the demo with an unreadable waypoint or a waypoint near a demo
+    pin, the reagent names in another game language, the Unfriendly NorgannonDB trainer, the vendor and
+    auctioneer tie in whole yards, the player waypoint next to the addon''s, the demo with an unreadable
+    waypoint or a failed timer, and Move (Done, Cancel, lock).'
+- id: s35
+  title: Find supplies
+  steps:
+  - id: cv.s35.1
+    title: Type /cvn find zzzz
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn find zzzz|r.
+      commands:
+      - /cvn find zzzz
+    expect: Chat says no supply item matches zzzz, and no menu opens. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"find: no item matches".'
+  - id: cv.s35.2
+    title: Type /cvn find with part of a drink name and pick one
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn find|r and part of a drink's name, for example |cff99ccff/cvn find juice|r.
+        If a menu of items opens, pick one drink.
+      commands:
+      - /cvn find
+      - /cvn find juice
+    expect: Chat says the sellers sell drink in general. A list opens at the mouse with the nearest seller
+      marked, each with zone and distance. Your waypoint has not changed. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"find: <item> looked up as drink" and "find: seller list for <item>".'
+  - id: cv.s35.3
+    title: In that list, pick a seller
+    action:
+      kind: manual
+      text: In that list, pick a seller.
+    expect: A waypoint is set to that seller and chat names it. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"accepted: <seller> via <provider>".'
+  - id: cv.s35.4
+    title: Repeat the search, then press Escape with the list open
+    action:
+      kind: manual
+      text: Repeat the search, then press Escape with the list open.
+    expect: The list closes and the waypoint stays where it was. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: no new "accepted:" line.
+  - id: cv.s35.5
+    title: Mage only. Type /cvn find rune of teleportation
+    action:
+      kind: manual
+      text: Mage only. Type |cff99ccff/cvn find rune of teleportation|r.
+      commands:
+      - /cvn find rune of teleportation
+    expect: Chat says the sellers of that rune are listed, and a list opens with no "sell drink in general"
+      note. Press Pass.
+    verify:
+    - player
+    - reviewer
+    reviewer: '"find: seller list for Rune of Teleportation".'
+  - id: cv.s35.6
+    title: Type a drink name in Find supplies at the end of Home
+    action:
+      kind: manual
+      text: Type |cff99ccff/cvn settings|r, type a drink name in |cffffd100Find supplies|r at the end
+        of Home, press Okay.
+      commands:
+      - /cvn settings
+    expect: The same menu opens as for the command. Closing the settings window changes no setting. Press
+      Pass.
+    verify:
+    - player
+    - reviewer
+    - assertions
+    reviewer: '"find:" lines as for the command; ClosestVendorCharDB has no new setting.'
+    assertions:
+    - kind: log
+      source: debug
+      contains: ClosestVendorCharDB
+      diagnostic: true
+  intro: 'Use a character that knows a vendor that sells drink (any class) and, for the reagent check,
+    a mage. No in-game check, unit tests only: more than 8 matching items (chat asks for more of the name;
+    it needs nine cached names), a seller of the wrong pet diet leaving the pet warning open, a pick ending
+    a running demo, a reagent found by its game-language name, no menu control on the client (chat names
+    the nearest seller), the search from the hearthstone point in an instance, an item the client has
+    not named yet found by link, and the other faction''s sellers.'

@@ -9,6 +9,20 @@ test-lua:
 test-py:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'test_*.py' -v
 
+.PHONY: plan
+# The in-game test plan, checked with the installed CheckThat tools (AGENTS.md, CheckThat). make test and
+# make check never need them.
+CT ?= ct
+PLAN ?= plans/closestvendor.yaml
+plan:
+	@command -v "$(CT)" >/dev/null 2>&1 || { echo "plan: no CheckThat tools ($(CT) not found); install them with make install-skill BIN_DIR=\$$HOME/bin in CheckThat, or set CT=<path to ct>" >&2; exit 1; }
+	@mkdir -p build
+	@"$(CT)" validate $(PLAN)
+	@"$(CT)" compile $(PLAN) -o build/closestvendor.ct
+	@"$(CT)" replay-flow $(PLAN)
+	@"$(CT)" lines $(PLAN) --addon-src ClosestVendor
+	@"$(CT)" offline $(PLAN)
+
 .PHONY: check
 # The same checks the release workflow runs.
 check:

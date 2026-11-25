@@ -649,6 +649,7 @@ local function reportText()
     }
     header[#header + 1] = "presentation scope: This character; style " .. tostring(c.notificationStyle) .. "; sample " .. tostring(sampleKind or "off")
     header[#header + 1] = ("toast: background %s%%, text/icons %s%%, scale %s%%, position %s/%s/%s/%s"):format(tostring(c.toastAlpha),tostring(c.toastTextAlpha),tostring(c.toastScale),tostring(CHAR.toast.point),tostring(CHAR.toast.relPoint),tostring(CHAR.toast.x),tostring(CHAR.toast.y))
+    header[#header + 1] = "CheckThat: " .. (ns.CheckThat and ns.CheckThat.Status() or "not detected")
     header[#header + 1] = "Move: hud " .. tostring(tracker and tracker.Move and tracker.Move.active or false) .. ", toast " .. tostring(toast and toast.Move.active or false)
     return ns.Log.Report(header, log.Entries(), log.Enabled()), header
 end
@@ -755,6 +756,13 @@ local function start()
         if target then pcall(target.Reset) end
     end
     touchWindow()
+    -- Last, and guarded: a fault in the test-runner integration never stops the addon from starting.
+    local CT = ns.CheckThat
+    if CT then
+        local ok, err = pcall(CT.Start, { cfg = function() return CHAR.cfg end, version = A.addonVersion,
+            log = function(msg) log.Add(msg) end })
+        if not ok then pcall(CT.Fail, "Start: " .. tostring(err)) end
+    end
 end
 
 SLASH_CLOSESTVENDOR1 = "/cvn"
@@ -770,8 +778,10 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
         return
     end
     if action and action[1] == "debug" then
+        -- The off line is written before the log stops, so both directions are recorded.
+        if not action[2] then log.Add("debug log turned off") end
         log.SetEnabled(action[2])
-        log.Add(action[2] and "debug log turned on" or "debug log turned off")
+        if action[2] then log.Add("debug log turned on") end
         return
     end
     if action and action[1] == "log" then

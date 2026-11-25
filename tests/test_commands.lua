@@ -570,4 +570,30 @@ eq(has(M.Run(fresh(), "help"), "/cvn food <count>"), true, "help lists the thres
 eq(has(M.Run(fresh(), "help"), "/cvn test food, water, petfood"), true, "help lists the tests")
 for _, line in ipairs(M.Run(fresh(), "help")) do eq(line:find("|", 1, true), nil, "no raw | in help") end
 
+do -- #60: /cvn set with a missing, fractional, unknown or out-of-range value is explained and changes nothing
+    local ns2 = H.locale({})
+    for _, name in ipairs({ "Status", "Reagents", "Supplies", "Nav", "Presentation", "Move", "Commands" }) do
+        assert(loadfile("ClosestVendor/" .. name .. ".lua"))("ClosestVendor", ns2)
+    end
+    local C2, P2 = ns2.Commands, ns2.Presentation
+    local cs = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, tradeThreshold = 10, reagentThreshold = 5,
+        hudAlpha = 43, hudTextAlpha = 38, hudScale = 150, hudColor = "123456", autoNotice = false, hudRow = {} }
+    P2.Migrate(cs)
+    local function saved() local t = {} for k, v in pairs(cs) do t[#t + 1] = k .. "=" .. tostring(v) end table.sort(t) return table.concat(t, ";") end
+    local before = saved()
+    for _, case in ipairs({ { "set", "Use /cvn help appearance for supported setting keys." },
+            { "set bags.threshold", "Use /cvn set bags.threshold" },
+            { "set bags.threshold 2.5", "Use /cvn set bags.threshold" },
+            { "set bags.threshold 201", "Use /cvn set bags.threshold" },
+            { "set bags.threshold -1", "Use /cvn set bags.threshold" },
+            { "set unknown.key 3", "Use /cvn help appearance for supported setting keys." } }) do
+        local out, action = C2.Run(cs, case[1])
+        eq(has(out, case[2]), true, case[1] .. ": chat explains: " .. table.concat(out, " | "))
+        eq(action and action[1], "read", case[1] .. ": nothing to refresh")
+        eq(saved(), before, case[1] .. ": no setting changes")
+    end
+    C2.Run(cs, "set bags.threshold 200")
+    eq(cs.bagThreshold, 200, "the top of the range is accepted")
+end
+
 H.done()

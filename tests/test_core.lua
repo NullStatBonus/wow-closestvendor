@@ -123,6 +123,7 @@ local function boot(opts)
         ClosestVendorDB = opts.db,
         NorgannonDB = opts.ng,
         ClosestVendorCharDB = opts.charDb,
+        CheckThat = opts.checkThat,
     }
     if opts.tomtom then
         env.TomTom = { AddWaypoint = function(_, map, x, y, o) g.tomtom[#g.tomtom + 1] = o.title; return {} end,
@@ -139,7 +140,7 @@ local function boot(opts)
     env._G = env
 
     local ns = {}
-    for _, f in ipairs({ "Locales/enUS", "Triggers", "Ammo", "Professions", "Reagents", "Supplies", "Status", "Adapter", "Search", "Discovery", "Nav", "Controller", "Presentation", "Move", "Toast", "Commands", "Options", "Log", "Report", "Tracker" }) do
+    for _, f in ipairs({ "Locales/enUS", "Triggers", "Ammo", "Professions", "Reagents", "Supplies", "Status", "Adapter", "Search", "Discovery", "Nav", "Controller", "Presentation", "Move", "Toast", "Commands", "Options", "Log", "Report", "Tracker", "CheckThat" }) do
         setmetatable(ns, nil)
         local chunk = assert(loadfile("ClosestVendor/" .. f .. ".lua"))
         setfenv(chunk, env)
@@ -914,6 +915,44 @@ g.env.SlashCmdList.CLOSESTVENDOR("log")
 for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then win = f end end
 eq(has(win.box.text, "Debug log: off (turn it on with /cvn debug on"), true, "log off: report says how to turn it on")
 eq(has(win.box.text, "addon version: 0.1.0"), true, "log off: still has the facts")
+
+-- The report names the CheckThat status (spec checkthat-integration); without CheckThat it is "not detected".
+eq(has(win.box.text, "CheckThat: not detected"), true, "report: CheckThat not detected")
+
+-- With CheckThat loaded, the entries register once at login and the report says it works.
+do
+    local stored = {}
+    local ct = { Entry = function(addon, name, fn) stored[#stored + 1] = addon .. "." .. name; return true end }
+    g = boot({ checkThat = ct }); login(g)
+    eq(table.concat(stored, ","), "ClosestVendor.version,ClosestVendor.setting,ClosestVendor.integration", "entries registered at login")
+    g.env.SlashCmdList.CLOSESTVENDOR("log")
+    for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then win = f end end
+    eq(has(win.box.text, "CheckThat: working"), true, "report: CheckThat working")
+    -- A CheckThat that raises turns the integration off; the addon still starts and the report says why.
+    g = boot({ checkThat = { Entry = function() error("entry broke", 0) end } }); login(g)
+    g.env.SlashCmdList.CLOSESTVENDOR("log")
+    for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then win = f end end
+    eq(has(win.box.text, "CheckThat: failed: Entry: entry broke"), true, "report: CheckThat failed with the reason, log off")
+    eq(has(win.box.text, "Debug log: off"), true, "the failure shows with the debug log off")
+    -- Start itself raising: start() has already done its work (vendors bucketed), and the report says why.
+    g = boot()
+    g.ns.CheckThat.Start = function() error("start broke", 0) end
+    login(g)
+    g.env.SlashCmdList.CLOSESTVENDOR("log")
+    for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then win = f end end
+    eq(has(win.box.text, "CheckThat: failed: Start: start broke"), true, "report: Start raising is a failure")
+    eq(has(win.box.text, "per continent: 1:6"), true, "start() finished its work before the integration")
+end
+
+-- The debug log records both toggles: the off line is written before the log stops.
+g = boot(); login(g)
+g.env.SlashCmdList.CLOSESTVENDOR("debug on")
+g.env.SlashCmdList.CLOSESTVENDOR("debug off")
+do
+    local e = g.env.ClosestVendorCharDB.log.entries
+    eq(e[#e].msg, "debug log turned off", "debug off: its line is the last one recorded")
+    eq(e[#e - 1].msg, "debug log turned on", "debug on: its line is recorded")
+end
 
 -- Navigation shown in the report follows what is installed.
 g = boot({ tomtom = true }); login(g)

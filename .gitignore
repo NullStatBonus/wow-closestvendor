@@ -9,6 +9,10 @@ tools/.cache/
 # Local notes and assistant files
 .claude/
 
+# CheckThat: make plan output and collected runs (never committed)
+build/
+evidence/
+
 # Python
 __pycache__/
 *.pyc
