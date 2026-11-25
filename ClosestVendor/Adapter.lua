@@ -684,9 +684,14 @@ function A.merchantItemId(index)
     return type(link) == "string" and tonumber(link:match("item:(%d+)")) or nil
 end
 
+-- Returns true when the game took the call, nil when the function is missing or raised. The game may
+-- still refuse the purchase without raising (no money, bags full); the bag and money reads show that.
 function A.buyMerchantItem(index, quantity)
-    if quantity then call("BuyMerchantItem", BuyMerchantItem, index, quantity)
-    else call("BuyMerchantItem", BuyMerchantItem, index) end
+    if type(BuyMerchantItem) ~= "function" then fail("BuyMerchantItem", "missing") return end
+    local ok, err
+    if quantity then ok, err = pcall(BuyMerchantItem, index, quantity) else ok, err = pcall(BuyMerchantItem, index) end
+    if not ok then fail("BuyMerchantItem", err) return end
+    return true
 end
 
 -- Buying reagents -------------------------------------------------------------------------------

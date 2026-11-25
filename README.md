@@ -503,6 +503,9 @@ The legacy `test` commands are live integration tests: accepting a question can 
 - Opening any vendor window clears the pin.
 - `/cvn reagent on|off <name>` accepts the English name or the name your game shows. `/cvn reagents` prints the game's name once the game has loaded the item. Matching ignores case for A-Z, Latin accented letters and Cyrillic.
 - `/cvn debug on` turns on the debug log. It records decisions and failures. Durability and inventory events are not logged one by one: one line, "gear events: N folded into one check", gives the count.
+  - A warning that waits names its reason once, for example "trigger held in combat: repair", "trigger held while dead: repair" or "trigger held in an instance: sell". Inside an instance the reason stays "in an instance", also during a fight there. Dead during a fight is "while dead".
+  - Each change of the ammo the addon watches is logged once: "ammo watched: arrow", or "ammo not watched: ..." for a thrown weapon, a wand, no ranged weapon or the ammo warning turned off.
+  - Closing a merchant with a purchase question open logs "purchase question closed with the merchant: ammo" (or "reagents"). Each purchase logs what it bought: only the purchases the game took, with a "FAILED:" line for any that did not go through. A merchant window that closes an open vendor question logs "question closed: merchant opened (sell)" (or the question's kind).
 - `/cvn debug off` turns it off.
 - `/cvn log` shows a report that you can copy.
 - `/cvn log clear` asks for confirmation before clearing diagnostic entries only. Cancel keeps everything.

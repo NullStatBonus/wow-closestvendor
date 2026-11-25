@@ -31,6 +31,25 @@ While the log is on, the addon SHALL record the game events it reacts to (except
 - **WHEN** a guarded game call fails
 - **THEN** the failing call and its error text are recorded, once per kind of failure
 
+### Requirement: Warning decisions are recorded
+While the log is on, the addon SHALL record each warning decision a test plan checks, once per change so bursts do not fill the log: a request held back (in an instance, while dead, in combat, in that order), a vendor question closed because the merchant window opened, a purchase question closed with the merchant, the ammo it watches (or why none), and what a purchase bought. A failed purchase call, or a question still shown after the addon tried to close it, is recorded with `FAILED:`.
+
+#### Scenario: Held in combat
+- **WHEN** bags are nearly full while the player is in combat
+- **THEN** one line `trigger held in combat: sell` is recorded, not one per bag event
+
+#### Scenario: Dead and in combat
+- **WHEN** a request is held while the player is dead and in combat
+- **THEN** the line names death: `trigger held while dead: <kind>`
+
+#### Scenario: Question closed by the merchant
+- **WHEN** a sell question is open and the player opens a merchant
+- **THEN** `question closed: merchant opened (sell)` is recorded once the question is gone; an open trainer question stays and writes nothing
+
+#### Scenario: Purchase
+- **WHEN** an ammo purchase goes through for some batches and a game call fails for another
+- **THEN** the bought line counts only the batches the game took, and the failure is recorded with `FAILED:`
+
 ### Requirement: Copyable report
 `/cvn log` SHALL show a report that can be selected and copied, containing the addon version, client interface and build, locale, the waypoint method in use and the chosen preference, vendor counts, current settings, the CheckThat status (`working`, `not detected`, `too old` or `failed: <why>`), and the recorded entries. If a window cannot be created, it SHALL print the most recent entries to chat.
 

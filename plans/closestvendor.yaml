@@ -5,6 +5,9 @@ title: ClosestVendor in-game test plan
 preamble: 'These checks cover what the automated tests cannot check: the real game.
 
 
+  Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults.
+
+
   Run them on WoW Forever. Run them on Classic Era when you can.
 
 
@@ -75,6 +78,11 @@ offline:
       args:
       - no.such.key
     returns: []
+  - label: No warning request is open after login, so the active entry returns nothing
+    call:
+      addon: ClosestVendor
+      entry: active
+    returns: []
 sections:
 - id: s0
   title: Setup
@@ -85,7 +93,7 @@ sections:
     action:
       kind: manual
       text: CheckThat reads the ClosestVendor version.
-    expect: The ClosestVendor version is 1.11.0 or newer. If the step fails, copy ClosestVendor 1.11.0
+    expect: The ClosestVendor version is 1.11.1 or newer. If the step fails, copy ClosestVendor 1.11.1
       into the game again.
     verify:
     - assertions
@@ -99,9 +107,9 @@ sections:
       addon: ClosestVendor
       key: entry.version
       op: ge
-      value: 11100
-      label: ClosestVendor is 1.11.0 or newer
-    notes: The entry returns major*10000 + minor*100 + patch, so 1.11.0 is 11100. It reads a fact, not
+      value: 11101
+      label: ClosestVendor is 1.11.1 or newer
+    notes: The entry returns major*10000 + minor*100 + patch, so 1.11.1 is 11101. It reads a fact, not
       the debug log, so it runs before debug logging is on. CheckThat too old to offer entries leaves
       this step unverified.
   - id: cv.s0.2
@@ -278,6 +286,21 @@ sections:
     expect: The settings stay. Press Pass.
     verify:
     - player
+  - id: cv.s1.13
+    title: Set the default thresholds back
+    action:
+      kind: manual
+      text: 'Press Run to type the default thresholds back: |cff99ccff/cvn bags 2|r, |cff99ccff/cvn dur 20|r, |cff99ccff/cvn ammo 200|r and |cff99ccff/cvn trade 10|r. Set back any other setting you changed in checks 5, 11 and 12.'
+      commands:
+      - /cvn bags 2
+      - /cvn dur 20
+      - /cvn ammo 200
+      - /cvn trade 10
+    expect: Chat shows the default thresholds. Press Pass.
+    verify:
+    - player
+    notes: 'Player step. Cleanup: check 6 set the ammo threshold to 500, and checks 5, 11 and 12 change settings the tester picks. Nothing to log.'
+  intro: Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults.
 - id: s2
   title: The question
   steps:
@@ -292,13 +315,18 @@ sections:
     verify:
     - player
     - assertions
-    - reviewer
     assertions:
     - kind: log
       source: debug
       contains: 'test command: sell'
-    reviewer: 'The log has "test command: sell". The original plan also expected "reminder: test", but
-      Controller.lua logs that line only for "/cvn test remind", so it is not asserted here.'
+      scope: attempt
+      label: The sell test ran
+    - kind: log
+      source: debug
+      contains: 'question shown: sell, '
+      scope: attempt
+      label: The sell question was asked
+    notes: 'Player step. Drawing: the dialog text (vendor name and zone). The log proves the test ran and found a vendor. The original plan also expected "reminder: test", but Controller.lua logs that line only for /cvn test remind, so it is not asserted.'
   - id: cv.s2.2
     title: Enter /cvn test repair
     action:
@@ -309,8 +337,19 @@ sections:
     expect: A question shows a vendor name and a zone. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"test command: repair".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'test command: repair'
+      scope: attempt
+      label: The repair test ran
+    - kind: log
+      source: debug
+      contains: 'question shown: repair, '
+      scope: attempt
+      label: The repair question was asked
+    notes: 'Player step. Drawing: the dialog text (vendor name and zone).'
   - id: cv.s2.3
     title: As a Hunter, type /cvn test arrows, then /cvn test bullets
     action:
@@ -319,129 +358,298 @@ sections:
       commands:
       - /cvn test arrows
       - /cvn test bullets
-    expect: The last question shows a vendor name and a zone. The reviewer confirms both tests ran. Press
-      Pass.
+    expect: The last question shows a vendor name and a zone. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"test command: arrows" and "test command: bullets".'
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'test command: arrow'
+      - contains: 'question shown: arrow, '
+      - contains: 'test command: bullet'
+      - contains: 'question shown: bullet, '
+      scope: attempt
+      label: Both tests ran and asked, arrows first
+    notes: 'Player step. Drawing: the dialog text (vendor name and zone). The commands say arrows and bullets; the log names the kinds arrow and bullet.'
   - id: cv.s2.4
     title: Enter /cvn test sell and click Yes
     action:
       kind: manual
-      text: Enter |cff99ccff/cvn test sell|r and click |cffffd100Yes|r.
+      text: Enter |cff99ccff/cvn test sell|r and click |cffffd100Yes|r. When the question names two vendors, click |cffffd100This map|r or |cffffd100Closest|r.
       commands:
       - /cvn test sell
     expect: A waypoint to the vendor is set (see the Navigation section). Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"accepted: <vendor> via <provider>".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'accepted: '
+      scope: attempt
+      label: Yes set a waypoint
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: A waypoint provider took the waypoint
+    notes: 'Player step. Drawing: the waypoint arrow. The log proves Yes was taken and a provider set the waypoint; the test command alone proves neither.'
   - id: cv.s2.5
     title: Enter /cvn test sell, click No, then enter it again and press Esc
     action:
       kind: manual
-      text: Enter |cff99ccff/cvn test sell|r and click |cffffd100No|r, then enter it again and press Esc.
+      text: Enter |cff99ccff/cvn test sell|r and click |cffffd100No|r (|cffffd100Cancel|r when the question names two vendors). Then enter it again and press Esc.
       commands:
       - /cvn test sell
-    expect: Nothing happens after either answer. Press Pass.
+    expect: Nothing happens after either answer.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question declined: sell".'
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'question declined: sell'
+      count:
+        min: 2
+      scope: attempt
+      label: Both answers were taken as No
+    - kind: log
+      source: debug
+      contains: 'accepted: '
+      absent: true
+      scope: attempt
+      label: No waypoint was set
   - id: cv.s2.6
-    title: Fill your bags to the threshold, then change your bags again
+    title: Make the sell warning due, then change your bags again
+    setup: Have at least 3 free bag slots. Wear at least one item between 21% and 99% durability and nothing at 20% or below.
     action:
       kind: manual
-      text: Fill your bags to the threshold (default 2 free slots or fewer), then change your bags again.
-    expect: The sell question appears once and does not repeat. Press Pass.
+      text: Press Run (|cff99ccff/cvn bags 200|r) so the sell warning is due. Leave the question open. Then move an item in your bags.
+      commands:
+      - /cvn bags 200
+    expect: The sell question appears once and does not repeat after the bag move.
     verify:
-    - player
-    - reviewer
-    reviewer: 'one "question shown: sell" line.'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: trigger go sell
+      - contains: event BAG_UPDATE_DELAYED
+      scope: attempt
+      label: The sell request went out, then your bag move was checked
+    - kind: log
+      source: debug
+      contains: 'question shown: sell, '
+      count:
+        exactly: 1
+      scope: attempt
+      label: The sell question was asked only once
+    notes: The bag move must come after the question, so Run alone cannot pass the step. The count proves the check after the move asked nothing again. With 3 or more free slots the default threshold 2 leaves the sell warning off before the step, so its latch is clear.
   - id: cv.s2.7
-    title: Wear one item below the durability threshold (default 20%)
+    title: End the sell warning, then make the repair warning due
+    setup: The sell question from check 6 is open. Wear at least one item between 21% and 99% durability, so the default 20 ends the repair warning in check 9.
     action:
       kind: manual
-      text: Wear one item below the durability threshold (default 20%).
-    expect: The repair question appears once. Press Pass.
+      text: Press Run. It types |cff99ccff/cvn bags 0|r, which ends the sell warning, then |cff99ccff/cvn dur 100|r, which makes the repair warning due. Leave the repair question open.
+      commands:
+      - /cvn bags 0
+      - /cvn dur 100
+    expect: The sell question closes and the repair question appears once.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question shown: repair".'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: trigger clear sell
+      - contains: trigger go repair
+      scope: attempt
+      label: The sell request ended, then the repair request went out
+    - kind: log
+      source: debug
+      contains: 'question shown: repair, '
+      count:
+        exactly: 1
+      scope: attempt
+      label: The repair question was asked once
+    notes: The threshold 0 ends the sell warning while any bag slot is free. The durability threshold stays at 100 until check 9 types the default back.
   - id: cv.s2.8
     title: Click Yes on the repair question
     action:
       kind: manual
-      text: Click |cffffd100Yes|r on the repair question.
+      text: Click |cffffd100Yes|r on the repair question. When it names two vendors, click |cffffd100This map|r or |cffffd100Closest|r.
     expect: Navigation starts to the vendor named in the question. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"accepted: <vendor> via <provider>".'
-  - id: cv.s2.9
-    title: Click No on a real question, then sell or repair
-    action:
-      kind: manual
-      text: Click |cffffd100No|r on a real question, then sell or repair.
-    expect: The addon does not ask again until the condition clears, then the question comes back. Press
-      Pass.
-    verify:
-    - player
-    - reviewer
-    reviewer: '"question declined: sell".'
-  - id: cv.s2.10
-    title: Open a question, then sell or repair while it is open
-    action:
-      kind: manual
-      text: Open a question, then sell or repair while it is open.
-    expect: The question closes by itself. Press Pass.
-    verify:
-    - player
-    - reviewer
-    reviewer: '"request released:" line.'
-  - id: cv.s2.11
-    title: Make the repair and the sell condition true together
-    action:
-      kind: manual
-      text: Make the repair and the sell condition true together.
-    expect: The repair question comes first. Press Pass.
-    verify:
-    - player
-    - reviewer
-    reviewer: '"question shown: repair" comes before any sell question.'
-  - id: cv.s2.12
-    title: Meet a condition during combat
-    action:
-      kind: manual
-      text: Meet a condition during combat.
-    expect: No question appears in combat. Press Pass.
-    verify:
-    - player
-    - reviewer
     - assertions
-    reviewer: '"trigger" line with combat=true.'
     assertions:
     - kind: log
       source: debug
-      contains: combat=true
+      contains: 'accepted: '
+      scope: attempt
+      label: Yes set a waypoint
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: A waypoint provider took the waypoint
+    notes: 'Player step. Drawing: the waypoint arrow and the vendor it points to.'
+  - id: cv.s2.9
+    title: End the repair request, then click No on the sell question
+    action:
+      kind: manual
+      text: Press Run. It types the default |cff99ccff/cvn dur 20|r, which ends the repair request, then |cff99ccff/cvn bags 200|r. Click |cffffd100No|r on the sell question (|cffffd100Cancel|r when it names two vendors).
+      commands:
+      - /cvn dur 20
+      - /cvn bags 200
+    expect: After No, the sell question does not come back while the warning stays due.
+    verify:
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: trigger clear repair
+      - contains: trigger go sell
+      - contains: 'question declined: sell'
+      scope: attempt
+      label: The repair request ended, the sell request went out, and No was taken
+    - kind: log
+      source: debug
+      contains: 'question shown: sell, '
+      count:
+        exactly: 1
+      scope: attempt
+      label: The sell question was not asked again after No
+    notes: After No the addon checks again (Controller release), so a second sell question in the step window fails the count. Check 10 makes the warning due again.
+  - id: cv.s2.10
+    title: Make the sell warning due again, then open a vendor window
+    action:
+      kind: manual
+      text: 'Press Run. It types |cff99ccff/cvn bags 0|r, which ends the sell warning, then |cff99ccff/cvn bags 200|r, which makes it due again. With the new sell question open, open a vendor''s window.'
+      commands:
+      - /cvn bags 0
+      - /cvn bags 200
+    expect: The sell question comes back. Opening the vendor window closes it.
+    verify:
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'question shown: sell, '
+      - contains: merchant window opened
+      - contains: 'question closed: merchant opened (sell)'
+      scope: attempt
+      label: The sell question came back, and the vendor window closed it
+    notes: The threshold going to 0 and back up ends the No from check 9, so the question comes back. Opening any vendor window closes a vendor question (Controller OnMerchantShow) and logs which one. A trainer question stays open and writes no closed line.
+  - id: cv.s2.11
+    title: Make the sell and then the repair warning due
+    action:
+      kind: manual
+      text: Press Run. It types |cff99ccff/cvn bags 0|r and |cff99ccff/cvn bags 200|r, so the sell question shows, then |cff99ccff/cvn dur 100|r. Leave the repair question open and move an item in your bags.
+      commands:
+      - /cvn bags 0
+      - /cvn bags 200
+      - /cvn dur 100
+    expect: The sell question shows, then the repair question replaces it. No sell question comes back while the repair question is open.
+    verify:
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: trigger go sell
+      - contains: trigger go repair
+      - contains: 'question shown: repair, '
+      - contains: event BAG_UPDATE_DELAYED
+      scope: attempt
+      label: Sell went out, repair replaced it, and your bag move was checked
+    - kind: log
+      source: debug
+      contains: 'question shown: sell, '
+      count:
+        exactly: 1
+      scope: attempt
+      label: No second sell question while repair was open
+    notes: 'Run fixes the order: each command checks at once (Core evaluate), so sell is asked first and repair, the higher warning, replaces it. The bag move makes the addon check again while repair is open; the count proves that check asked no sell question.'
+  - id: cv.s2.12
+    title: Make the sell warning due during combat
+    setup: Start a fight first. The Run button hides in combat, so copy each line from its box into chat, in order.
+    action:
+      kind: manual
+      text: During the fight, enter |cff99ccff/cvn dur 20|r (the default), |cff99ccff/cvn bags 0|r and |cff99ccff/cvn bags 200|r from their boxes, in that order.
+      commands:
+      - /cvn dur 20
+      - /cvn bags 0
+      - /cvn bags 200
+    expect: No question appears in combat.
+    verify:
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: trigger clear repair
+      - contains: 'trigger held in combat: sell'
+      scope: attempt
+      label: The repair request ended, and the sell warning waited for the fight
+    - kind: log
+      source: debug
+      contains: 'question shown: sell, '
+      absent: true
       diagnostic: true
+      scope: attempt
+      label: No sell question during the fight
+    notes: 'The commands belong in the fight: run before it, they ask the sell question at once and the hold line is missing, so the step fails. The default 20 ends the repair request from check 11; the threshold 0 ends the sell warning that the repair trip covered. The absent check is diagnostic: the fight may end inside the step and the question then comes.'
   - id: cv.s2.13
     title: End combat with the condition still true
     action:
       kind: manual
       text: End combat with the condition still true.
-    expect: The question appears after combat ends. Press Pass.
+    expect: The question appears after combat ends.
+    verify:
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: event PLAYER_REGEN_ENABLED
+      - contains: 'question shown: sell, '
+      scope: attempt
+      label: The sell question came after the fight ended
+  - id: cv.s2.14
+    title: Type the default bag threshold back
+    action:
+      kind: manual
+      text: Press Run to type the default bag threshold back (|cff99ccff/cvn bags 2|r).
+      commands:
+      - /cvn bags 2
+    expect: Chat shows the bag threshold 2 and the sell question closes. Press Pass.
     verify:
     - player
-    - reviewer
-    - assertions
-    reviewer: '"trigger" line with combat=false.'
-    assertions:
-    - kind: log
-      source: debug
-      contains: combat=false
-      diagnostic: true
+    notes: 'Player step. Cleanup: checks 6 to 13 changed the bag and durability thresholds; check 12 typed the durability default back and this types the bag default back. Nothing to log.'
+  intro: 'Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults. Use |cff99ccff/cvn choice ask|r so questions show. No ammo, reagent, food, water or pet food warning may be due.'
 - id: s3
   title: Navigation
   steps:
@@ -575,65 +783,189 @@ sections:
   steps:
   - id: cv.s5.1
     title: As a Hunter, equip a bow with fewer arrows than the threshold
+    setup: A Hunter with a bow and 3 to 2000 arrows in the ammo slot, and a gun in your bags. The ammo threshold goes up to 2000, so more arrows never count as low.
     action:
       kind: manual
-      text: As a Hunter, equip a bow with fewer arrows than the threshold.
-    expect: The arrows question appears. Press Pass.
+      text: Hunter only; press Skip on other classes. Press Run. It types |cff99ccff/cvn ammo 0|r, which ends any ammo warning, then |cff99ccff/cvn ammo 2000|r, so your 3 to 2000 arrows are low. Leave the arrow question open for check 2.
+      commands:
+      - /cvn ammo 0
+      - /cvn ammo 2000
+    expect: The arrows question appears.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question shown: arrows".'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'question shown: arrow, '
+      scope: attempt
+      label: The arrow question was asked
+    notes: 'Class step: a run belongs to one character, so other classes skip it. The threshold 0 clears the ammo latch while you carry any arrows, so the threshold 2000 asks again. An answered question would hold the ammo warning until the count clears, so check 2 needs this one open.'
   - id: cv.s5.2
     title: As a Hunter, equip a gun with fewer bullets than the threshold
+    setup: The arrow question from check 1 is still open.
     action:
       kind: manual
-      text: As a Hunter, equip a gun with fewer bullets than the threshold.
-    expect: The bullets question appears. Press Pass.
+      text: Hunter only; press Skip on other classes. Equip the gun. Leave the bullet question open.
+    expect: The arrow question closes and the bullets question appears.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question shown: bullets".'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'ammo request restarted: arrow -> bullet'
+      - contains: 'question shown: bullet, '
+      scope: attempt
+      label: The arrow request ended and the bullet question was asked
+    notes: Class step. The ammo threshold is still 2000, so any bullet count is low. Arrows in the ammo slot count as 0 bullets.
   - id: cv.s5.3
     title: As a Hunter, shoot ammo down to the threshold
+    setup: Equip the bow with arrows again before you press Run, and count your arrows. The arrow question may show; leave it.
     action:
       kind: manual
-      text: As a Hunter, shoot ammo down to the threshold.
-    expect: The question appears when you cross the threshold. Press Pass.
+      text: Hunter only; press Skip on other classes. Press Run (|cff99ccff/cvn ammo 0|r) to end the ammo request. Then enter |cff99ccff/cvn ammo|r, a space and a count 3 below your arrows (for example 197 with 200 arrows). Shoot a target until your arrows drop to that count.
+      commands:
+      - /cvn ammo 0
+    expect: The arrow question appears when you cross the threshold, or as soon as the fight ends.
     verify:
-    - player
-    - reviewer
-    reviewer: '"event BAG_UPDATE_DELAYED", "event UNIT_INVENTORY_CHANGED" and "event PLAYER_EQUIPMENT_CHANGED"
-      lines show which events fired as the count dropped.'
+    - assertions
+    auto: true
+    timeout: 300
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: trigger clear ammo
+      - contains: trigger go ammo (
+      - contains: 'question shown: arrow, '
+      scope: attempt
+      label: The ammo request ended, your shots crossed the threshold, and the arrow question came
+    - kind: log
+      source: debug
+      contains: 'trigger held in combat: ammo'
+      diagnostic: true
+      scope: attempt
+      label: The crossing was held until the fight ended
+    - kind: log
+      source: debug
+      contains: 'gear events: '
+      diagnostic: true
+      scope: attempt
+      label: Ammo changes were checked
+    notes: 'Class step. The threshold you type by hand sits just below your count, so a few shots cross it. Shooting is combat, so the crossing is usually held until the fight ends; the hold line is diagnostic, because the crossing shot can kill the target and end the fight first. A threshold typed at or above your count asks at once, before any shot, so type a count below your arrows. The threshold goes up to 2000, so start with 3 to 2000 arrows. Equip the bow before Run: with the gun, 0 bullets stay low at threshold 0 and the request does not end. The game may report the count as a bag update instead of a gear event, so the "gear events: N folded into one check" line is diagnostic.'
   - id: cv.s5.4
     title: As a Hunter, equip a bow with only bullets in the ammo slot
+    setup: 'Put bullets in the bow''s ammo slot instead of arrows before you press Run.'
     action:
       kind: manual
-      text: As a Hunter, equip a bow with only bullets in the ammo slot.
-    expect: The addon counts it as no ammo and asks. Press Pass.
+      text: Hunter only; press Skip on other classes. Press Run. It turns the ammo warning off, types the default threshold back (|cff99ccff/cvn ammo 200|r) and turns the warning on again.
+      commands:
+      - /cvn ammo off
+      - /cvn ammo 200
+      - /cvn ammo on
+    expect: The addon counts it as no ammo and asks. Put the arrows back afterwards.
     verify:
-    - player
-    - reviewer
-    reviewer: '"trigger" line with the ammo value.'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'ammo=arrow:0 '
+      - contains: 'question shown: arrow, '
+      scope: attempt
+      label: Zero arrows counted, and the arrow question was asked
+    - kind: log
+      source: debug
+      contains: 'ammo not watched: the ammo warning is off'
+      diagnostic: true
+      scope: attempt
+      label: The ammo warning was off in between
+    notes: Class step. Turning the warning off and on ends the ammo request from check 3, so the zero count asks again. Zero arrows are low at any threshold, so this check also types the default 200 back.
   - id: cv.s5.5
     title: As a Rogue or Warrior, equip a thrown weapon
+    setup: A bow, crossbow or gun is equipped, and a thrown weapon is in your bags.
     action:
       kind: manual
-      text: As a Rogue or Warrior, equip a thrown weapon.
-    expect: The addon never asks about ammo. Press Pass.
+      text: Rogue, Warrior, or a Hunter who has learned Thrown only; press Skip otherwise. Equip the thrown weapon.
+    expect: The addon never asks about ammo.
     verify:
-    - player
-    - reviewer
-    reviewer: no "question shown:" line for ammo.
+    - assertions
+    auto: true
+    timeout: 60
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'ammo not watched: no bow, crossbow or gun equipped, or its ammo cannot be read'
+      scope: attempt
+      label: The addon stopped watching ammo
+    - kind: log
+      source: debug
+      contains: trigger go ammo
+      absent: true
+      scope: attempt
+      label: No ammo request
+    - kind: log
+      source: debug
+      contains: 'question shown: arrow'
+      absent: true
+      scope: attempt
+      label: No arrow question
+    - kind: log
+      source: debug
+      contains: 'question shown: bullet'
+      absent: true
+      scope: attempt
+      label: No bullet question
+    notes: 'Class step: it needs a thrown weapon and nothing from the checks before it.'
   - id: cv.s5.6
     title: As a Mage, Priest or Warlock, equip a wand
+    setup: A wand is in your bags.
     action:
       kind: manual
-      text: As a Mage, Priest or Warlock, equip a wand.
-    expect: The addon never asks about ammo. Press Pass.
+      text: Mage, Priest or Warlock only; press Skip on other classes. Equip the wand.
+    expect: The addon never asks about ammo.
     verify:
-    - player
-    - reviewer
-    reviewer: no "question shown:" line for ammo.
+    - assertions
+    auto: true
+    timeout: 60
+    assertions:
+    - kind: log
+      source: debug
+      contains: event PLAYER_EQUIPMENT_CHANGED
+      scope: attempt
+      label: The new weapon was checked
+    - kind: log
+      source: debug
+      contains: 'ammo watched: '
+      absent: true
+      scope: attempt
+      label: Ammo is not watched
+    - kind: log
+      source: debug
+      contains: trigger go ammo
+      absent: true
+      scope: attempt
+      label: No ammo request
+    - kind: log
+      source: debug
+      contains: 'question shown: arrow'
+      absent: true
+      scope: attempt
+      label: No arrow question
+    - kind: log
+      source: debug
+      contains: 'question shown: bullet'
+      absent: true
+      scope: attempt
+      label: No bullet question
+    notes: 'Class step: it needs a wand user and nothing from the checks before it. A wand never needs ammo, so nothing changes and no ammo line is written; the equipment event proves the check ran.'
+  intro: Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults. Use |cff99ccff/cvn choice ask|r. Press Skip on a check your class cannot do.
 - id: s6
   title: Professions
   steps:
@@ -815,6 +1147,19 @@ sections:
     expect: The Professions checkbox is cleared. Press Pass.
     verify:
     - player
+  - id: cv.s6.18
+    title: Turn the profession warning back on at the default threshold
+    action:
+      kind: manual
+      text: Press Run. It types |cff99ccff/cvn trade on|r and the default |cff99ccff/cvn trade 10|r.
+      commands:
+      - /cvn trade on
+      - /cvn trade 10
+    expect: Chat shows the profession warning on at 10. Press Pass.
+    verify:
+    - player
+    notes: 'Player step. Cleanup: checks 16 and 17 set the profession threshold to 25 and turned it off. Nothing to log.'
+  intro: Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults.
 - id: s7
   title: Report and debug log
   steps:
@@ -928,48 +1273,132 @@ sections:
   steps:
   - id: cv.s8.1
     title: Enter a dungeon, then leave it
+    setup: Stand at a dungeon entrance with at least 3 free bag slots.
     action:
       kind: manual
-      text: Enter a dungeon, then leave it.
-    expect: Inside, no error, no question and no waypoint. After leaving, normal behavior returns. Press
-      Pass.
+      text: Enter the dungeon. Inside, press Run (|cff99ccff/cvn bags 200|r) so the sell warning is due. Then leave the dungeon.
+      commands:
+      - /cvn bags 200
+    expect: Inside, no error, no question and no waypoint. After leaving, the sell question appears.
     verify:
-    - player
-    - reviewer
-    reviewer: '"instance: <old> -> <new>" lines and, inside, "profession check skipped: in an instance".'
+    - assertions
+    auto: true
+    timeout: 300
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'instance: none -> party'
+      - contains: 'trigger held in an instance: sell'
+      - contains: 'instance: party -> none'
+      - contains: 'question shown: sell, '
+      scope: attempt
+      label: Held inside, asked after leaving
+    - kind: log
+      source: errors
+      pattern: '%[ClosestVendor%]'
+      absent: true
+      scope: attempt
+      label: ClosestVendor raised no Lua error
+    notes: 'Compound step: entering and leaving is one trip, and the step id stays. Press Run inside the dungeon: before it, the sell question comes at once. With 3 or more free slots the default threshold leaves the sell latch clear. The bag threshold stays at 200 until check 6 types the default back.'
   - id: cv.s8.2
     title: Enter a battleground, then leave it
     action:
       kind: manual
-      text: Enter a battleground, then leave it.
-    expect: Inside, no error, no question and no waypoint. After leaving, normal behavior returns. Press
-      Pass.
+      text: Enter a battleground. Inside, press Run. It types |cff99ccff/cvn bags 0|r, which ends the sell request from check 1, then |cff99ccff/cvn bags 200|r. Then leave the battleground.
+      commands:
+      - /cvn bags 0
+      - /cvn bags 200
+    expect: Inside, no error, no question and no waypoint. After leaving, the sell question appears. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"instance: <old> -> <new>" lines.'
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'instance: none -> pvp'
+      - contains: 'trigger held in an instance: sell'
+      - contains: 'instance: pvp -> none'
+      - contains: 'question shown: sell, '
+      scope: attempt
+      label: Held inside, asked after leaving
+    - kind: log
+      source: errors
+      pattern: '%[ClosestVendor%]'
+      absent: true
+      scope: attempt
+      label: ClosestVendor raised no Lua error
+    notes: 'Player step. Timing: a battleground queue and match outlast the 300 seconds an automatic step can wait, so the player presses Pass; the log checks are required. Compound step: entering and leaving is one trip. Both commands run inside, so the sell warning is due only there; the threshold 0 clears the latch an answered question from check 1 left. The bag threshold stays at 200 until check 6.'
   - id: cv.s8.3
-    title: Enable TomTom after a login without it, then reload
+    title: Enable TomTom after a login without it, reload, and set a waypoint
+    setup: Waypoints are on Automatic (the default) and TomTom was disabled at login.
     action:
       kind: manual
-      text: Optional. Enable TomTom after a login without it, then enter |cff99ccff/reload|r.
+      text: Optional; press Skip without TomTom. Enable TomTom in the AddOns list and click Reload UI there. After the reload, press Run (|cff99ccff/cvn test sell|r) and click |cffffd100Yes|r (or |cffffd100This map|r or |cffffd100Closest|r).
       commands:
-      - /reload
-    expect: No error. Press Pass.
+      - /cvn test sell
+    expect: No error after the reload, and a TomTom arrow points to the vendor.
     verify:
-    - player
-    reload: after_action
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: '---- login ----'
+      - contains: ' via tomtom'
+      scope: attempt
+      label: The addon started again, then TomTom took the waypoint
+    - kind: state
+      probe: addon-loaded
+      name: TomTom
+      op: eq
+      value: true
+      label: TomTom is loaded
+      diagnostic: true
+    - kind: log
+      source: errors
+      pattern: '%[ClosestVendor%]'
+      absent: true
+      scope: attempt
+      label: ClosestVendor raised no Lua error
+    notes: 'The accepted line names the waypoint provider, and the sequence puts it after the login, so a waypoint accepted before the reload, or a reload without TomTom, fails the step. Press Run only after the reload: the reload is a separate action. The state probe is diagnostic because the replay cannot write it. A ClosestVendor error at load, before CheckThat has loaded, is caught only with BugGrabber installed.'
   - id: cv.s8.4
-    title: Enable WaypointUI after a login without it, then reload
+    title: Enable WaypointUI after a login without it, reload, and set a waypoint
+    setup: Waypoints are on Automatic (the default), WaypointUI was disabled at login, and TomTom is disabled, because TomTom comes first.
     action:
       kind: manual
-      text: Optional. Enable WaypointUI after a login without it, then enter |cff99ccff/reload|r.
+      text: Optional; press Skip without WaypointUI. Enable WaypointUI in the AddOns list and click Reload UI there. After the reload, press Run (|cff99ccff/cvn test sell|r) and click |cffffd100Yes|r (or |cffffd100This map|r or |cffffd100Closest|r).
       commands:
-      - /reload
-    expect: No error. Press Pass.
+      - /cvn test sell
+    expect: No error after the reload, and WaypointUI shows the way to the vendor.
     verify:
-    - player
-    reload: after_action
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: '---- login ----'
+      - contains: ' via waypointui'
+      scope: attempt
+      label: The addon started again, then WaypointUI took the waypoint
+    - kind: state
+      probe: global-value
+      name: WaypointUIAPI
+      op: exists
+      label: WaypointUI is loaded
+      diagnostic: true
+    - kind: log
+      source: errors
+      pattern: '%[ClosestVendor%]'
+      absent: true
+      scope: attempt
+      label: ClosestVendor raised no Lua error
+    notes: The accepted line names the waypoint provider, and the sequence puts it after the login, so a waypoint accepted before the reload, or a reload without WaypointUI, fails the step. Press Run only after the reload. The state probe is diagnostic because the replay cannot write it. A ClosestVendor error at load, before CheckThat has loaded, is caught only with BugGrabber installed.
   - id: cv.s8.5
     title: Optional, on a client where a game function is missing
     action:
@@ -978,8 +1407,28 @@ sections:
     expect: The addon keeps working. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"game call failed: <name>" once.'
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'game call failed: '
+      - contains: 'event '
+      scope: session
+      label: A game call failed and events were still handled after it
+    notes: 'Player step. No action: the client, not the player, makes a game call fail, often at login, so the checks read the whole session. Skip the step on a client where nothing is known to be missing.'
+  - id: cv.s8.6
+    title: Type the default bag threshold back
+    action:
+      kind: manual
+      text: Press Run to type the default bag threshold back (|cff99ccff/cvn bags 2|r).
+      commands:
+      - /cvn bags 2
+    expect: Chat shows the bag threshold 2. Press Pass.
+    verify:
+    - player
+    notes: 'Player step. Cleanup: checks 1 and 2 set the bag threshold to 200; this types the default back. Nothing to log.'
+  intro: Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults. Use |cff99ccff/cvn choice ask|r so questions show.
 - id: s9
   title: Languages
   steps:
@@ -1888,9 +2337,18 @@ sections:
     - player
     - reviewer
     reviewer: '"merchant window opened".'
-  intro: 'Use a character whose class has reagents: mage, rogue, priest, paladin, shaman or druid. This
-    section checks the spell and item IDs in the real client. No in-game check, unit tests only: no class
-    has both ammo and reagents (ammo versus reagents priority).'
+  - id: cv.s12.35
+    title: Type the default reagent threshold back
+    action:
+      kind: manual
+      text: Press Run to type the default reagent threshold back (|cff99ccff/cvn reagent 5|r).
+      commands:
+      - /cvn reagent 5
+    expect: Chat shows the reagent threshold 5. Press Pass.
+    verify:
+    - player
+    notes: 'Player step. Cleanup: checks 16 and 17 set the reagent threshold to 10. Nothing to log.'
+  intro: 'Use a character whose class has reagents (mage, rogue, priest, paladin, shaman or druid). Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults. This section checks the spell and item IDs in the real client. No in-game check, unit tests only: no class has both ammo and reagents (ammo versus reagents priority).'
 - id: s13
   title: Status window, instances and auction house
   steps:
@@ -3710,13 +4168,38 @@ sections:
     expect: No supply rows show. Press Pass.
     verify:
     - player
-  intro: 'Use |cff99ccff/cvn|r to check the line "Supplies: food on (5), water on (5), pet food on (5),
-    healthstone reminder on".'
+  - id: cv.s14.56
+    title: Turn the ammo and supply warnings back on
+    action:
+      kind: manual
+      text: Press Run. It types |cff99ccff/cvn ammo on|r, |cff99ccff/cvn food on|r, |cff99ccff/cvn water on|r and |cff99ccff/cvn petfood on|r.
+      commands:
+      - /cvn ammo on
+      - /cvn food on
+      - /cvn water on
+      - /cvn petfood on
+    expect: Chat shows each warning on. Press Pass.
+    verify:
+    - player
+    notes: 'Player step. Cleanup: checks in this section turn these warnings off. Check 57 types the default food threshold back. Nothing to log.'
+  - id: cv.s14.57
+    title: Type the default food threshold back
+    action:
+      kind: manual
+      text: Press Run to type the default food threshold back (|cff99ccff/cvn food 5|r). Set back any Supplies slider you moved in check 38.
+      commands:
+      - /cvn food 5
+    expect: Chat shows the food threshold 5. Press Pass.
+    verify:
+    - player
+    notes: 'Player step. Cleanup: check 37 set the food threshold to 10. Nothing to log.'
+  intro: 'Check with |cff99ccff/cvn|r: "Supplies: food on (5), water on (5), pet food on (5), healthstone reminder on". Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults.'
 - id: s15
   title: Settings per character
   steps:
   - id: cv.s15.1
     title: On character A, change bags and sound, then log in character B
+    setup: On character A, enter |cff99ccff/cvn sound|r first and note the notification sound it shows; check 4 types it back.
     action:
       kind: manual
       text: On character A, type |cff99ccff/cvn bags 30|r and |cff99ccff/cvn sound ping|r, then move the
@@ -3745,6 +4228,18 @@ sections:
     expect: It starts with those earlier settings. Press Pass.
     verify:
     - player
+  - id: cv.s15.4
+    title: On character A, type the default bag threshold and your sound back
+    action:
+      kind: manual
+      text: On character A, press Run. It types the default |cff99ccff/cvn bags 2|r. Then set the sound you noted before check 1 back, typed the way check 1 typed ping.
+      commands:
+      - /cvn bags 2
+    expect: Chat shows the bag threshold 2 and the sound you noted. Press Pass.
+    verify:
+    - player
+    notes: 'Player step. Cleanup: check 1 set the bag threshold to 30 and the sound to ping on character A. The sound is the character''s own choice, not a default, so the tester notes it first and types it back. Nothing to log.'
+  intro: Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults.
 - id: s16
   title: Profession level gate
   steps:
@@ -4408,97 +4903,253 @@ sections:
   steps:
   - id: cv.s23.1
     title: Leave the ammo question open and close the merchant
+    setup: Buy ammo and Ask before buying ammo are on, and your quiver or ammo pouch has room for more ammo.
     action:
       kind: manual
-      text: 'Hunter, with ammo "ask first" on: open an ammo merchant, leave the question open and close
-        the merchant.'
-    expect: The question closes and nothing is bought. Press Pass.
+      text: Hunter only; press Skip on other classes. Open an ammo merchant, leave the purchase question open and close the merchant.
+    expect: The question closes and nothing is bought.
     verify:
-    - player
-    - reviewer
-    reviewer: '"purchase dropped: the merchant window changed"'
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: merchant window opened
+      - contains: 'purchase question closed with the merchant: ammo'
+      scope: attempt
+      label: The ammo question closed with the merchant
+    - kind: log
+      source: debug
+      contains: 'ammo buy: bought'
+      absent: true
+      scope: attempt
+      label: Nothing was bought
+    notes: 'Class step: a run belongs to one character, so other classes skip it. It needs nothing from another check.'
   - id: cv.s23.2
     title: Leave the reagent question open and close the merchant
+    setup: Buy reagents and Ask before buying reagents are on, and a watched reagent is below its buy target.
     action:
       kind: manual
-      text: 'Mage, with reagent "ask first" on: open a reagent merchant, leave the question open and close
-        the merchant.'
-    expect: The question closes and nothing is bought. Press Pass.
+      text: Reagent class only (for example a Mage); press Skip on other classes. Open a reagent merchant, leave the purchase question open and close the merchant.
+    expect: The question closes and nothing is bought.
     verify:
-    - player
-    - reviewer
-    reviewer: '"purchase dropped: the merchant window changed"'
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: merchant window opened
+      - contains: 'purchase question closed with the merchant: reagents'
+      scope: attempt
+      label: The reagent question closed with the merchant
+    - kind: log
+      source: debug
+      contains: 'reagent buy: bought'
+      absent: true
+      scope: attempt
+      label: Nothing was bought
+    notes: 'Class step: it needs a class with watched reagents and nothing from another check.'
   - id: cv.s23.3
     title: With the ammo question open, cause a route question
+    setup: Buy ammo and Ask before buying ammo are on. Open an ammo merchant and leave the purchase question open.
     action:
       kind: manual
-      text: With the ammo question open, cause a route question.
+      text: Hunter only; press Skip on other classes. With the purchase question open, press Run (|cff99ccff/cvn test sell|r) so a route question shows.
+      commands:
+      - /cvn test sell
     expect: The route question does not replace the ammo question. Press Pass.
     verify:
     - player
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: merchant window opened
+      - contains: 'question shown: sell, '
+      scope: attempt
+      label: The merchant opened, then a route question was asked
+    notes: 'Player step. Drawing: the purchase and route questions are separate dialogs side by side. No decision point chooses between them, so only the screen shows that both stay. Class step: it opens its own purchase question, so it does not need check 1.'
   - id: cv.s23.4
     title: With gear below the threshold and full bags, answer No to repair
+    setup: Have at least 3 free bag slots. Wear at least one item between 21% and 99% durability and nothing at 20% or below. No ammo, reagent, food, water or pet food warning is due, because those come before selling.
     action:
       kind: manual
-      text: With gear below the threshold and bags full, answer No to the repair question, or press Escape
-        on it.
-    expect: The sell question appears within a moment. Press Pass.
+      text: Press Run. It types |cff99ccff/cvn dur 100|r, then |cff99ccff/cvn bags 200|r. Click |cffffd100No|r (or |cffffd100Cancel|r) on the repair question, or press Escape on it. Leave the sell question open.
+      commands:
+      - /cvn dur 100
+      - /cvn bags 200
+    expect: The sell question appears within a moment.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question declined: repair".'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'question shown: repair, '
+      - contains: 'question declined: repair'
+      - contains: 'request released: repair'
+      - contains: 'question shown: sell, '
+      scope: attempt
+      label: No ended the repair request, then the sell question came
+    notes: Durability first, then bags, so the repair question comes first. Both thresholds stay changed until check 10 types the defaults back.
   - id: cv.s23.5
-    title: After that, wait a few minutes without repairing
+    title: After that, wait a minute without repairing
+    setup: The sell question from check 4 is still open.
     action:
       kind: manual
-      text: After that, wait a few minutes without repairing.
-    expect: The repair question is not asked again until you repair. Press Pass.
+      text: Leave the sell question open. Move an item in your bags, then wait a minute without repairing.
+    expect: The repair question is not asked again until you repair.
     verify:
-    - player
-    - reviewer
-    reviewer: no new "question shown" line for repair.
+    - assertions
+    auto: true
+    timeout: 90
+    call:
+      addon: ClosestVendor
+      entry: active
+    assertions:
+    - kind: log
+      source: debug
+      contains: event BAG_UPDATE_DELAYED
+      scope: attempt
+      label: The addon checked again
+    - kind: log
+      source: debug
+      contains: trigger go repair
+      absent: true
+      scope: attempt
+      label: No new repair request
+    - kind: log
+      source: debug
+      contains: 'question shown: repair'
+      absent: true
+      scope: attempt
+      label: No repair question
+    - kind: fact
+      source: facts
+      addon: ClosestVendor
+      key: entry.active
+      op: eq
+      value: sell
+      label: Sell, not repair, is the open request
+    notes: The latch that holds repair back (handled in Triggers) has no entry. After No on repair the sell question from check 4 is the open request, so the active entry must return sell when the step opens. The bag move makes the addon check again inside the step; the step waits its 90 seconds for the absent checks.
   - id: cv.s23.6
-    title: Need repair with full bags where no repairer is known
+    title: 'Optional: need repair with full bags where no repairer is known'
+    setup: 'WoW Forever only. Go to a new zone on its own continent (for example Zephras Isle) where you opened a vendor that does not repair and know no repairer, before you press Run.'
     action:
       kind: manual
-      text: With bags full and repair needed, where no repairer is known on the continent.
-    expect: The sell question is asked. Press Pass.
+      text: Optional; press Skip if no such zone is at hand. Press Run. It types |cff99ccff/cvn dur 1|r, which ends the repair warning, then |cff99ccff/cvn dur 100|r.
+      commands:
+      - /cvn dur 1
+      - /cvn dur 100
+    expect: The sell question is asked.
     verify:
-    - player
-    - reviewer
-    reviewer: '"no known vendor for repair on this continent".'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: no known vendor for repair on this continent
+      - contains: 'request released: repair'
+      - contains: 'question shown: sell, '
+      scope: attempt
+      label: No repairer known, so the sell question came
+    notes: 'Optional, WoW Forever only: the shipped Classic Era list has repairers on both outdoor continents, so only a new WoW Forever zone without shipped vendors can lack one, and only when NorgannonDB adds no repairer there. The threshold 1 ends the repair warning unless an item is broken, so the No from check 4 is cleared and the threshold 100 sends the repair warning out again. The bag threshold is still 200. Check 7 starts by going back to a continent with a known repairer.'
+    clients:
+    - forever-camelot
   - id: cv.s23.7
-    title: Die with gear just above the threshold so death drops it below
+    title: Make the repair warning due while dead, then resurrect
+    setup: Go back to a continent with a known repairer. Then die, for example to a much stronger enemy.
     action:
       kind: manual
-      text: Die with gear just above the threshold so death drops it below. Resurrect at the corpse or
-        a spirit healer.
-    expect: No question while dead or a ghost; the repair question appears once alive. Press Pass.
+      text: While dead or a ghost, press Run. It types |cff99ccff/cvn dur 1|r, then |cff99ccff/cvn dur 100|r. Then resurrect at the corpse or a spirit healer.
+      commands:
+      - /cvn dur 1
+      - /cvn dur 100
+    expect: No question while dead or a ghost; the repair question appears once alive.
     verify:
-    - player
-    - reviewer
-    reviewer: '"trigger repair" appears only after the resurrection.'
+    - assertions
+    auto: true
+    timeout: 300
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'trigger held while dead: repair'
+      - contains: 'question shown: repair, '
+      scope: attempt
+      label: Held while dead, asked once alive
+    notes: 'Run shows while dead, out of combat. Both commands run while dead: the threshold 1 clears the repair latch, and 100 makes the warning due while dead only. A repair question needs a known repairer, so the check starts on such a continent.'
   - id: cv.s23.8
     title: Repeat, but accept a resurrection from another player before releasing
+    setup: Another player who can resurrect you is with you. Die near them.
     action:
       kind: manual
-      text: Repeat, but accept a resurrection from another player before releasing.
-    expect: The repair question appears once alive. Press Pass.
+      text: While dead, before you release, press Run. It types |cff99ccff/cvn dur 1|r, then |cff99ccff/cvn dur 100|r. Then accept the resurrection from the other player.
+      commands:
+      - /cvn dur 1
+      - /cvn dur 100
+    expect: The repair question appears once alive.
     verify:
-    - player
-    - reviewer
-    reviewer: '"trigger repair" appears after the resurrection.'
+    - assertions
+    auto: true
+    timeout: 300
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'trigger held while dead: repair'
+      - contains: 'question shown: repair, '
+      scope: attempt
+      label: Held while dead, asked once alive
+    notes: The threshold 1 ends the repair request from check 7, so no repair at a vendor is needed in between. You are still on the continent with a known repairer from check 7.
   - id: cv.s23.9
     title: With the sell question showing, drop gear below the threshold
     action:
       kind: manual
-      text: With the sell question showing, let gear drop below the threshold and answer No to repair.
-    expect: The sell question is asked again. Press Pass.
+      text: Press Run. It ends the repair and sell warnings (|cff99ccff/cvn dur 1|r, |cff99ccff/cvn bags 0|r), makes the sell warning due (|cff99ccff/cvn bags 200|r), then the repair warning (|cff99ccff/cvn dur 100|r). Answer |cffffd100No|r (or |cffffd100Cancel|r) to the repair question.
+      commands:
+      - /cvn dur 1
+      - /cvn bags 0
+      - /cvn bags 200
+      - /cvn dur 100
+    expect: The repair question replaces the sell question. After No, the sell question is asked again.
+    verify:
+    - assertions
+    auto: true
+    timeout: 300
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'question shown: sell, '
+      - contains: 'question shown: repair, '
+      - contains: 'question declined: repair'
+      - contains: 'question shown: sell, '
+      scope: attempt
+      label: Repair replaced sell, then sell came back after No
+    notes: 'Run fixes the order: each command checks at once, so the sell question comes first, then repair replaces it. The thresholds 1 and 0 clear both latches whatever the gear and bags are.'
+  - id: cv.s23.10
+    title: Type the default bag and durability thresholds back
+    action:
+      kind: manual
+      text: 'Press Run to type the default thresholds back: |cff99ccff/cvn bags 2|r and |cff99ccff/cvn dur 20|r.'
+      commands:
+      - /cvn bags 2
+      - /cvn dur 20
+    expect: Chat shows the bag threshold 2 and the durability threshold 20. Repair your gear if the deaths took it to 20% or below. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"question declined: repair", then "question shown" for the sell.'
-  intro: Use |cff99ccff/cvn choice ask|r so questions show.
+    notes: 'Player step. Cleanup: checks 4 to 9 changed both thresholds; this types the defaults back. Nothing to log.'
+  intro: Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults. Use |cff99ccff/cvn choice ask|r. Press Skip on a check your class cannot do.
 - id: s24
   title: Zone changes, hearth, partial merchants and standing
   steps:
@@ -5057,91 +5708,243 @@ sections:
   steps:
   - id: cv.s32.1
     title: With the repair question open, click a low reagent or food row
+    setup: Wear at least one item below 100% durability. A reagent or food row is low in the status window. TomTom is installed; on WoW Forever, WaypointUI or the built-in map waypoint also works. Chat coordinates alone do not prove a pin.
     action:
       kind: manual
-      text: With the repair question open, click a low reagent or food row in the status window.
-    expect: The repair question closes and the row's vendor is pinned. Press Pass.
+      text: Press Run. It types |cff99ccff/cvn dur 1|r, which ends any repair warning, then |cff99ccff/cvn dur 100|r, so the repair question shows. With it open, click a low reagent or food row in the status window.
+      commands:
+      - /cvn dur 1
+      - /cvn dur 100
+    expect: 'The repair question closes and the row''s vendor is pinned.'
     verify:
-    - player
-    - reviewer
-    reviewer: '"direct pin: ..."'
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'question shown: repair, '
+      - contains: 'direct pin: '
+      - contains: 'accepted: '
+      scope: attempt
+      label: 'The click pinned the row''s vendor'
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: A waypoint provider took the waypoint
+    - kind: log
+      source: debug
+      contains: ' via chat'
+      absent: true
+      scope: attempt
+      label: The pin went to a map waypoint, not only to chat coordinates
+    notes: A vendor pin writes "auto:" before "accepted:", an auctioneer pin (closer than the vendor) writes only "accepted:", so the check asserts "accepted:". The threshold 1 clears a repair latch that deaths in earlier sections may have left. The durability threshold stays at 100 until check 9.
   - id: cv.s32.2
-    title: Open a vendor's window afterward
+    title: Open a vendor's window afterward, then move an item in your bags
     action:
       kind: manual
-      text: Open a vendor's window afterward.
-    expect: The repair question comes back. Press Pass.
+      text: Open a vendor's window, then close the window and move an item in your bags. Do not repair.
+    expect: The repair question comes back after the bag move.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question shown: repair".'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: merchant window opened
+      - contains: event BAG_UPDATE_DELAYED
+      - contains: 'question shown: repair, '
+      scope: attempt
+      label: The repair question came back at the bag check after the vendor
   - id: cv.s32.3
     title: With the repair question open, click a row that is not low
+    setup: The waypoint setup from check 1 is still in place.
     action:
       kind: manual
       text: With the repair question open, click a row that is not low.
-    expect: That vendor is pinned and the repair question comes back at the next check. Press Pass.
+    expect: That vendor is pinned and the repair question comes back at the next check.
     verify:
-    - player
-    - reviewer
-    reviewer: '"direct pin: ..."'
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'direct pin: '
+      - contains: 'accepted: '
+      - contains: 'request put back: repair'
+      scope: attempt
+      label: The vendor was pinned and repair will be asked again
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: A waypoint provider took the waypoint
+    - kind: log
+      source: debug
+      contains: ' via chat'
+      absent: true
+      scope: attempt
+      label: The pin went to a map waypoint, not only to chat coordinates
   - id: cv.s32.4
-    title: Then move an item in your bags and answer No to the repair question
+    title: Then make bags due and answer No to the repair question
+    setup: Have at least 3 free bag slots. Apart from the row you clicked in check 1, no ammo, reagent, food, water or pet food warning is due.
     action:
       kind: manual
-      text: Then move an item in your bags and answer No to the repair question.
-    expect: The next low warning is asked. Press Pass.
-    verify:
-    - player
-    - reviewer
-    reviewer: '"question declined: repair".'
-  - id: cv.s32.5
-    title: 'Optional: with the trainer question open near the cap, enter a dungeon'
-    action:
-      kind: manual
-      text: Optional. With a profession near its cap (|cff99ccff/cvn trade 300|r, then craft once) and
-        the trainer question open, enter a dungeon.
+      text: Press Run (|cff99ccff/cvn bags 200|r). Move an item in your bags and answer |cffffd100No|r (or |cffffd100Cancel|r) to the repair question.
       commands:
-      - /cvn trade 300
-    expect: The question closes. Press Pass.
+      - /cvn bags 200
+    expect: The sell question is asked next.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question withdrawn: the player changed zone".'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'question declined: repair'
+      - contains: 'request released: repair'
+      - contains: 'question shown: sell, '
+      scope: attempt
+      label: No ended the repair request, then the sell question was asked
+    notes: The repair question can come back during check 3, before this step opens, so this step does not assert it. The bag threshold 200 makes selling the next warning.
+  - id: cv.s32.5
+    title: 'Optional: with the trainer question open, walk into the next zone'
+    setup: A profession that you can still raise, and a known trainer for it. Check 9 types the profession threshold back.
+    action:
+      kind: manual
+      text: Optional. Type |cff99ccff/cvn bags 2|r (the default bag threshold) to end the sell question, then |cff99ccff/cvn trade 300|r. Craft once so the trainer question shows. With it open, walk across a zone border.
+      commands:
+      - /cvn bags 2
+      - /cvn trade 300
+    expect: The question closes when you enter the next zone.
+    verify:
+    - assertions
+    auto: true
+    timeout: 300
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'question shown: trainer for '
+      - contains: event ZONE_CHANGED_NEW_AREA
+      - contains: 'question withdrawn: the player changed zone'
+      scope: attempt
+      label: The trainer question was withdrawn at the zone border
+    notes: Walking keeps the question on screen; a loading screen may close it first and then nothing is withdrawn. The trainer question shows only with no warning request open, so the sell request ends first. The profession threshold 300 makes any profession near its cap.
   - id: cv.s32.6
     title: 'Hunter with ammo and repair questions open: answer No to both'
+    setup: A bow with 201 to 2000 arrows (above the default 200, so the ammo latch is clear, and at most the highest threshold 2000, so they count as low), and at least one item below 100% durability. Pet food is not low, or no pet is out, because pet food comes before selling.
     action:
       kind: manual
-      text: 'Hunter with bags full and ammo low and the ammo question open: wear gear below the durability
-        threshold. Answer No to repair, then No to ammo.'
-    expect: The repair question replaces the ammo question; then the sell question comes. Press Pass.
+      text: Hunter only; press Skip on other classes. Press Run. It types |cff99ccff/cvn dur 1|r, |cff99ccff/cvn bags 200|r, |cff99ccff/cvn ammo 2000|r and |cff99ccff/cvn dur 100|r, in that order. Answer |cffffd100No|r (or |cffffd100Cancel|r) to repair, then to ammo.
+      commands:
+      - /cvn dur 1
+      - /cvn bags 200
+      - /cvn ammo 2000
+      - /cvn dur 100
+    expect: The repair question replaces the ammo question; then the sell question comes.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question declined: repair", "question declined: ammo", then "question shown" for the sell.'
+    - assertions
+    auto: true
+    timeout: 300
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'question shown: arrow, '
+      - contains: 'question shown: repair, '
+      - contains: 'question declined: repair'
+      - contains: 'request released: repair'
+      - contains: 'question declined: arrow'
+      - contains: 'request released: arrow'
+      - contains: 'question shown: sell, '
+      scope: attempt
+      label: Repair replaced ammo; after both No answers the sell question came
+    notes: 'Class step. Run fixes the order: sell, then ammo, then repair, each replacing the one before. The threshold 1 ends the No to repair from check 4 whatever the gear. Check 9 types the defaults back.'
   - id: cv.s32.7
     title: 'Hunter with low arrows and bullets: equip a gun'
+    setup: The bow is equipped and a gun is in your bags, with 2000 or fewer bullets.
     action:
       kind: manual
-      text: 'Hunter with low arrows and low bullets, arrow question open or arrow vendor pinned: equip
-        a gun.'
-    expect: The arrow question or pin ends and the bullet question is asked. Press Pass.
+      text: Hunter only; press Skip on other classes. Press Run (|cff99ccff/cvn ammo off|r, then |cff99ccff/cvn ammo on|r) so the arrow question shows again. Leave it open and equip the gun.
+      commands:
+      - /cvn ammo off
+      - /cvn ammo on
+    expect: The arrow question ends and the bullet question is asked.
     verify:
-    - player
-    - reviewer
-    reviewer: '"request released: ..." then "question shown: ..." for bullets.'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'ammo request restarted: arrow -> bullet'
+      - contains: 'question shown: bullet, '
+      scope: attempt
+      label: The arrow request ended and the bullet question was asked
+    notes: Class step. Turning the warning off and on ends the No to ammo from check 6. The ammo threshold is still 2000, so both counts are low; arrows in the ammo slot count as 0 bullets.
   - id: cv.s32.8
     title: Call a pet that does not eat meat while a meat vendor is pinned
+    setup: Call your pet that eats meat, and have low pet food for it. A pet that does not eat meat is in the stable list. Equip the bow again before you press Run. The waypoint setup from check 1 is still in place.
     action:
       kind: manual
-      text: 'Hunter with low pet food and a meat vendor pinned: call a pet that does not eat meat.'
-    expect: The meat pin ends and a vendor for the new pet's food is asked. Press Pass.
+      text: Hunter only; press Skip on other classes. Press Run. It types |cff99ccff/cvn ammo 0|r, which ends the ammo warning, and the default |cff99ccff/cvn bags 2|r. Click |cffffd100Yes|r on the pet food question so a meat vendor is pinned. Then call the pet that does not eat meat.
+      commands:
+      - /cvn ammo 0
+      - /cvn bags 2
+    expect: 'The meat pin ends and a vendor for the new pet''s food is asked.'
+    verify:
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'question shown: supply '
+      - contains: 'accepted: '
+      - contains: 'pet request restarted: pet:'
+      - contains: 'question shown: supply '
+      scope: attempt
+      label: 'The meat vendor was pinned, then the request restarted for the new pet''s food'
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: A waypoint provider took the waypoint
+    - kind: log
+      source: debug
+      contains: ' via chat'
+      absent: true
+      scope: attempt
+      label: The pin went to a map waypoint, not only to chat coordinates
+    notes: 'Class step. The ammo request from check 7 comes before pet food, so the bow goes back on first (with the gun, 0 bullets stay low at any threshold) and the threshold 0 ends it. The second command checks again, so the pet food question comes; it also ends the sell warning. The accepted line between the two questions proves Yes pinned the meat vendor before the pet changed. Check 9 types the default ammo threshold back. The question line names the food in the client''s language ("pet food (...)" on an English client), so the check matches only "question shown: supply ".'
+  - id: cv.s32.9
+    title: Type the default thresholds back
+    action:
+      kind: manual
+      text: 'Press Run to type the default thresholds back: |cff99ccff/cvn bags 2|r, |cff99ccff/cvn dur 20|r, |cff99ccff/cvn ammo 200|r and |cff99ccff/cvn trade 10|r.'
+      commands:
+      - /cvn bags 2
+      - /cvn dur 20
+      - /cvn ammo 200
+      - /cvn trade 10
+    expect: Chat shows the default thresholds, and the sell, repair and ammo questions close. The pet food question from check 8 may stay open, because these thresholds do not cover pet food; answer No to it. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"request released: ..." then "question shown: ..." for the new food.'
-  intro: Use |cff99ccff/cvn choice ask|r so questions show. Lower a threshold or wear gear down to make
-    a warning fire.
+    notes: 'Player step. Cleanup: checks 1 to 8 changed these thresholds; this types the defaults back. The pet food warning has its own threshold and stays due while the new pet''s food is low. Nothing to log.'
+  intro: Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults. Use |cff99ccff/cvn choice ask|r. Checks 6 to 8 need a Hunter; press Skip on other classes.
 - id: s33
   title: Places and waypoints
   steps:

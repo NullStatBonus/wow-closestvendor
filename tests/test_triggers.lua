@@ -446,4 +446,19 @@ due({ "food" })
 eq(t.Active(), "pet", "a reminder leaves the active request alone")
 eq(due({ "food", "water", "food" }), "water", "a repeated key is announced once")
 
+-- Held back: combat or an instance names the request that would go now, and uses nothing up.
+local function held(a, kind, id) return tostring(a and a[1]) .. "," .. tostring(kind) .. "," .. tostring(id) end
+t = T.New(cfg())
+eq(held(t.Update(1, 10, true)), "nil,repair,nil", "combat holds the highest request back and names it")
+eq(held(t.Update(1, 10, false, nil, nil, true)), "nil,repair,nil", "an instance holds it back too")
+eq(act(t.Update(1, 10, false)), "go:repair", "nothing used up: it goes once out")
+eq(held(t.Update(1, 10, true)), "nil,nil,nil", "the active request: nothing held")
+t = T.New(cfg()); t.Update(1, nil, false) -- sell active
+eq(held(t.Update(1, nil, true)), "nil,nil,nil", "nothing that would replace the active request: nothing held")
+t = T.New(cfg())
+eq(held(t.Update(10, nil, true, nil, { 17020 })), "nil,reagent,17020", "a reagent is named with its item id")
+eq(held(t.Update(10, nil, true)), "nil,nil,nil", "nothing low: nothing held")
+t = T.New(cfg()); t.Update(10, 10, false) -- repair active
+eq(held(t.Update(10, 10, true, nil, { 17020 })), "nil,nil,nil", "a lower request than the active one is not held: it would not go")
+
 H.done()

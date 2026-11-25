@@ -63,7 +63,7 @@ local function world(over)
             w.prompts[#w.prompts + 1] = { kind = kind, vendor = v, accept = accept, count = count, trade = trade, two = two, decline = decline }
             if w.autoAccept ~= false then (w.pickOther and two and two.acceptOther or accept)() else w.open = true end -- tests say autoAccept = false to hold the question open
         end,
-        cancelConfirm = function() w.cancelCount = w.cancelCount + 1; w.open = false end,
+        cancelConfirm = function() w.cancelCount = w.cancelCount + 1; w.open = w.stuckOpen or false end, -- stuckOpen: the dialog does not close
         nav = {
             Set = function(v) w.setCount = w.setCount + 1; w.last = v; if not w.nilNav then return { kind = "x" } end end,
             Clear = function() w.clearCount = w.clearCount + 1 end,
@@ -373,7 +373,108 @@ eq(has(w, "no known vendor for sell on this continent"), true, "no vendor noted"
 
 w = world({ ammoKind = "arrow", ammoCount = 10, combat = true })
 w.c.Evaluate()
-eq(has(w, "trigger"), false, "nothing decided in combat, nothing logged")
+eq(has(w, "trigger go"), false, "nothing decided in combat")
+eq(has(w, "trigger held in combat: ammo"), true, "the request combat holds back is named: " .. table.concat(w.logs, " / "))
+
+-- A hold is logged once for a burst of checks, and again after it ended; the reason is exact.
+local function count(w, text)
+    local n = 0
+    for _, m in ipairs(w.logs) do if m == text then n = n + 1 end end
+    return n
+end
+w = world({ dur = 10, combat = true, autoAccept = false })
+w.c.Evaluate(); w.c.Evaluate(); w.c.Evaluate()
+eq(count(w, "trigger held in combat: repair"), 1, "a burst of checks in combat logs the hold once")
+w.combat = false
+w.c.Evaluate()
+eq(has(w, "trigger go repair"), true, "asked once combat ends")
+w = world({ dur = 10, dead = true, autoAccept = false })
+w.c.Evaluate(); w.c.Evaluate()
+eq(count(w, "trigger held while dead: repair"), 1, "dead or a ghost: its own reason, once")
+eq(has(w, "in combat"), false, "dead is not called combat")
+w.dead = false
+w.c.Evaluate()
+eq(has(w, "trigger go repair"), true, "asked once alive")
+w.prompts[1].decline()
+w.dur = 100; w.c.Evaluate() -- repaired: the latch clears
+w.dur = 10; w.dead = true; w.c.Evaluate()
+eq(count(w, "trigger held while dead: repair"), 2, "a second death logs the hold again")
+w = world({ free = 1, instance = "party", combat = true })
+w.c.Evaluate()
+w.combat = false; w.c.Evaluate()
+eq(count(w, "trigger held in an instance: sell"), 1, "an instance is the reason, also in a fight there")
+eq(has(w, "in combat"), false, "a fight inside does not change the reason")
+w = world({ free = 1, combat = true })
+w.c.Evaluate()
+w.free = 20; w.c.Evaluate() -- nothing wanted any more
+w.free = 1; w.c.Evaluate()
+eq(count(w, "trigger held in combat: sell"), 1, "the same fight: a hold after nothing was wanted is not logged again")
+w.combat = false; w.free = 20; w.c.Evaluate()
+w.combat = true; w.free = 1; w.c.Evaluate()
+eq(count(w, "trigger held in combat: sell"), 2, "the next fight logs the hold again")
+-- A check in the same fight that ends another request holds nothing; the hold is still not logged again.
+w = world({ free = 1, autoAccept = false })
+w.c.Evaluate() -- the sell question is open
+w.combat = true; w.dur = 10; w.c.Evaluate() -- repair would replace it: held
+w.free = 20; w.c.Evaluate() -- the sell request ends: a clear, nothing held at this check
+w.c.Evaluate()
+eq(count(w, "trigger held in combat: repair"), 1, "a clear in the same fight does not log the hold again: " .. table.concat(w.logs, " / "))
+w = world({ combat = true })
+w.c.Evaluate()
+eq(has(w, "trigger held"), false, "nothing wanted: no hold line")
+
+-- The ammo the addon watches: each change is logged once, both ways.
+w = world({ ammoKind = "arrow", ammoCount = 900 })
+w.c.Evaluate(); w.c.Evaluate()
+eq(count(w, "ammo watched: arrow"), 1, "the watched ammo is logged once")
+w.ammoKind = nil; w.c.Evaluate(); w.c.Evaluate()
+eq(count(w, "ammo not watched: no bow, crossbow or gun equipped, or its ammo cannot be read"), 1, "no ammo weapon: logged once")
+w.ammoKind = "bullet"; w.c.Evaluate()
+eq(count(w, "ammo watched: bullet"), 1, "another ammo kind is logged")
+-- With the ammo warning off, a bow is not watched: no "ammo watched" line, its own reason instead.
+w = world({ cfg = { ammoEnabled = false } })
+w.c.Evaluate()
+w.ammoKind, w.ammoCount = "arrow", 5; w.c.Evaluate(); w.c.Evaluate()
+eq(has(w, "ammo watched"), false, "ammo warning off: equipping a bow is not watched")
+eq(count(w, "ammo not watched: the ammo warning is off"), 1, "ammo warning off: logged once")
+w.liveCfg.ammoEnabled = true; w.c.Evaluate()
+eq(count(w, "ammo watched: arrow"), 1, "turned back on: the bow is watched")
+
+-- Active: the request that is open or active.
+w = world({ dur = 10, autoAccept = false })
+eq(w.c.Active(), nil, "nothing active")
+w.c.Evaluate()
+eq(w.c.Active(), "repair", "the repair request is active")
+
+-- A merchant window closes an open vendor question and says so; a trainer question stays open.
+w = world({ free = 1, autoAccept = false })
+w.c.Evaluate()
+w.c.OnMerchantShow()
+eq(count(w, "question closed: merchant opened (sell)"), 1, "an open vendor question closed by a merchant is logged")
+eq(w.open, false, "the vendor question is closed")
+w.c.OnMerchantShow()
+eq(count(w, "question closed: merchant opened (sell)"), 1, "no question open: no closed line")
+w = world({})
+w.c.OnMerchantShow()
+eq(has(w, "question closed"), false, "a merchant with no question: no closed line")
+-- A question that does not close when the merchant opens is a failure, not a closed line.
+w = world({ free = 1, autoAccept = false, stuckOpen = true })
+w.c.Evaluate()
+w.c.OnMerchantShow()
+eq(count(w, "FAILED: question still shown after the merchant opened (sell)"), 1, "a question still shown after the merchant opened is logged as a failure")
+eq(has(w, "question closed: merchant opened"), false, "and no closed line")
+w = world({ skills = { { name = "Mining", rank = 70, max = 75 } }, known = { Mining = true }, trainers = { [1] = { { 20, "Near Miner", 100, 0.1, 0.1, 0, { Mining = true }, 10, 0 } } }, autoAccept = false })
+w.c.OnCraft()
+eq(has(w, "question shown: trainer for Mining"), true, "trainer question open: " .. table.concat(w.logs, " / "))
+w.c.OnMerchantShow()
+eq(has(w, "question closed"), false, "a trainer question stays open at a merchant: no closed line")
+eq(w.open, true, "the trainer question is still open")
+
+-- Dead and in combat at once: death is the reason.
+w = world({ dur = 10, dead = true, combat = true, autoAccept = false })
+w.c.Evaluate()
+eq(count(w, "trigger held while dead: repair"), 1, "dead and in combat: held while dead")
+eq(has(w, "trigger held in combat"), false, "dead and in combat: not called combat")
 
 w = world({})
 w.c.OnMerchantShow()

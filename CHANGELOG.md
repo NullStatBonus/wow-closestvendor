@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.1
+
+- **Changed: The debug log shows more of what the addon decides about warnings.** CheckThat can check more warnings without you.
+
 ## 1.11.0
 
 - **New: The addon works with the CheckThat test runner.** CheckThat can read the addon version and your settings. Without CheckThat, nothing changes.

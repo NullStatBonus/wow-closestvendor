@@ -5,7 +5,8 @@
 --
 --   CT.Start(ctx) runs from Core at PLAYER_LOGIN and registers the entries once. ctx gives functions:
 --     cfg() (this character's settings, read at call time), version() (the TOC version, read once here, so
---     an entry call never reaches the game), log(msg) (the debug log; only Start and failures write to it).
+--     an entry call never reaches the game), log(msg) (the debug log; only Start and failures write to it),
+--     active() (the warning request that is open or active and a reagent's item id, or nil).
 --   CT.Report(key, value) reports the fact [ClosestVendor] key=value. A false return is normal.
 --   A raised error from CheckThat turns the integration off for the session and keeps the reason, so
 --     /cvn log shows "CheckThat: failed: <why>" with the debug log off. An error inside an entry returns
@@ -88,6 +89,16 @@ end)
 -- The integration's own status, as the report shows it.
 add("integration", function()
     return cut(CT.Status())
+end)
+
+-- The warning request that is open or active now ("repair", "ammo", "reagent 17020", ...), from
+-- ctx.active (Triggers.Active), or nothing when there is none. A request answered with No is no
+-- longer active, though it stays handled until its condition clears.
+add("active", function()
+    if type(ctx.active) ~= "function" then return end
+    local kind, id = ctx.active()
+    if not kind then return end
+    return cut(id and (kind .. " " .. tostring(id)) or kind)
 end)
 
 local function pack(...) return { n = select("#", ...), ... } end

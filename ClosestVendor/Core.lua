@@ -760,7 +760,8 @@ local function start()
     local CT = ns.CheckThat
     if CT then
         local ok, err = pcall(CT.Start, { cfg = function() return CHAR.cfg end, version = A.addonVersion,
-            log = function(msg) log.Add(msg) end })
+            log = function(msg) log.Add(msg) end,
+            active = function() if controller then return controller.Active() end end })
         if not ok then pcall(CT.Fail, "Start: " .. tostring(err)) end
     end
 end
@@ -922,7 +923,17 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
     end
     if event == "MERCHANT_CLOSED" then
         retryParts, retryItems, relearnMerchant = {}, {}, false
-        A.hidePopup(POPUP_AMMO); A.hidePopup(POPUP_REAGENTS) -- a purchase question ends with its merchant
+        -- A purchase question ends with its merchant, unanswered: nothing is bought.
+        -- Logged only after the hide, once the question is confirmed gone; still shown is a failure.
+        local function close(which, closed, failed)
+            local was = A.popupShown(which)
+            A.hidePopup(which)
+            if log and was then log.Add(A.popupShown(which) and failed or closed) end
+        end
+        close(POPUP_AMMO, "purchase question closed with the merchant: ammo",
+            "FAILED: purchase question still shown after the merchant closed: ammo")
+        close(POPUP_REAGENTS, "purchase question closed with the merchant: reagents",
+            "FAILED: purchase question still shown after the merchant closed: reagents")
         return
     end
     if event == "PLAYER_TARGET_CHANGED" or event == "UPDATE_MOUSEOVER_UNIT" or event == "NAME_PLATE_UNIT_ADDED" then

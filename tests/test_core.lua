@@ -111,7 +111,7 @@ local function boot(opts)
         IsTradeskillTrainer = function() return g.trainer ~= nil end,
         GetNumTrainerServices = function() return g.trainer and #g.trainer or 0 end,
         GetTrainerServiceSkillLine = function(i) return g.trainer[i] end,
-        StaticPopup_Visible = function() return g.popup and "StaticPopup1" or nil end,
+        StaticPopup_Visible = function(which) return g.popup and g.popup.which == which and "StaticPopup1" or nil end,
         SlashCmdList = {},
         StaticPopupDialogs = {},
         StaticPopup_Show = function(which, text, _, data)
@@ -921,10 +921,14 @@ eq(has(win.box.text, "CheckThat: not detected"), true, "report: CheckThat not de
 
 -- With CheckThat loaded, the entries register once at login and the report says it works.
 do
-    local stored = {}
-    local ct = { Entry = function(addon, name, fn) stored[#stored + 1] = addon .. "." .. name; return true end }
+    local stored, fns = {}, {}
+    local ct = { Entry = function(addon, name, fn) stored[#stored + 1] = addon .. "." .. name; fns[name] = fn; return true end }
     g = boot({ checkThat = ct }); login(g)
-    eq(table.concat(stored, ","), "ClosestVendor.version,ClosestVendor.setting,ClosestVendor.integration", "entries registered at login")
+    eq(table.concat(stored, ","), "ClosestVendor.version,ClosestVendor.setting,ClosestVendor.integration,ClosestVendor.active", "entries registered at login")
+    g.free = 20; g.onEvent("BAG_UPDATE_DELAYED")
+    eq(select("#", fns.active()), 0, "active: no warning request, nothing")
+    g.free = 1; g.onEvent("BAG_UPDATE_DELAYED")
+    eq(fns.active(), "sell", "active: the controller's open sell request")
     g.env.SlashCmdList.CLOSESTVENDOR("log")
     for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then win = f end end
     eq(has(win.box.text, "CheckThat: working"), true, "report: CheckThat working")
@@ -1394,10 +1398,45 @@ eq(has(lastPrinted(g), "Bought 17 Arcane Powder for 17s 0c."), true, "and says s
 -- A purchase question ends with its merchant window; ammo has a dialog of its own.
 g = reagentShop()
 g.env.SlashCmdList.CLOSESTVENDOR("reagentbuy on")
+g.env.SlashCmdList.CLOSESTVENDOR("debug on")
 g.onEvent("MERCHANT_SHOW")
 eq(g.popup and g.popup.which, "CLOSESTVENDOR_CONFIRM_REAGENTS", "purchase asked")
 g.onEvent("MERCHANT_CLOSED")
 eq(g.popup, nil, "closing the merchant closes the purchase question")
+do
+    local n, ammoLine = 0, false
+    for _, e in ipairs(g.env.ClosestVendorCharDB.log.entries) do
+        if e.msg == "purchase question closed with the merchant: reagents" then n = n + 1 end
+        if e.msg:find("closed with the merchant: ammo", 1, true) then ammoLine = true end
+    end
+    eq(n, 1, "the debug log says the open purchase question closed with the merchant")
+    eq(ammoLine, false, "and names only the question that was open")
+    g.onEvent("MERCHANT_CLOSED")
+    local again = 0
+    for _, e in ipairs(g.env.ClosestVendorCharDB.log.entries) do
+        if e.msg:find("purchase question closed", 1, true) then again = again + 1 end
+    end
+    eq(again, 1, "no question open: nothing more logged")
+    g.ns.Adapter.showPopup("CLOSESTVENDOR_CONFIRM_AMMO", "Buy 200 arrows?", function() end) -- an ammo purchase question
+    g.onEvent("MERCHANT_CLOSED")
+    local ammo = 0
+    for _, e in ipairs(g.env.ClosestVendorCharDB.log.entries) do
+        if e.msg == "purchase question closed with the merchant: ammo" then ammo = ammo + 1 end
+    end
+    eq(ammo, 1, "the ammo purchase question closing with the merchant is logged")
+    eq(g.popup, nil, "and it closes")
+    -- A purchase question the game does not hide is a failure, not a closed line.
+    g.ns.Adapter.showPopup("CLOSESTVENDOR_CONFIRM_REAGENTS", "Buy 17 Arcane Powder?", function() end)
+    g.env.StaticPopup_Hide = function() end
+    g.onEvent("MERCHANT_CLOSED")
+    local failed, closed = 0, 0
+    for _, e in ipairs(g.env.ClosestVendorCharDB.log.entries) do
+        if e.msg == "FAILED: purchase question still shown after the merchant closed: reagents" then failed = failed + 1 end
+        if e.msg == "purchase question closed with the merchant: reagents" then closed = closed + 1 end
+    end
+    eq(failed, 1, "a purchase question still shown after the merchant closed is logged as a failure")
+    eq(closed, 1, "and no second closed line")
+end
 eq(g.env.StaticPopupDialogs.CLOSESTVENDOR_CONFIRM_AMMO ~= nil, true, "ammo purchases have their own dialog")
 g = reagentShop(); g.autoAccept = true
 g.env.SlashCmdList.CLOSESTVENDOR("reagentbuy on"); g.env.SlashCmdList.CLOSESTVENDOR("reagentbuy auto")

@@ -254,6 +254,14 @@ function C.New(env)
     end
 
     local asking -- { kind, id, prompt }: the question a warning asked, while it may still be open
+    -- The requests combat, death or an instance held back while that reason lasts, by log line: each
+    -- reason and kind is logged once while the reason lasts (a burst of checks, or a check in the same
+    -- fight that held nothing), and again once the reason ended or changed. Instance comes first, so
+    -- a fight inside a dungeon does not change the reason.
+    local HOLD = { instance = "trigger held in an instance: ", dead = "trigger held while dead: ",
+        combat = "trigger held in combat: " }
+    local holdWhy, held = nil, {}
+    local ammoSeen -- the ammo kind at the last check, "none" without one, "off" with the warning off: each change is logged once
 
     -- The request for kind ended without a trip (No, or no vendor): the next need may be asked.
     local function release(kind, id)
@@ -440,8 +448,17 @@ function C.New(env)
 
     function self.Evaluate()
         ammoKind, ammoCount = env.ammo()
+        -- The ammo warning turned off watches nothing either, whatever the weapon.
+        local seen = not ammoKind and "none" or (env.cfg.ammoEnabled and ammoKind or "off")
+        if seen ~= ammoSeen then
+            ammoSeen = seen
+            if seen == "none" then log("ammo not watched: no bow, crossbow or gun equipped, or its ammo cannot be read")
+            elseif seen == "off" then log("ammo not watched: the ammo warning is off")
+            else log("ammo watched: " .. ammoKind) end
+        end
         -- Dead or a ghost is held like combat: the game would hide the question and use it up.
-        local free, dur, combat, inside = env.freeSlots(), env.lowestDurability(), env.inCombat() or dead(), instance()
+        local fighting, isDead = env.inCombat(), dead()
+        local free, dur, combat, inside = env.freeSlots(), env.lowestDurability(), fighting or isDead, instance()
         -- Reagents.Low is the one "is it low" test for reagents; the status window uses it too.
         local items, watched = {}, {}
         for _, r in ipairs(env.reagents and env.reagents() or {}) do
@@ -487,7 +504,13 @@ function C.New(env)
             triggers.Release(act, nil, true)
             placedFor[act], self.pending, self.pendingId = nil, nil, nil
         end
-        local a = triggers.Update(free, dur, combat, ammoKind and ammoCount or nil, lowIds, inside ~= nil, supKeys)
+        local a, heldKind, heldId = triggers.Update(free, dur, combat, ammoKind and ammoCount or nil, lowIds, inside ~= nil, supKeys)
+        local why = (inside and "instance") or (isDead and "dead") or (fighting and "combat") or nil
+        if why ~= holdWhy then holdWhy, held = why, {} end
+        if heldKind and why then
+            local line = HOLD[why] .. heldKind .. (heldId and (" " .. tostring(heldId)) or "")
+            if not held[line] then held[line] = true; log(line) end
+        end
         if a then
             log(("trigger %s%s%s (bags=%s durability=%s ammo=%s combat=%s)"):format(a[1], a[2] and (" " .. a[2]) or "",
                 a[3] and (" " .. a[3]) or "",
@@ -511,7 +534,14 @@ function C.New(env)
     function self.OnMerchantShow()
         log("merchant window opened")
         -- a merchant window answers a vendor question by itself, but not a trainer question
-        if lastKind ~= "trainer" then cancelPrompt() end
+        if lastKind ~= "trainer" then
+            local wasOpen = questionOpen()
+            cancelPrompt()
+            if wasOpen then -- logged once the question is gone, or as a failure when it is still shown
+                if questionOpen() then log("FAILED: question still shown after the merchant opened (" .. tostring(lastKind) .. ")")
+                else log("question closed: merchant opened (" .. tostring(lastKind) .. ")") end
+            end
+        end
         if triggers.OnMerchantShow() then self.pending = nil end
         clearVendorNav() -- any merchant counts as arriving, including after a test pin
     end
@@ -1139,6 +1169,9 @@ function C.New(env)
     -- What the current waypoint is for: "sell", "repair", "ammo", "reagent" (plus the item id) or
     -- "trainer"; nil when the addon has no waypoint set.
     function self.PinKind() return pinKind, pinId end
+
+    -- The vendor request that is open or active and the item id for a reagent, or nil (Triggers.Active).
+    function self.Active() return triggers.Active() end
 
     return self
 end
