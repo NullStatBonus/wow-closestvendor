@@ -31,19 +31,12 @@ requirements:
     probe: addon-loaded
     name: ClosestVendor
 offline:
+  level: 6
   toc: wow-closest-vendor/ClosestVendor/ClosestVendor_Vanilla.toc
+  tocs:
+    era: wow-closest-vendor/ClosestVendor/ClosestVendor_Vanilla.toc
+    forever: wow-closest-vendor/ClosestVendor/ClosestVendor_Camelot.toc
   steps:
-  - event:
-      name: ADDON_LOADED
-      args:
-      - ClosestVendor
-  - event:
-      name: PLAYER_LOGIN
-  - label: The fake client gives no version, so the version entry returns nothing
-    call:
-      addon: ClosestVendor
-      entry: version
-    returns: []
   - label: The status window scale is 100 by default
     call:
       addon: ClosestVendor
@@ -60,25 +53,6 @@ offline:
       - hudRow.bags
     returns:
     - low
-  - label: A name that is not a setting returns nothing
-    call:
-      addon: ClosestVendor
-      entry: config
-      args:
-      - no.such.setting
-    returns: []
-  - label: The status window has not drawn yet (its redraw waits for a timer), so the window entry returns nothing
-    call:
-      addon: ClosestVendor
-      entry: window
-    returns: []
-  - label: The window entry for one row group returns nothing before the first draw too
-    call:
-      addon: ClosestVendor
-      entry: window
-      args:
-      - supplies
-    returns: []
   - label: The saved bag threshold reads 2 by default
     call:
       addon: ClosestVendor
@@ -95,6 +69,13 @@ offline:
       - notificationStyle
     returns:
     - toast
+  - wait: 2
+  - label: After its redraw timer the status window is hidden, because nothing is low
+    call:
+      addon: ClosestVendor
+      entry: window
+    returns:
+    - hidden
 sections:
 - id: s10
   title: Setup

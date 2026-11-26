@@ -25,7 +25,7 @@ plan:
 		"$(CT)" compile "$$plan" -o "build/$$name.ct"; \
 		"$(CT)" replay-flow "$$plan"; \
 		"$(CT)" lines "$$plan" --addon-src ClosestVendor; \
-		"$(CT)" offline "$$plan"; \
+		"$(CT)" offline "$$plan" --client both; \
 	done
 
 .PHONY: check

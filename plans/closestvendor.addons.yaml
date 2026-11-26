@@ -31,26 +31,19 @@ requirements:
     probe: addon-loaded
     name: ClosestVendor
 offline:
+  level: 6
   toc: wow-closest-vendor/ClosestVendor/ClosestVendor_Vanilla.toc
+  tocs:
+    era: wow-closest-vendor/ClosestVendor/ClosestVendor_Vanilla.toc
+    forever: wow-closest-vendor/ClosestVendor/ClosestVendor_Camelot.toc
   steps:
-  - event:
-      name: ADDON_LOADED
-      args:
-      - ClosestVendor
-  - event:
-      name: PLAYER_LOGIN
-  - label: The fake client gives no version, so the version entry returns nothing
-    call:
-      addon: ClosestVendor
-      entry: version
-    returns: []
-  - label: The fake client has no TomTom, WaypointUI or game waypoint, so the waypoint is a chat line
+  - label: The game has no TomTom, WaypointUI or map waypoint here, so the waypoint is a chat line
     call:
       addon: ClosestVendor
       entry: nav
     returns:
     - chat
-  - label: The fake client has no NorgannonDB
+  - label: NorgannonDB is not installed
     call:
       addon: ClosestVendor
       entry: external

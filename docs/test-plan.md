@@ -11,7 +11,7 @@ The in-game checks live in three CheckThat test plans. This file only points the
 The unit tests (`make test`) prove the logic. The plans keep only what a fake game cannot prove: real game data and events, end-to-end wiring, drawing, sound, other addons and saved variables across `/reload`. Each plan stays under 25 steps.
 
 - **When:** run all three plans before each release, on WoW Forever and on Classic Era.
-- **Check and build them:** `make plan` (needs the installed `ct` tools; see AGENTS.md, CheckThat). It writes `build/closestvendor.ct`, `build/closestvendor.ui.ct` and `build/closestvendor.addons.ct`.
+- **Check and build them:** `make plan` (needs the installed `ct` tools; see AGENTS.md, CheckThat). It writes `build/closestvendor.ct`, `build/closestvendor.ui.ct` and `build/closestvendor.addons.ct`, and runs each plan's offline block in the fake client twice, once as Classic Era and once as WoW Forever.
 - **Run them** with the CheckThat addon in game, one plan at a time: type `/ct import`, paste the contents of one `.ct` file, type `/ct start ClosestVendor` and finish the run. Then type `/ct export` and `/reload` before you import the next plan: a run uses the last plan imported. Steps marked automatic are judged from the debug log, CheckThat facts and ClosestVendor's entries; the others ask the player.
 - **Read a run back** with `ct collect --plan <plan file> --dest evidence` for each plan (the evidence folder is kept out of Git), or the `/ct-verify` skill.
 - **Numbers:** "test plan check 4.1" means step `cv.s4.1`; "test plan section 20" means section `s20`. Each plan owns its section range, so a number names one step across the three plans. Step ids are fixed from this version of the plans on: never renumber or reuse one.
