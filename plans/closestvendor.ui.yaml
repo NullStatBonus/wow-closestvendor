@@ -7,7 +7,7 @@ preamble: |-
   ClosestVendor has three plans, and all three run before each release: |cff99ccffplans/closestvendor.yaml|r (core), |cff99ccffplans/closestvendor.ui.yaml|r (status window, visuals and settings) and |cff99ccffplans/closestvendor.addons.yaml|r (other addons). Import one plan, finish it and export it (|cff99ccff/ct export|r, optionally |cff99ccff/cvn debug off|r, then |cff99ccff/reload|r) before you import the next: a run uses the last plan imported.
 
   Have at least 3 free bag slots. The setup step turns on test settings, so the plan runs on the default settings whatever yours are. The last step turns them off and your own settings come back. The steps that change a setting type the default back later.
-  Each step has one player action. A player step says what to look at; the log lines are for the reviewer.
+  Each step starts with one sentence that says what to expect: a question to answer, nothing (CheckThat checks by itself), or something to look at. Steps that ask you to look wait for Pass or Fail. A step that needs a class or two vendors says Needs: first. Press Skip when you cannot do it.
 logs:
   debug:
     global: ClosestVendorCharDB
@@ -86,7 +86,7 @@ sections:
     auto: true
     action:
       kind: manual
-      text: CheckThat reads the ClosestVendor version.
+      text: Nothing appears. CheckThat checks by itself. CheckThat reads the ClosestVendor version.
     expect: The ClosestVendor version is 1.12.0 or newer. If the step fails, copy ClosestVendor 1.12.0 into the game again.
     verify:
     - assertions
@@ -107,7 +107,7 @@ sections:
     title: Turn on Lua errors, debug logging and test settings, then reload
     action:
       kind: manual
-      text: Press Run. It turns on Lua error popups (|cff99ccff/console scriptErrors 1|r), the debug log (|cff99ccff/cvn debug on|r) and test settings (|cff99ccff/cvn testsettings on|r, which puts your own settings aside and uses the defaults), then reloads (|cff99ccff/reload|r).
+      text: Nothing appears. CheckThat checks by itself. Press Run. It turns on Lua error popups (|cff99ccff/console scriptErrors 1|r), the debug log (|cff99ccff/cvn debug on|r) and test settings (|cff99ccff/cvn testsettings on|r, which puts your own settings aside and uses the defaults), then reloads (|cff99ccff/reload|r).
       commands:
       - "/console scriptErrors 1"
       - "/cvn debug on"
@@ -134,37 +134,46 @@ sections:
   intro: The status window shows a row when it is low. Know at least two vendors you can sell to (most towns have several).
   steps:
   - id: cv.s11.1
-    title: Make Bag space low
-    setup: At least 3 free bag slots, so Bag space is not low before the step.
+    title: "Make Bag space low"
+    setup: "Needs: at least 3 free bag slots, so Bag space is not low before the step."
     action:
       kind: manual
-      text: Press Run (|cff99ccff/cvn bags 200|r). It makes Bag space low. A sell question opens too; leave it open.
+      text: "A question appears. Click No. Look, then press Pass or Fail. Press Run (|cff99ccff/cvn bags 200|r). It makes Bag space low and a sell question opens. Click |cffffd100No|r."
       commands:
       - "/cvn bags 200"
-    expect: The status window shows the Bag space row with red text, a red warning symbol and a Low label. Press Pass.
+    expect: "The status window shows the Bag space row with red text, a red warning symbol and a Low label. Press Pass."
     verify:
     - player
     - assertions
     assertions:
     - kind: log
       source: debug
-      pattern: 'status window: shown, rows: .*bags low'
+      pattern: "status window: shown, rows: .*bags low"
       scope: attempt
-      label: The window shows the Bag space row as low
+      label: "The window shows the Bag space row as low"
     - kind: log
       source: debug
-      contains: 'status window: FAILED'
+      contains: "status window: FAILED"
       absent: true
       scope: attempt
-      label: The window state matches the rows
-    notes: 'Player step. Drawing: the red row and the Low label. The row key "bags low" in the window line means the row is low. Check 12.5 types the bag default back.'
+      label: "The window state matches the rows"
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: "question shown: sell, "
+      - contains: "question declined: sell"
+      scope: attempt
+      label: "The sell question was asked and answered"
+    notes: "Player step. Drawing: the red row and the Low label. The row key \"bags low\" in the window line means the row is low. Check 11.7 types the bag default back."
   - id: cv.s11.2
-    title: Click the Bag space row
-    setup: The sell question from check 11.1 is open.
+    title: "Click the Bag space row"
+    setup: "Builds on check 11.1: the Bag space row is low. Run makes sure of it."
     action:
       kind: manual
-      text: Click the Bag space row in the status window.
-    expect: The sell question closes, and a waypoint to the closest vendor is set without a question. A short notice names the vendor and its distance, and goes away after about five seconds. Press Pass.
+      text: "Look, then press Pass or Fail. Press Run (|cff99ccff/cvn bags 200|r), then click the Bag space row in the status window."
+      commands:
+      - "/cvn bags 200"
+    expect: "A waypoint to the closest vendor is set without a question. A short notice names the vendor and its distance, and goes away after about five seconds. Press Pass."
     verify:
     - player
     - assertions
@@ -172,24 +181,25 @@ sections:
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: 'row click: bags ('
-      - contains: 'direct pin: sell'
-      - pattern: 'accepted: .+ via '
+      - pattern: "row click: bags %("
+      - contains: "direct pin: sell"
+      - pattern: "accepted: .+ via "
       scope: attempt
-      label: The click pinned the closest vendor to sell to
+      label: "The click pinned the closest vendor to sell to"
     - kind: log
       source: debug
-      contains: via nothing available
+      contains: "via nothing available"
       absent: true
       scope: attempt
-      label: A waypoint provider took the waypoint
-    notes: 'Player step. Drawing: the question closing, the waypoint and the notice (Toast by default; it grows to fit long text).'
+      label: "A waypoint provider took the waypoint"
+    notes: "Player step. Drawing: the waypoint and the notice (Toast by default; it grows to fit long text)."
   - id: cv.s11.3
-    title: Click the arrow on the Bag space row and pick the second seller
+    title: "Click the arrow on the Bag space row and pick the second seller"
+    setup: "Needs: two vendors you can sell to (most towns have several). Builds on check 11.1: the Bag space row is low."
     action:
       kind: manual
-      text: Click the small arrow at the right end of the Bag space row. In the menu that opens, pick the second entry.
-    expect: A menu opens at the arrow with the current seller marked and up to three more, each with its zone and yards. After the pick, the waypoint moves to the second seller. Press Pass.
+      text: "Look, then press Pass or Fail. Click the small arrow at the right end of the Bag space row. In the menu that opens, pick the second entry."
+    expect: "A menu opens at the arrow with the current seller marked and up to three more, each with its zone and yards. After the pick, the waypoint moves to the second seller. Press Pass."
     verify:
     - player
     - assertions
@@ -197,129 +207,175 @@ sections:
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: 'choice menu shown: '
-      - contains: 'chosen pin: '
-      - contains: 'accepted: '
+      - contains: "choice menu shown: "
+      - contains: "chosen pin: "
+      - contains: "accepted: "
       scope: attempt
-      label: The menu opened, and the pick set a waypoint
+      label: "The menu opened, and the pick set a waypoint"
     - kind: log
       source: debug
-      contains: via nothing available
+      contains: "via nothing available"
       absent: true
       scope: attempt
-      label: A waypoint provider took the waypoint
-    notes: 'Player step. Drawing: the menu at the arrow. The menu comes from the click, so the pick is part of the action. The chosen pin line comes before the seller is checked, so the accepted line proves the waypoint.'
-    setup: The waypoint from check 11.2 is set, and you know at least two vendors you can sell to (most towns have several).
+      label: "A waypoint provider took the waypoint"
+    notes: "Player step. Drawing: the menu at the arrow. The menu comes from the click, so the pick is part of the action. The chosen pin line comes before the seller is checked, so the accepted line proves the waypoint."
   - id: cv.s11.4
-    title: Move the status window, then press Escape
+    title: "Move the status window, then press Escape"
     action:
       kind: manual
-      text: Press Run (|cff99ccff/cvn settings status-window|r). On the Status window page, click |cffffd100Move|r, drag the status window to a new place and press Escape.
+      text: "Look, then press Pass or Fail. Press Run (|cff99ccff/cvn settings status-window|r). On the Status window page, click |cffffd100Move|r, drag the status window to a new place and press Escape."
       commands:
       - "/cvn settings status-window"
-    expect: While you drag, a placeholder shows where the window goes. After Escape, the window is back where it was. Press Pass.
+    expect: "While you drag, a placeholder shows where the window goes. After Escape, the window is back where it was. Press Pass."
     verify:
     - player
-    notes: 'Player step. Drawing: the position. Move writes no log line, and Escape saves nothing.'
+    notes: "Player step. Position: where the window goes while you drag and after Escape. Move writes no log line, and Escape saves nothing, so no assertion can prove it."
   - id: cv.s11.5
-    title: Pick a background color for the status window
-    setup: The settings window from check 11.4 is open.
+    title: "Pick a background color for the status window"
     action:
       kind: manual
-      text: On Appearance, Status window, click Background color, change the color wheel and confirm.
-    expect: The status window background changes while you turn the wheel, and keeps the new color. Press Pass.
+      text: "Look, then press Pass or Fail. Press Run (|cff99ccff/cvn settings status-window|r). On Appearance, Status window, click Background color, change the color wheel and confirm."
+      commands:
+      - "/cvn settings status-window"
+    expect: "The status window background changes while you turn the wheel, and keeps the new color. Press Pass."
     verify:
     - player
     - assertions
     assertions:
     - kind: log
       source: debug
-      pattern: 'setting changed: hudColor %x+ %-> %x+'
+      pattern: "setting changed: hudColor %x+ %-> %x+"
       scope: attempt
-      label: A new color was saved
-    notes: 'Player step. Drawing: the live color. The picker writes one line about a second after the last change. Check 13.7 sets the color back to black.'
+      label: "A new color was saved"
+    notes: "Player step. Drawing: the live color. The picker writes one line about a second after the last change. Check 11.7 sets the color back to black."
   - id: cv.s11.6
-    title: Clear the status window background and dim its text
+    title: "Clear the status window background and dim its text"
     action:
       kind: manual
-      text: Press Run. It sets the background opacity to 0 (|cff99ccff/cvn hud opacity 0|r) and the text and icon opacity to 40 (|cff99ccff/cvn hud textopacity 40|r).
+      text: "Look, then press Pass or Fail. Press Run. It sets the background opacity to 0 (|cff99ccff/cvn hud opacity 0|r) and the text and icon opacity to 40 (|cff99ccff/cvn hud textopacity 40|r)."
       commands:
       - "/cvn hud opacity 0"
       - "/cvn hud textopacity 40"
-    expect: Only the title, the cog and the row text show, dimmer than before. No fill, border or faint rectangle is drawn, whatever the color. Press Pass.
+    expect: "Only the title, the cog and the row text show, dimmer than before. No fill, border or faint rectangle is drawn, whatever the color. Press Pass."
     verify:
     - player
     - assertions
     assertions:
     - kind: log
       source: debug
-      contains: 'setting changed: hudAlpha 80 -> 0'
+      contains: "setting changed: hudAlpha 80 -> 0"
       scope: attempt
-      label: The background opacity is 0
+      label: "The background opacity is 0"
     - kind: log
       source: debug
-      contains: 'setting changed: hudTextAlpha 100 -> 40'
+      contains: "setting changed: hudTextAlpha 100 -> 40"
       scope: attempt
-      label: The text opacity is 40
-    notes: 'Player step. Drawing: nothing is drawn behind the rows at opacity 0, and the text dims on its own. Check 12.5 sets both back.'
+      label: "The text opacity is 40"
+    notes: "Player step. Drawing: nothing is drawn behind the rows at opacity 0, and the text dims on its own. Check 11.7 sets both back."
+  - id: cv.s11.7
+    title: "Put the status window and bag settings back"
+    setup: "Builds on checks 11.1, 11.5 and 11.6, which changed these settings; otherwise press Skip."
+    auto: true
+    action:
+      kind: manual
+      text: "Nothing appears. CheckThat checks by itself. Press Run. It sets the window opacities back (|cff99ccff/cvn hud opacity 80|r, |cff99ccff/cvn hud textopacity 100|r), the window color to black (|cff99ccff/cvn hud color black|r) and the bag threshold to the default (|cff99ccff/cvn bags 2|r)."
+      commands:
+      - "/cvn hud opacity 80"
+      - "/cvn hud textopacity 100"
+      - "/cvn hud color black"
+      - "/cvn bags 2"
+    expect: "The status window looks as it did at the start."
+    verify:
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: "setting changed: hudAlpha 0 -> 80"
+      scope: attempt
+      label: "The background opacity is back at 80"
+    - kind: log
+      source: debug
+      contains: "setting changed: hudTextAlpha 40 -> 100"
+      scope: attempt
+      label: "The text opacity is back at 100"
+    - kind: log
+      source: debug
+      contains: "setting changed: hudColor "
+      diagnostic: true
+      scope: attempt
+      label: "The window color is black again"
+    - kind: log
+      source: debug
+      contains: "setting changed: bagThreshold 200 -> 2"
+      diagnostic: true
+      scope: attempt
+      label: "The bag threshold is back at 2"
+    notes: "Cleanup the player sees. Added at the end of section 11, so no id changes."
 - id: s12
   title: Demo and preview
   steps:
   - id: cv.s12.1
-    title: Run the demo
-    setup: The waypoint from check 11.3 is set.
+    title: "Run the demo"
+    auto: true
     action:
       kind: manual
-      text: Press Run (|cff99ccff/cvn demo|r) and wait for the tour to end (about 40 seconds).
+      text: "Nothing appears. CheckThat checks by itself. Press Run (|cff99ccff/cvn demo|r) and wait for the tour to end (about 40 seconds)."
       commands:
       - "/cvn demo"
-    expect: The tour runs every step and ends. Your earlier waypoint comes back and no setting changes.
+    expect: "The tour runs every step and ends. No setting changes."
     verify:
     - assertions
-    auto: true
-    timeout: 120
+    timeout: 90
     call:
       addon: ClosestVendor
       entry: config
       args:
-      - vendorMode
+      - "vendorMode"
     assertions:
     - kind: fact
       source: facts
       addon: ClosestVendor
       key: entry.config
       op: eq
-      value: ask
-      label: The target choice is Ask before the tour
+      value: "ask"
+      label: "The target choice is Ask before the tour"
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: 'demo: pin without asking, sell'
-      - contains: 'demo: question, repair'
-      - contains: 'demo: pin without asking, food'
-      - contains: 'demo: pin without asking, arrow'
-      - contains: 'demo: row click, '
-      - contains: 'demo: reminder'
-      - contains: 'demo: over'
-      - contains: 'demo: previous waypoint restored'
+      - contains: "demo: pin without asking, sell"
+      - contains: "demo: question, repair"
+      - contains: "demo: pin without asking, food"
+      - contains: "demo: pin without asking, arrow"
+      - contains: "demo: row click, "
+      - contains: "demo: reminder"
+      - contains: "demo: over"
       scope: attempt
-      label: The tour ran every step and gave back the earlier waypoint
+      label: "The tour ran every step"
     - kind: log
       source: debug
-      contains: 'setting changed: '
-      scope: attempt
-      label: The tour changed no setting
+      contains: "setting changed: "
       absent: true
-    notes: Auto. The look and sound of each notification are drawing and sound; the log proves every step ran. The water or pet step depends on the class, so it is not asserted. The tour puts the waypoint from check 11.3 back at the end. The tour navigates without asking but keeps the target choice; the config entry reads Ask when the step opens, and check 12.3 proves it is still Ask after the tours (its own change logs ask -> auto).
+      scope: attempt
+      label: "The tour changed no setting"
+    - kind: log
+      source: debug
+      contains: "demo: previous waypoint restored"
+      diagnostic: true
+      scope: attempt
+      label: "The earlier waypoint came back (when one was set before the tour)"
+    notes: "Auto. The look and sound of each notification are drawing and sound; the log proves every step ran. The water or pet step depends on the class, so it is not asserted. The step waits its whole timeout, because the check that no setting changed can only hold at the end. The waypoint line is diagnostic: it needs a waypoint set before the tour (check 11.3 leaves one). The tour navigates without asking but keeps the target choice; the config entry reads Ask when the step opens, and check 12.3 proves it is still Ask after the tours (its own change logs ask -> auto)."
   - id: cv.s12.2
-    title: 'WoW Forever: put your own waypoint on the map and run the demo'
+    title: "WoW Forever: put your own waypoint on the map and run the demo"
+    clients:
+    - forever-camelot
+    setup: "Needs: WoW Forever (Classic Era has no game waypoint). Put your own waypoint on the map first."
     action:
       kind: manual
-      text: WoW Forever only (Classic Era has no game waypoint). First put your own waypoint on the map. Then press Run (|cff99ccff/cvn nav native|r, needed when TomTom or WaypointUI is installed, then |cff99ccff/cvn demo|r) and wait about a minute for the tour to end.
+      text: "Look, then press Pass or Fail. Press Run (|cff99ccff/cvn nav native|r, needed when TomTom or WaypointUI is installed, then |cff99ccff/cvn demo|r) and wait about a minute for the tour to end."
       commands:
       - "/cvn nav native"
       - "/cvn demo"
-    expect: Your waypoint is on the map again, where you put it. Press Pass.
+    expect: "Your waypoint is on the map again, where you put it. Press Pass."
     verify:
     - player
     - assertions
@@ -327,22 +383,20 @@ sections:
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: 'demo: over'
-      - contains: 'demo: your game waypoint restored'
+      - contains: "demo: over"
+      - contains: "demo: your game waypoint restored"
       scope: attempt
-      label: The demo ended and put your waypoint back
-    notes: 'Player step. Drawing: your waypoint on the map. The demo has 6 or 7 steps of 5 seconds. The line ends with tracked or not tracked, as your waypoint was. Check 13.7 sets the waypoint choice back.'
-    clients:
-    - forever-camelot
+      label: "The demo ended and put your waypoint back"
+    notes: "Player step. Drawing: your waypoint on the map. The demo has 6 or 7 steps of 5 seconds. The line ends with tracked or not tracked, as your waypoint was. Check 13.7 sets the waypoint choice back."
   - id: cv.s12.3
-    title: Navigate without asking
+    title: "Navigate without asking"
     action:
       kind: manual
-      text: Press Run. It sets the target choice to navigate without asking (|cff99ccff/cvn choice auto|r) and asks for a sell vendor (|cff99ccff/cvn test sell|r).
+      text: "Look, then press Pass or Fail. Press Run. It sets the target choice to navigate without asking (|cff99ccff/cvn choice auto|r) and asks for a sell vendor (|cff99ccff/cvn test sell|r). Listen for the sound."
       commands:
       - "/cvn choice auto"
       - "/cvn test sell"
-    expect: No question opens. The waypoint goes to a vendor at once, the notification sound plays once, and a short notice says why. Press Pass.
+    expect: "No question opens. The waypoint goes to a vendor at once, the notification sound plays once, and a short notice says why. Press Pass."
     verify:
     - player
     - assertions
@@ -350,139 +404,160 @@ sections:
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: 'test command: sell'
-      - contains: 'auto: '
-      - pattern: 'accepted: .+ via '
+      - contains: "test command: sell"
+      - contains: "auto: "
+      - pattern: "accepted: .+ via "
       scope: attempt
-      label: The vendor was pinned without a question
+      label: "The vendor was pinned without a question"
     - kind: log
       source: debug
-      contains: 'setting changed: vendorMode ask -> auto'
+      contains: "setting changed: vendorMode ask -> auto"
       scope: attempt
-      label: The target choice was still Ask after the demos, so they changed no setting
+      label: "The target choice was still Ask after the demos, so they changed no setting"
     - kind: log
       source: debug
-      contains: 'question shown: '
+      contains: "question shown: "
       absent: true
       scope: attempt
-      label: No question
-    notes: 'Player step. Drawing and sound: the notice and the sound. Check 13.7 sets the target choice back to ask.'
+      label: "No question"
+    notes: "Player step. Drawing and sound: the notice and the sound. Check 12.5 sets the target choice back to ask."
   - id: cv.s12.4
-    title: Turn the on-screen notice off, then navigate without asking
+    title: "Turn the on-screen notice off, then navigate without asking"
     action:
       kind: manual
-      text: Press Run. It turns the on-screen notice off (|cff99ccff/cvn notice off|r) and asks for a sell vendor again (|cff99ccff/cvn test sell|r).
+      text: "Look, then press Pass or Fail. Press Run. It turns the on-screen notice off (|cff99ccff/cvn notice off|r) and asks for a sell vendor again (|cff99ccff/cvn test sell|r)."
       commands:
       - "/cvn notice off"
       - "/cvn test sell"
-    expect: The waypoint goes to a vendor at once, and the chat line says why. No notice shows on screen. Press Pass.
+    expect: "The waypoint goes to a vendor at once, and the chat line says why. No notice shows on screen. Press Pass."
     verify:
     - player
     - assertions
     assertions:
     - kind: log
       source: debug
-      contains: 'setting changed: autoNotice true -> false'
+      contains: "setting changed: autoNotice true -> false"
       scope: attempt
-      label: The on-screen notice is off
+      label: "The on-screen notice is off"
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: 'test command: sell'
-      - contains: 'auto: '
+      - contains: "test command: sell"
+      - contains: "auto: "
       scope: attempt
-      label: The vendor was still pinned
-    notes: 'Player step. Drawing: no notice on screen; the chat line stays. Check 13.8 turns the notice back on.'
+      label: "The vendor was still pinned"
+    notes: "Player step. Drawing: no notice on screen; the chat line stays. Check 12.5 turns the notice back on."
   - id: cv.s12.5
-    title: Preview the status window
+    title: "Preview the status window"
     action:
       kind: manual
-      text: Press Run. It types the bag default back (|cff99ccff/cvn bags 2|r), sets the window opacities back (|cff99ccff/cvn hud opacity 80|r, |cff99ccff/cvn hud textopacity 100|r) and shows a sample status window (|cff99ccff/cvn preview hud|r). Look at a low line in the sample.
+      text: "Look, then press Pass or Fail. Press Run. It sets the target choice back to ask (|cff99ccff/cvn choice ask|r), turns the on-screen notice back on (|cff99ccff/cvn notice on|r) and shows a sample status window (|cff99ccff/cvn preview hud|r). Look at a low line in the sample."
       commands:
-      - "/cvn bags 2"
-      - "/cvn hud opacity 80"
-      - "/cvn hud textopacity 100"
+      - "/cvn choice ask"
+      - "/cvn notice on"
       - "/cvn preview hud"
-    expect: The background is back. A low line has red text, a red warning symbol and a visible Low label; lines that are not low use neutral text, and display-only lines are never red. The text uses the game's normal font, and no line overlaps another. Press Pass.
+    expect: "A low line has red text, a red warning symbol and a visible Low label; lines that are not low use neutral text, and display-only lines are never red. The text uses the game's normal font, and no line overlaps another. Press Pass."
     verify:
     - player
-    notes: 'Player step. Drawing: red text, symbol and label, the font and the spacing. The sample uses made-up rows, so the window writes no line. The bag default ends the sell warning from check 11.1.'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: "setting changed: vendorMode auto -> ask"
+      diagnostic: true
+      scope: attempt
+      label: "The target choice asks again"
+    - kind: log
+      source: debug
+      contains: "setting changed: autoNotice false -> true"
+      diagnostic: true
+      scope: attempt
+      label: "The on-screen notice is on again"
+    notes: "Player step. Drawing: red text, symbol and label, the font and the spacing. The sample uses made-up rows, so the window writes no line. The two setting lines are diagnostic: they appear only when checks 12.3 and 12.4 ran."
 - id: s13
   title: Settings pages
   steps:
   - id: cv.s13.1
-    title: Open Closest Vendor in the game's AddOns list
+    title: "Open Closest Vendor in the game's AddOns list"
     action:
       kind: manual
-      text: Open Esc, Options, AddOns and select Closest Vendor. Open each page listed under it.
-    expect: The badge icon shows by the name. Restock, Navigation, Appearance, Advanced and About are listed under it, and each opens. Selecting Closest Vendor shows Home. Press Pass.
+      text: "Look, then press Pass or Fail. Open Esc, Options, AddOns and select Closest Vendor. Open each page listed under it."
+    expect: "The badge icon shows by the name. Restock, Navigation, Appearance, Advanced and About are listed under it, and each opens. Selecting Closest Vendor shows Home. Press Pass."
     verify:
     - player
-    notes: 'Player step. Drawing: the icon and the page list. No line proves it.'
+    notes: "Player step. Drawing: the icon and the page list. No line proves it."
   - id: cv.s13.2
-    title: Open the settings window and resize it
+    title: "Open the settings window and resize it"
     action:
       kind: manual
-      text: Press Run (|cff99ccff/cvn settings|r). Drag the corner of the window to make it larger, then smaller, and open Home and Appearance.
+      text: "Look, then press Pass or Fail. Press Run (|cff99ccff/cvn settings|r). Drag the corner of the window to make it larger, then smaller, and open Home and Appearance."
       commands:
       - "/cvn settings"
-    expect: The window opens at about 600 by 460 with the page introduction above the first section. Controls fill their rows, long labels stay readable, and every control is reachable by scrolling. Press Pass.
+    expect: "The window opens at about 600 by 460 with the page introduction above the first section. Controls fill their rows, long labels stay readable, and every control is reachable by scrolling. Press Pass."
     verify:
     - player
-    notes: 'Player step. Drawing: layout and readability. No line proves it.'
+    notes: "Player step. Drawing: layout and readability. No line proves it."
   - id: cv.s13.3
-    title: 'Reagent class: turn Buy reagents on and off'
+    title: "Reagent class: turn Buy reagents on and off"
+    setup: "Needs: a class with reagents (for example a Mage); otherwise press Skip."
     action:
       kind: manual
-      text: Reagent class only (for example a Mage); press Skip otherwise. In the settings, open Restock, Reagents. Turn Buy reagents on, then off.
-    expect: The other two controls are greyed out while it is off. Turning it on makes them usable again. Press Pass.
+      text: "Look, then press Pass or Fail. In the settings, open Restock, Reagents. Turn Buy reagents on, then off."
+    expect: "The other two controls are greyed out while it is off. Turning it on makes them usable again. Press Pass."
     verify:
     - player
-    notes: 'Player step. Drawing: greyed controls. Ends with Buy reagents off, the default.'
-  - id: cv.s13.4
-    title: Change two settings on the pages, then reload
-    action:
-      kind: manual
-      text: On Home, set the bag space slider to 3. On Appearance, Notifications, set Style to Warning. Wait a second, then press Run (|cff99ccff/reload|r).
-      commands:
-      - "/reload"
-    expect: The game reloads.
-    verify:
     - assertions
-    auto: true
-    reload: after_action
-    timeout: 180
     assertions:
     - kind: log-sequence
       source: debug
       sequence:
-      - pattern: 'setting changed: bagThreshold %d+ %-> 3'
-      - contains: "---- login ----"
+      - contains: "setting changed: reagentBuyEnabled false -> true"
+      - contains: "setting changed: reagentBuyEnabled true -> false"
       scope: attempt
-      label: The page saved the bag threshold 3 before the reload
+      label: "Buy reagents was turned on, then off"
+    notes: "Player step. Drawing: greyed controls. Ends with Buy reagents off, the default."
+  - id: cv.s13.4
+    title: "Change two settings on the pages, then reload"
+    auto: true
+    action:
+      kind: manual
+      text: "Nothing appears. CheckThat checks by itself. On Home, set the bag space slider to 3. On Appearance, Notifications, set Style to Warning. Wait a second, then press Run (|cff99ccff/reload|r)."
+      commands:
+      - "/reload"
+    expect: "The game reloads."
+    verify:
+    - assertions
+    reload: after_action
+    assertions:
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: 'setting changed: notificationStyle toast -> warning'
+      - pattern: "setting changed: bagThreshold %d+ %-> 3"
       - contains: "---- login ----"
       scope: attempt
-      label: The page saved the Warning style before the reload
-    notes: The pages write their lines about a second after the last change. Checks 13.5 and 13.6 read the values after the reload.
+      label: "The page saved the bag threshold 3 before the reload"
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: "setting changed: notificationStyle toast -> warning"
+      - contains: "---- login ----"
+      scope: attempt
+      label: "The page saved the Warning style before the reload"
+    notes: "The pages write their lines about a second after the last change. Checks 13.5 and 13.6 read the values after the reload."
   - id: cv.s13.5
-    title: After the reload, the bag threshold is still 3
+    title: "After the reload, the bag threshold is still 3"
+    auto: true
     action:
       kind: manual
-      text: Nothing to do. CheckThat reads the saved bag threshold.
-    expect: The bag threshold is 3 after the reload.
+      text: "Nothing appears. CheckThat checks by itself. Nothing to do. CheckThat reads the saved bag threshold."
+    expect: "The bag threshold is 3 after the reload."
     verify:
     - assertions
-    auto: true
-    timeout: 30
     call:
       addon: ClosestVendor
       entry: config
       args:
-      - bagThreshold
+      - "bagThreshold"
     assertions:
     - kind: fact
       source: facts
@@ -490,89 +565,75 @@ sections:
       key: entry.config
       op: eq
       value: 3
-      label: The page change survived the reload
-    notes: The entry runs when the step opens, after the reload in check 13.4. It reads this character's saved setting.
+      label: "The page change survived the reload"
+    notes: "The entry runs when the step opens, after the reload in check 13.4. It reads this character's saved setting."
   - id: cv.s13.6
-    title: After the reload, the notification style is still Warning
+    title: "After the reload, the notification style is still Warning"
+    auto: true
     action:
       kind: manual
-      text: Nothing to do. CheckThat reads the saved notification style.
-    expect: The style is Warning after the reload.
+      text: "Nothing appears. CheckThat checks by itself. Nothing to do. CheckThat reads the saved notification style."
+    expect: "The style is Warning after the reload."
     verify:
     - assertions
-    auto: true
-    timeout: 30
     call:
       addon: ClosestVendor
       entry: config
       args:
-      - notificationStyle
+      - "notificationStyle"
     assertions:
     - kind: fact
       source: facts
       addon: ClosestVendor
       key: entry.config
       op: eq
-      value: warning
-      label: The style survived the reload
-    notes: The style is saved per character (ClosestVendorCharDB).
+      value: "warning"
+      label: "The style survived the reload"
+    notes: "The style is saved per character (ClosestVendorCharDB)."
   - id: cv.s13.7
-    title: Put the bag, color, waypoint and target settings back
+    title: "Put the bag and waypoint settings back"
+    setup: "Builds on check 13.4, which set the bag threshold to 3; otherwise press Skip."
+    auto: true
     action:
       kind: manual
-      text: Press Run. It types the bag default back (|cff99ccff/cvn bags 2|r) and sets the window color back to black (|cff99ccff/cvn hud color black|r), the waypoint choice to Automatic (|cff99ccff/cvn nav auto|r) and the target choice to ask (|cff99ccff/cvn choice ask|r).
+      text: "Nothing appears. CheckThat checks by itself. Press Run. It types the bag default back (|cff99ccff/cvn bags 2|r) and sets the waypoint choice to Automatic (|cff99ccff/cvn nav auto|r)."
       commands:
       - "/cvn bags 2"
-      - "/cvn hud color black"
       - "/cvn nav auto"
-      - "/cvn choice ask"
-    expect: The status window background is black again.
+    expect: "The bag threshold is 2 again."
     verify:
     - assertions
-    auto: true
-    timeout: 60
     assertions:
     - kind: log
       source: debug
-      contains: 'setting changed: bagThreshold 3 -> 2'
+      contains: "setting changed: bagThreshold 3 -> 2"
       scope: attempt
-      label: The bag threshold is back at 2
-    - kind: log
-      source: debug
-      contains: 'setting changed: vendorMode auto -> ask'
-      scope: attempt
-      label: The target choice asks again
-    notes: Cleanup the player sees. The color and waypoint commands are harmless when the setting is already at its default.
+      label: "The bag threshold is back at 2"
+    notes: "Cleanup the player sees. The waypoint command is harmless when the setting is already at its default. Checks 11.7 and 12.5 put the window and target settings back."
   - id: cv.s13.8
-    title: Put the notice and the style back
+    title: "Put the notification style back"
+    setup: "Builds on check 13.4, which set the style to Warning; otherwise press Skip."
+    auto: true
     action:
       kind: manual
-      text: Press Run. It turns the on-screen notice back on (|cff99ccff/cvn notice on|r) and sets the style back to Toast (|cff99ccff/cvn set appearance.notification-style toast|r).
+      text: "Nothing appears. CheckThat checks by itself. Press Run. It sets the style back to Toast (|cff99ccff/cvn set appearance.notification-style toast|r)."
       commands:
-      - "/cvn notice on"
       - "/cvn set appearance.notification-style toast"
-    expect: The on-screen notice is on and the style is Toast again.
+    expect: "The style is Toast again."
     verify:
     - assertions
-    auto: true
-    timeout: 60
     assertions:
     - kind: log
       source: debug
-      contains: 'setting changed: autoNotice false -> true'
+      contains: "setting changed: notificationStyle warning -> toast"
       scope: attempt
-      label: The on-screen notice is on
-    - kind: log
-      source: debug
-      contains: 'setting changed: notificationStyle warning -> toast'
-      scope: attempt
-      label: The style is Toast
-    notes: Cleanup the player sees.
+      label: "The style is Toast"
+    notes: "Cleanup the player sees. Check 12.5 turned the on-screen notice back on."
   - id: cv.s13.9
     title: Turn test settings off, then check for Lua errors
     action:
       kind: manual
-      text: Press Run. It turns test settings off (|cff99ccff/cvn testsettings off|r) and your own settings come back. CheckThat then reads its list of Lua errors for this run.
+      text: Nothing appears. CheckThat checks by itself. Press Run. It turns test settings off (|cff99ccff/cvn testsettings off|r) and your own settings come back. CheckThat then reads its list of Lua errors for this run.
       commands:
       - "/cvn testsettings off"
     expect: Chat says your own settings are back, and ClosestVendor raised no Lua error during this plan.

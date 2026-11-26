@@ -100,6 +100,51 @@ for _, plan in ipairs(PLANS) do
     eq(tail:find("timeout: 120", 1, true) ~= nil, true, plan.path .. ": the last step waits for the player to press Run (timeout 120)")
     eq(setup:find("title: Turn on Lua errors, debug logging and test settings, then reload", 1, true) ~= nil, true, setupId .. " is titled for test settings too")
     eq(tail:find("scope: session", 1, true) ~= nil and tail:find("auto: true", 1, true) ~= nil, true, plan.path .. ": the no-Lua-error step is automatic and covers the run")
+
+    -- Assertion-first rules. Every step opens its action with one fixed sentence, and a timeout belongs only to
+    -- a step with a required absence (the setup, version and last steps keep theirs).
+    local OPENERS = {
+        "A question appears. Click Yes.",
+        "A question appears. Click No.",
+        "Nothing appears. CheckThat checks by itself.",
+        "Look, then press Pass or Fail.",
+    }
+    local all, cur = {}, nil
+    for line in (text .. "\n- id: end\n"):gmatch("([^\n]*)\n") do
+        local id = line:match("^  %- id: (cv%.s%d+%.%d+)$")
+        if id or line:match("^%- id: ") then
+            cur = id and { id = id, body = "" } or nil
+            if cur then all[#all + 1] = cur end
+        elseif cur then
+            cur.body = cur.body .. "\n" .. line
+        end
+    end
+    local lastId = all[#all] and all[#all].id
+    eq(#all, count, plan.path .. ": the step scan sees every step (" .. #all .. " of " .. count .. ")")
+    for _, st in ipairs(all) do
+        local actionText = st.body:match("\n    action:\n      kind: manual\n      text: ([^\n]*)") or ""
+        actionText = actionText:gsub('^"', ""):gsub("^'", "")
+        local ok = false
+        for _, o in ipairs(OPENERS) do if actionText:sub(1, #o) == o then ok = true end end
+        eq(ok, true, st.id .. ": the action text opens with one of the four fixed sentences: " .. actionText:sub(1, 60))
+        if st.body:find("\n    timeout: ", 1, true) then
+            local exempt = st.id:match("^cv%.s%d+%.[12]$") ~= nil and (st.id:match("^cv%.s(%d+)") == tostring(plan.first)) or st.id == lastId
+            eq(exempt or st.body:find("absent: true", 1, true) ~= nil, true, st.id .. ": a timeout needs a required absence check")
+            eq(st.body:find("\n    auto: true", 1, true) ~= nil, true, st.id .. ": only an automatic step has a timeout")
+        end
+    end
+end
+
+-- Ids of steps that were merged into another or removed stay retired: no plan has them again.
+local RETIRED = { "cv.s3.2", "cv.s3.4", "cv.s4.3", "cv.s4.4", "cv.s21.2", "cv.s21.6", "cv.s21.9" }
+for _, id in ipairs(RETIRED) do
+    eq(steps[id], nil, "a retired step id is not used again: " .. id)
+end
+do
+    local addons = read("plans/closestvendor.addons.yaml")
+    for _, name in ipairs({ "TomTom", "WaypointUI", "NorgannonDB" }) do
+        eq(addons:find("probe: addon-loaded\n    name: " .. name .. "\n", 1, true) ~= nil, true, "the addons plan has a requirement that " .. name .. " is loaded")
+    end
 end
 
 -- "test plan check 4.1", "test plan 8.2, 8.3", "test-plan section 20", "manual test plan §7".
