@@ -32,6 +32,17 @@ When CheckThat is loaded at login, the addon SHALL register its entries once: `v
 - **WHEN** an entry raises an error
 - **THEN** it returns `error: <message>` and the integration stays on
 
+### Requirement: Active warning entry
+The addon SHALL register an `active` entry that returns the warning request open or active now (`sell`, `repair`, `ammo`, `food`, `water`, `pet`, or `reagent <item id>`), and nothing when there is none. It SHALL follow the same rules as the other entries.
+
+#### Scenario: Sell question open
+- **WHEN** the sell question is open and CheckThat calls `active`
+- **THEN** it returns `sell`
+
+#### Scenario: No request
+- **WHEN** no warning request is open or active
+- **THEN** `active` returns no value
+
 ### Requirement: Failure turns the integration off
 If a CheckThat call raises an error, the addon SHALL stop calling CheckThat for the rest of the session and keep the reason, so the report shows `CheckThat: failed: <why>` even with the debug log off.
 

@@ -244,21 +244,37 @@ function R.OnMerchant(cfg, env)
             if #kept == 0 then log("nothing left to buy") return end
             lines, list, coins, short = kept, table.concat(keptParts, ", "), ns.Ammo.Coins(keptCost), short2
         end
+        -- Only the calls the game took count: a call that raised bought nothing.
+        local bought, missed, doneParts, doneCost = {}, {}, {}, 0
         for _, l in ipairs(lines) do
             local o = l.offer
+            local got = 0 -- purchases (batches) that went through
             if o.batch == 1 and o.maxBuy and o.maxBuy > 1 then
                 -- Single items: as many per call as the merchant allows.
                 local left = l.items
                 while left > 0 do
                     local q = math.min(left, o.maxBuy)
-                    env.buy(o.index, q)
+                    if env.buy(o.index, q) then got = got + q end
                     left = left - q
                 end
             else
-                for _ = 1, l.purchases do env.buy(o.index) end
+                for _ = 1, l.purchases do if env.buy(o.index) then got = got + 1 end end
             end
-            purchases = purchases + l.purchases
+            purchases = purchases + got
+            if got > 0 then
+                bought[#bought + 1] = o.id .. "x" .. got * o.batch
+                doneParts[#doneParts + 1] = L["%d %s"]:format(got * o.batch, o.name)
+                doneCost = doneCost + got * o.price
+            end
+            if got < l.purchases then missed[#missed + 1] = o.id .. "x" .. (l.purchases - got) * o.batch end
         end
+        cost = doneCost
+        if #missed > 0 then
+            log("FAILED: did not go through: " .. table.concat(missed, " "))
+            list, coins, short = table.concat(doneParts, ", "), ns.Ammo.Coins(doneCost), nil
+        end
+        if #bought == 0 then return end
+        log("bought " .. table.concat(bought, " "))
         local text = L["Bought %s for %s."]
         if short == "money" then text = L["Bought %s for %s (all you could afford)."]
         elseif short == "bags" then text = L["Bought %s for %s (all that fits in your bags)."] end

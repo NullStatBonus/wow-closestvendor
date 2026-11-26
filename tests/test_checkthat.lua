@@ -46,15 +46,15 @@ eq(CT.Start(ctx({}, "1.11.0")), 0, "old: no entries")
 CT.Report("k", 1)
 eq(CT.Status(), "too old", "old: loaded, but too old to register entries")
 
--- Working: three entries, registered once.
+-- Working: four entries, registered once.
 local f = fakeCT()
 local cfg = { bagThreshold = 2 }
 CT = load(f)
-eq(CT.Start(ctx(cfg, "1.11.0")), 3, "three entries stored")
-eq(CT.Start(ctx(cfg, "1.11.0")), 3, "a second start registers nothing more")
-eq(f.calls, 3, "Entry called once per entry")
+eq(CT.Start(ctx(cfg, "1.11.0")), 4, "four entries stored")
+eq(CT.Start(ctx(cfg, "1.11.0")), 4, "a second start registers nothing more")
+eq(f.calls, 4, "Entry called once per entry")
 eq(f.addon, "ClosestVendor", "entries belong to ClosestVendor")
-eq(logged[#logged], "checkthat: entries registered: 3", "registration logged")
+eq(logged[#logged], "checkthat: entries registered: 4", "registration logged")
 eq(f.entries.version(), 11100, "1.11.0 is 11100")
 eq(f.entries.version(), 11100, "the version answers again")
 eq(f.entries.setting("bags.threshold"), "2", "setting: the value /cvn get prints")
@@ -62,6 +62,7 @@ eq(f.entries.setting("BAGS.THRESHOLD"), "2", "setting: key case does not matter"
 eq(count(f.entries.setting("no.such.key")), 0, "setting: unknown key returns nothing")
 eq(count(f.entries.setting(42)), 0, "setting: a non-string key returns nothing")
 eq(f.entries.integration(), "working", "integration: working")
+eq(count(f.entries.active()), 0, "active: no getter, nothing")
 CT.Report("k", 1)
 eq(f.reports, 1, "Report passes through; a false return is normal")
 eq(CT.Status(), "working", "a false Report return does not fail")
@@ -80,8 +81,22 @@ CT.Start({ cfg = function() return cfg end, version = function() reads = reads +
 f.entries.version(); f.entries.version()
 eq(reads, 1, "version read once at Start")
 f = fakeCT(); CT = load(f)
-eq(CT.Start({ cfg = function() return cfg end, version = function() error("no metadata", 0) end }), 3, "a version read that raises does not stop registration")
+eq(CT.Start({ cfg = function() return cfg end, version = function() error("no metadata", 0) end }), 4, "a version read that raises does not stop registration")
 eq(count(f.entries.version()), 0, "and the version is unknown")
+
+-- active: the request Triggers.Active names, with a reagent's item id; nothing when none.
+local now = {}
+f = fakeCT(); CT = load(f)
+CT.Start({ cfg = function() return cfg end, version = function() return "1.11.0" end,
+           active = function() return now[1], now[2] end })
+eq(count(f.entries.active()), 0, "active: nothing open or active, nothing")
+now = { "repair" }
+eq(f.entries.active(), "repair", "active: the repair request")
+now = { "reagent", 17020 }
+eq(f.entries.active(), "reagent 17020", "active: a reagent with its item id")
+f = fakeCT(); CT = load(f)
+CT.Start({ active = function() error("no controller", 0) end })
+eq(f.entries.active(), "error: no controller", "active: an error is returned as a value")
 
 -- No saved-variable change: every entry leaves the settings table as it was.
 local before = {}

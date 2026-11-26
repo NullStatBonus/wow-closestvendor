@@ -81,6 +81,8 @@ end
 -- requested and no latch is used up, so the request comes once the player is out and it still holds.
 -- Returns nil | { "go", "sell"|"ammo"|"repair"|"food"|"water"|"pet" } | { "go", "reagent", itemId } |
 -- { "clear", kind, itemId } (the request that ended; from OnMerchantShow just { "clear" }).
+-- When combat or an instance holds back a request that would go now, the first result is nil and the
+-- second and third are its kind and item id (the debug log names what waits).
 function T.New(cfg)
     local handled = { sell = false, ammo = false, repair = false, food = false, water = false, pet = false }
     local reminded = {} -- reminder key -> true while its condition holds
@@ -114,8 +116,6 @@ function T.New(cfg)
             return { "clear", was }
         end
 
-        if inCombat or inInstance then return nil end
-
         local want, wantId
         for _, k in ipairs(ORDER) do
             if k == "reagent" then
@@ -131,6 +131,7 @@ function T.New(cfg)
         -- Never replace an equal or higher priority request that is still open or active.
         -- A trip the player chose is not replaced either: the warning it replaced waits for it.
         if active and (taken or PRIORITY[want] <= PRIORITY[active]) then return nil end
+        if inCombat or inInstance then return nil, want, wantId end
 
         -- A request that a higher one replaces is asked again once that one is done, and so is
         -- selling when the replaced trip covered it.

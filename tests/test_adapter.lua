@@ -541,8 +541,9 @@ eq(boot({}).stackSize(17020), nil, "no item info: stack unknown")
 eq(boot({ GetItemInfo = function() return "n" end }).stackSize(17020), nil, "item info without a stack: unknown")
 local calls = {}
 local Ab = boot({ BuyMerchantItem = function(...) calls[#calls + 1] = select("#", ...) .. ":" .. table.concat({ ... }, ",") end })
-Ab.buyMerchantItem(3); Ab.buyMerchantItem(4, 17)
+eq(tostring((Ab.buyMerchantItem(3))) .. "/" .. tostring((Ab.buyMerchantItem(4, 17))), "true/true", "a call the game took returns true")
 eq(table.concat(calls, " "), "1:3 2:4,17", "one batch, or a quantity of single items")
+eq(boot({}).buyMerchantItem(1), nil, "no BuyMerchantItem: nil, not false")
 eq(boot({ BuyMerchantItem = boom }).buyMerchantItem(1, 5), nil, "buying throws: no error")
 eq(boot(ammoGame(false)).level(), nil, "no UnitLevel: unknown")
 

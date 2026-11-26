@@ -57,7 +57,7 @@ local function run(cfg, over)
         kind = function() return "arrow" end, equippedID = function() return 11 end,
         level = function() return 30 end, offers = function() return offers end,
         money = function() return 100000 end, space = function() return 400 end,
-        buy = function(i) bought[#bought + 1] = i end, say = function(t) said[#said + 1] = t end,
+        buy = function(i) bought[#bought + 1] = i; return true end, say = function(t) said[#said + 1] = t end,
         confirm = function(t, accept) asked[#asked + 1] = { t, accept } end,
     }
     for k, v in pairs(over or {}) do env[k] = v end
@@ -68,7 +68,7 @@ local function run(cfg, over)
 end
 local b, s = run()
 eq(#b, 4, "default: buys at once")
-local _, spentCost = M.OnMerchant({ ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped" }, { kind = function() return "arrow" end, equippedID = function() return 11 end, level = function() return 30 end, offers = function() return offers end, money = function() return 100000 end, space = function() return 400 end, buy = function() end, say = function() end })
+local _, spentCost = M.OnMerchant({ ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped" }, { kind = function() return "arrow" end, equippedID = function() return 11 end, level = function() return 30 end, offers = function() return offers end, money = function() return 100000 end, space = function() return 400 end, buy = function() return true end, say = function() end })
 eq(spentCost, 1600, "returns what an immediate purchase cost")
 eq(b[1], 2, "buys the equipped item's offer")
 eq(s[1], "Bought 400 Sharp for 16s 0c.", "reports")
@@ -147,4 +147,32 @@ eq(#b .. "/" .. #s .. "/" .. lines[#lines], "0/0/ammo buy: item data not loaded"
 b, s = run({ arrowGrade = "best" }, { equippedID = function() return 99 end, level = function() return nil end,
     offers = function() return { { index = 1, id = 10, name = "Rough", price = 100, batch = 100, kind = "arrow" } } end })
 eq(s[1], "This merchant does not sell the ammo your settings ask for.", "best with the player's level unknown still says why")
+-- A purchase is logged with how many and which item; a dropped one is not.
+lines = {}
+run(nil, { log = function(t) lines[#lines + 1] = t end })
+eq(lines[#lines], "ammo buy: bought 400 of item 11", "the purchase is logged")
+lines, slot = {}, { [2] = 11 }
+b, s, asked = run({ ammoBuyPrompt = true }, { sells = function(i) return slot[i] end, log = function(t) lines[#lines + 1] = t end })
+slot[2] = 99
+asked[1][2]()
+eq(lines[#lines], "ammo buy: purchase dropped: the merchant window changed", "a dropped purchase is logged")
+local function boughtLine(ls)
+    for _, t in ipairs(ls) do if t:find("bought", 1, true) then return t end end
+end
+eq(boughtLine(lines), nil, "a dropped purchase logs no bought line anywhere")
+-- An immediate purchase whose slot cannot be read buys nothing, so it spends nothing either.
+local dropN, dropCost = M.OnMerchant({ ammoBuyEnabled = true, ammoBuyPrompt = false, arrowGrade = "equipped" }, { kind = function() return "arrow" end, equippedID = function() return 11 end, level = function() return 30 end, offers = function() return offers end, money = function() return 100000 end, space = function() return 400 end, buy = function() return true end, say = function() end, sells = function() return nil end })
+eq(tostring(dropN) .. "/" .. tostring(dropCost), "0/0", "a dropped immediate purchase returns no purchases and no spend")
+-- A purchase call the game did not take is not counted: only the calls that went through.
+lines = {}
+local calls = 0
+b, s = run(nil, { log = function(t) lines[#lines + 1] = t end,
+    buy = function() calls = calls + 1; return calls ~= 2 or nil end })
+eq(boughtLine(lines), "ammo buy: bought 300 of item 11", "a failed call in the batch: only 3 of 4 logged")
+eq(lines[#lines - 1], "ammo buy: FAILED: 1 of 4 purchases of item 11 did not go through", "the failed call is logged")
+eq(s[1], "Bought 300 Sharp for 12s 0c.", "chat names only what went through")
+lines = {}
+b, s = run(nil, { log = function(t) lines[#lines + 1] = t end, buy = function() end })
+eq(boughtLine(lines), nil, "every call failed: no bought line")
+eq(#s, 0, "every call failed: no Bought chat line")
 print("ok")

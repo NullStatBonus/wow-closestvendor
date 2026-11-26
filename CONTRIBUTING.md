@@ -16,7 +16,7 @@ Thank you for your help. Closest Vendor is a Lua addon for WoW Classic Era and W
 
 ## Setup
 
-1. Clone the repository.
+1. Clone the repository into a folder named `wow-closest-vendor` (the plan's offline check looks for that name).
 2. Link or copy `ClosestVendor/` into your AddOns folder (`_classic_era_` or the Forever folder).
 3. Install [LuaJIT](https://luajit.org) and Python 3.
 4. From the repository root, run these commands:

@@ -110,7 +110,11 @@ function M.OnMerchant(cfg, env)
     end
     local function buy(later)
         -- A question answered later: buy only if this merchant still offers the item at that slot.
-        if env.sells and env.sells(o.index) ~= o.id then log("purchase dropped: the merchant window changed") return end
+        if env.sells and env.sells(o.index) ~= o.id then
+            log("purchase dropped: the merchant window changed")
+            n, items, cost = 0, 0, 0 -- nothing bought: the money stays for the reagents
+            return
+        end
         if later then
             -- The player may have bought some by hand meanwhile: buy only what still fits and can be
             -- afforded, never more than the question named.
@@ -119,7 +123,16 @@ function M.OnMerchant(cfg, env)
             if n2 < n then n, items, cost, partial = n2, n2 * o.batch, n2 * o.price, partial2 end
             if n == 0 then log("nothing left to buy") return end
         end
-        for _ = 1, n do env.buy(o.index) end
+        -- Only the calls the game took count: a call that raised bought nothing.
+        local done = 0
+        for _ = 1, n do if env.buy(o.index) then done = done + 1 end end
+        if done < n then
+            log(("FAILED: %d of %d purchases of item %s did not go through"):format(n - done, n, tostring(o.id)))
+            partial = false
+        end
+        n, items, cost = done, done * o.batch, done * o.price
+        if done == 0 then return end
+        log(("bought %d of item %s"):format(items, tostring(o.id)))
         env.say((partial and L["Bought %d %s for %s (all you could afford)."] or L["Bought %d %s for %s."])
             :format(items, o.name, M.Coins(cost)))
     end

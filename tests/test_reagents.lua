@@ -179,7 +179,7 @@ local function run(cfg, over)
         watched = function() return { { item = AP, count = 5 }, { item = RT, count = 0 } } end,
         offers = function() return OFFERS end, slots = function() return free(4) end,
         stack = stack20, money = function() return 1e6 end,
-        buy = function(i, q) bought[#bought + 1] = i .. ":" .. tostring(q) end,
+        buy = function(i, q) bought[#bought + 1] = i .. ":" .. tostring(q); return true end,
         say = function(t) said[#said + 1] = t end,
         confirm = function(t, accept) asked[#asked + 1] = { t, accept } end,
         log = function(t) logged[#logged + 1] = t end,
@@ -190,9 +190,24 @@ local function run(cfg, over)
     local n = R.OnMerchant(c, env)
     return bought, said, asked, logged, n
 end
-local b, s, _, _, n = run()
+local b, s, _, bl, n = run()
 eq(table.concat(b, ","), "3:5,4:10", "buys each up to the target, single items in one call each")
+eq(bl[#bl], "reagent buy: bought 17020x5 17031x10", "the purchase is logged: item ids and counts")
 eq(n, 15, "returns the purchases")
+-- A purchase call the game did not take is not counted: only the calls that went through.
+local function boughtIn(ls)
+    for _, t in ipairs(ls) do if t:find("bought", 1, true) then return t end end
+end
+local fb, fs, _, fl, fn = run(nil, { buy = function(i, q) if i == 3 then return true end end })
+eq(boughtIn(fl), "reagent buy: bought 17020x5", "a failed call: only what went through is logged")
+eq(fl[#fl - 1], "reagent buy: FAILED: did not go through: 17031x10", "the failed call is logged")
+eq(fn .. "/" .. fs[1], "5/Bought 5 Arcane Powder for 5s 0c.", "chat and the count name only what went through")
+local single = function() return { offer(17020, "Arcane Powder", 3, 100, { maxBuy = false }) } end
+local tries = 0
+fb, fs, _, fl = run(nil, { offers = single, buy = function() tries = tries + 1; return tries > 2 or nil end })
+eq(boughtIn(fl), "reagent buy: bought 17020x3", "one purchase per call: the two that failed are not counted")
+fb, fs, _, fl = run(nil, { buy = function() end })
+eq(tostring((boughtIn(fl))) .. "/" .. #fs, "nil/0", "every call failed: no bought line and no Bought chat line")
 eq(s[1], "Bought 5 Arcane Powder, 10 Rune of Teleportation for 1g 5s 0c.", "one chat line: what and the cost")
 b = run({ reagentBuyTarget = 45 })
 eq(table.concat(b, ","), "3:20,3:20,4:20,4:20", "more than one stack: calls of at most maxBuy (and four slots hold 80)")
@@ -249,10 +264,12 @@ eq(#asked .. "/" .. s[1], "0/You cannot afford any reagents here.", "nothing to 
 -- Yes after buying by hand: plan again from what is carried now, never more than asked.
 local carried = { 5, 0 }
 local function watchedNow() return { { item = AP, count = carried[1] }, { item = RT, count = carried[2] } } end
-b, s, asked = run({ reagentBuyPrompt = true }, { watched = watchedNow })
+local yl
+b, s, asked, yl = run({ reagentBuyPrompt = true }, { watched = watchedNow })
 carried[2] = 8 -- bought 8 runes by hand
 asked[1][2]()
 eq(table.concat(b, ",") .. "/" .. s[1], "3:5,4:2/Bought 5 Arcane Powder, 2 Rune of Teleportation for 25s 0c.", "Yes after buying by hand: only what is still needed")
+eq(yl[#yl], "reagent buy: bought 17020x5 17031x2", "Yes after buying by hand: the log names the smaller amount")
 carried = { 5, 0 }
 local m = 1e6
 b, s, asked = run({ reagentBuyPrompt = true }, { watched = watchedNow, money = function() return m end })
