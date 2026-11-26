@@ -481,16 +481,17 @@ end
 
 -- The class reagents being watched, with their counts: { { item, count, name } }, or nil when the
 -- class is unknown. A reagent is watched when the player knows a spell that uses it and has not
--- switched it off; one whose count cannot be read is left out.
+-- switched it off; one whose count cannot be read is left out, and the second value is then true
+-- (the CheckThat reagents entry answers nothing, never "none").
 local function reagentList()
     local class = A.classToken()
     if not class then return end
-    local out = {}
+    local out, unread = {}, false
     for _, item in ipairs(ns.Reagents.Watched(class, A.knowsSpell, CHAR.cfg.reagentOff)) do
         local count = A.itemCount(item.id)
-        if count then out[#out + 1] = { item = item, count = count, name = A.itemName(item.id) or item.name } end
+        if count then out[#out + 1] = { item = item, count = count, name = A.itemName(item.id) or item.name } else unread = true end
     end
-    return out
+    return out, unread
 end
 
 -- What the controller needs for food, water, pet food and the reminders: the class, the bag totals
@@ -858,6 +859,10 @@ local function sourceOf(kind, id)
     return external.byId[id] and "NorgannonDB" or "shipped"
 end
 
+-- The CheckThat run handlers (set after swapTestSettings below): a run start turns test settings on once,
+-- a run end turns them off, and a login with no run open restores what a run left on.
+local runStarted, runEnded, runGone
+
 local function start()
     log.Add("---- login ----")
     if CHAR.realSettings then
@@ -986,7 +991,10 @@ local function start()
                 if tracker.Demoing() then return "demo" end
                 return windowState
             end,
-            reagents = function(id) if controller then return controller.Reagents(id) end end })
+            reagents = function(id) if controller then return controller.Reagents(id) end end,
+            runStarted = function(id) return runStarted(id) end,
+            runEnded = function(reason) return runEnded(reason) end,
+            runGone = function() return runGone() end })
         if not ok then pcall(CT.Fail, "Start: " .. tostring(err)) end
     end
 end
@@ -1029,6 +1037,33 @@ local function swapTestSettings(on)
     evaluate()
     applyWindow()
     cfgSeen = flatSettings()
+end
+
+-- The run owns test settings while it is open (spec checkthat-integration). CHAR.testRun is the id of the
+-- run whose start turned them on: a start for the same run (CheckThat repeats it after a /reload) does
+-- nothing, so a plan's last step that turned them off stays final. Test settings typed by hand have no run.
+function runStarted(id)
+    if id == nil then log.Add("test settings: run start without an id") return end
+    id = tostring(id):sub(1, 40)
+    if CHAR.testRun == id then log.Add("test settings: run already seen") return end
+    local other = CHAR.testRun ~= nil -- another run turned them on and ended while the addon was not loaded
+    CHAR.testRun = id
+    if CHAR.realSettings and not other then log.Add("test settings: already on (run started)") return end
+    log.Add(other and "test settings: another run started" or "test settings: run started")
+    swapTestSettings(true) -- on while on resets the test set to the defaults and keeps the own settings aside
+end
+
+function runEnded(reason)
+    CHAR.testRun = nil
+    log.Add("test settings: run ended: " .. tostring(reason or "unknown"):sub(1, 20))
+    if CHAR.realSettings then swapTestSettings(false) end
+end
+
+function runGone()
+    if not CHAR.testRun then return end
+    CHAR.testRun = nil
+    log.Add("test settings: no run open at login")
+    if CHAR.realSettings then swapTestSettings(false) end
 end
 
 SLASH_CLOSESTVENDOR1 = "/cvn"

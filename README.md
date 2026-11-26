@@ -422,7 +422,7 @@ These values are per character. Prior saved values override defaults. Commands a
 - `/cvn config` opens the settings page.
 - `/cvn find <item link or name>` shows the nearest known sellers of a food, drink, pet food or class reagent item. Pick one to set the waypoint. With no text it prints how to use it.
 - `/closestvendor` works the same as `/cvn`.
-- For testers: the in-game test plans turn test settings on in their setup step and off in their last step, so they run on the defaults whatever your own settings are. If you stop a run early, type `/cvn testsettings off` to get your own settings back. Chat at login reminds you while it is on.
+- For testers: the in-game test plans turn test settings on in their setup step and off in their last step, so they run on the defaults whatever your own settings are. With a CheckThat that reports its runs, test settings also turn on when a run of a ClosestVendor plan starts and off when it ends, is replaced or is deleted, so your own settings come back if you stop a run early. With an older CheckThat, type `/cvn testsettings off` to get them back. Chat at login reminds you while it is on.
 - Settings are saved per character. The vendors, trainers and auctioneers the addon learns are shared by the account. A character you have not used with the addon before starts from the settings you had before this was per character.
 
 ### Thresholds
@@ -523,8 +523,9 @@ The legacy `test` commands are live integration tests: accepting a question can 
 - `/cvn testsettings on` is for testers. It puts your settings, the status window position and the toast position aside, and uses the defaults a new character gets. Every change, Move and the settings page then change only the test set. `/cvn testsettings off` brings your own back exactly. Learned places, the hearthstone point, professions, standings and the debug log are not affected.
   - Typing `on` again while it is on resets the test set to the defaults and keeps your own settings put aside. Typing `off` while it is off says that test settings are not on.
   - The mode lasts across `/reload` and logout. At login chat says it is on and names `/cvn testsettings off`.
+  - With a CheckThat that reports its runs, a run turns it on once when it starts, and turns it off when the run ends, is replaced or is deleted. A reload during a run does not turn it on again after the last step turned it off. A new run always starts from the defaults, also when an earlier run ended while the addon was not loaded. At login with no run open, test settings that a run left on are turned off. Test settings you turned on by hand stay on until you turn them off.
   - A switch ends what is open: a question, the demo, a preview, Move and a color pick. A purchase question closes and nothing is bought.
-  - With the debug log on, each switch logs one line: "test settings: on (own settings put aside)", "test settings: reset to defaults", "test settings: off (own settings restored)", or "test settings: not on" for a refused `off`. A login while it is on logs "test settings: on at login". A switch is not logged as setting changes.
+  - With the debug log on, each switch logs one line: "test settings: on (own settings put aside)", "test settings: reset to defaults", "test settings: off (own settings restored)", or "test settings: not on" for a refused `off`. A login while it is on logs "test settings: on at login". A CheckThat run adds "test settings: run started", "test settings: run already seen", "test settings: already on (run started)", "test settings: another run started", "test settings: run start without an id", "test settings: run ended: ended" (or "replaced", "deleted") and "test settings: no run open at login". A switch is not logged as setting changes.
 
 ## How it finds vendors
 
@@ -664,7 +665,7 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 - A sound-pack sound needs the addon that shares it. While that addon is off, the whisper ping plays instead, and your choice stays saved.
 - The text of the addon is English only. You can add other languages. See [docs/localization.md](docs/localization.md).
 - The addon was written and tested against fake game APIs. The in-game checks are CheckThat test plans. The core plan, `plans/closestvendor.yaml`, runs before each release on both clients. A feature gets its own plan when it is built or changed. See `docs/test-plan.md`.
-- With the CheckThat test runner installed, the addon gives it read-only values for automatic checks: its version, a setting, the open warning, what the account learned, an NPC's standing, the waypoint method, what NorgannonDB gave, what the status window shows, a saved setting by its saved name and the reagents the warning watches. Without CheckThat, nothing changes.
+- With the CheckThat test runner installed, the addon gives it read-only values for automatic checks: its version, a setting, the open warning, what the account learned, an NPC's standing, the waypoint method, what NorgannonDB gave, what the status window shows, a saved setting by its saved name and the reagents the warning watches (nothing when a watched reagent's count cannot be read). Without CheckThat, nothing changes.
 
 ## Problems?
 

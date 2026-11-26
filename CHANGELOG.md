@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.14.0
+
+- **New: Test settings turn off when a CheckThat test run ends.** This also occurs when you stop a run early.
+- New: Test settings turn on when a test run starts. Each run starts with the default settings.
+- Fixed: The CheckThat reagent check said that no reagent was watched when the addon could not count a reagent. Now it gives no answer.
+
 ## 1.13.1
 
 - **Fixed: A known vendor, trainer or auctioneer keeps its saved place when you stand a few steps away.** Before, its waypoint moved a little after each visit.

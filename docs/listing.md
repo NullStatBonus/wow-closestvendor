@@ -58,7 +58,7 @@ Closest Vendor tells you when it is a good time to repair, restock or make bag s
 - Vendors, trainers and auction houses that will not deal with you (Unfriendly or Hostile) are skipped once you have seen them.
 - Pet food works for hunters with a pet out, in every game language.
 - Open a vendor or trainer once so the addon learns it. This matters most in WoW Forever's new zones.
-- For testers: it works with the CheckThat test runner, and works the same without it. `/cvn testsettings on` puts your own settings aside and uses the defaults; `/cvn testsettings off` brings them back.
+- For testers: it works with the CheckThat test runner, and works the same without it. `/cvn testsettings on` puts your own settings aside and uses the defaults; `/cvn testsettings off` brings them back. With a CheckThat that reports its runs, a test run turns them on when it starts and off when it ends.
 - If the NorgannonDB addon is installed, its vendors in WoW Forever's new zones and its profession trainers (with the tier each teaches) are used too. Nothing is copied from it.
 - Problems? Type `/cvn debug on`, repeat the problem, then type `/cvn log` and post the report.
 

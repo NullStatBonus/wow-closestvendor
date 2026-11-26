@@ -222,4 +222,94 @@ do
     eq(asked, nil, "window: no group passes nothing")
 end
 
+-- The run callback (spec checkthat-integration, "Test settings follow the CheckThat run").
+do
+    local function runCT(open)
+        local f = fakeCT()
+        f.open, f.onRunCalls = open, 0
+        function f.OnRun(addon, fn) f.onRunCalls = f.onRunCalls + 1; f.run = fn; f.runAddon = addon; return true end
+        function f.ActiveRun() return f.open end
+        return f
+    end
+    local seen
+    local function runCtx(extra)
+        seen = {}
+        local c = ctx({}, "1.14.0")
+        c.runStarted = function(id) seen[#seen + 1] = "start " .. tostring(id) end
+        c.runEnded = function(reason) seen[#seen + 1] = "end " .. tostring(reason) end
+        c.runGone = function() seen[#seen + 1] = "gone" end
+        for k, v in pairs(extra or {}) do c[k] = v end
+        return c
+    end
+
+    -- Registered once for ClosestVendor; a second Start does not register again.
+    local fr = runCT("Some plan"); local CR = load(fr)
+    eq(CR.Start(runCtx()), 11, "run hook: entries still register")
+    CR.Start(runCtx())
+    eq(fr.onRunCalls, 1, "run hook: registered once")
+    eq(fr.runAddon, "ClosestVendor", "run hook: for ClosestVendor")
+    local found = false
+    for _, m in ipairs(logged) do if m == "checkthat: run hook registered" then found = true end end
+    eq(found, true, "run hook: registration logged")
+
+    -- Start and end reach Core's handlers with the run id and the reason.
+    fr.run("start", { runId = "r1", plan = "p" })
+    fr.run("end", { runId = "r1", reason = "ended" })
+    fr.run("start", { runId = "r2" })
+    eq(table.concat(seen, ","), "start r1,end ended,start r2", "run hook: start and end reach the handlers")
+    fr.run("pause", {})
+    fr.run("start")
+    eq(#seen, 4, "run hook: an unknown event is ignored, a missing info table is safe")
+
+    -- A run already open at login: no "gone" call. No run open: "gone" before the callback is registered.
+    seen = {}
+    fr = runCT("Some plan"); CR = load(fr); CR.Start(runCtx())
+    eq(table.concat(seen, ","), "", "run hook: a run is open, nothing restored")
+    fr = runCT(nil); CR = load(fr)
+    local order = {}
+    local base = fr.OnRun
+    fr.OnRun = function(...) order[#order + 1] = "OnRun"; return base(...) end
+    CR.Start(runCtx({ runGone = function() order[#order + 1] = "gone" end }))
+    eq(table.concat(order, ","), "gone,OnRun", "run hook: no run open, restore first, then register")
+
+    -- A CheckThat without the callback changes nothing, and the entries still register.
+    local fo = fakeCT(); local CO = load(fo)
+    eq(CO.Start(runCtx()), 11, "no run hook: entries register")
+    eq(#seen, 0, "no run hook: no handler called")
+    eq(CO.Status(), "working", "no run hook: still working")
+    found = false
+    for _, m in ipairs(logged) do if m == "checkthat: run hook not available" then found = true end end
+    eq(found, true, "no run hook: logged")
+    -- ...also without ActiveRun: the callback registers, nothing is restored.
+    fr = runCT(nil); fr.ActiveRun = nil; CR = load(fr); CR.Start(runCtx())
+    eq(fr.onRunCalls, 1, "no ActiveRun: the callback still registers")
+    eq(#seen, 0, "no ActiveRun: nothing restored")
+
+    -- A handler that raises is logged and leaves the integration on.
+    fr = runCT("p"); CR = load(fr)
+    CR.Start(runCtx({ runStarted = function() error("handler broke", 0) end }))
+    fr.run("start", { runId = "r1" })
+    eq(logged[#logged], "checkthat: FAILED: runStarted: handler broke", "run hook: a handler error is logged")
+    eq(CR.Status(), "working", "run hook: a handler error keeps the integration on")
+    fr.run("end", { reason = "ended" })
+    eq(seen[#seen], "end ended", "run hook: the next event still arrives")
+
+    -- OnRun or ActiveRun raising turns the integration off for the session.
+    fr = runCT("p"); fr.OnRun = function() error("onrun broke", 0) end; CR = load(fr)
+    eq(CR.Start(runCtx()), 0, "OnRun raising: no entries registered")
+    eq(CR.Status(), "failed: OnRun: onrun broke", "OnRun raising: the reason is kept")
+    fr = runCT("p"); fr.ActiveRun = function() error("active broke", 0) end; CR = load(fr)
+    CR.Start(runCtx())
+    eq(CR.Status(), "failed: ActiveRun: active broke", "ActiveRun raising: the reason is kept")
+    eq(fr.onRunCalls, 0, "ActiveRun raising: no callback registered")
+
+    -- After a failure the stored callback answers nothing.
+    fr = runCT("p"); CR = load(fr); CR.Start(runCtx()); CR.Fail("later")
+    seen = {}
+    fr.run("start", { runId = "r9" })
+    eq(#seen, 0, "after a failure a run start turns nothing on")
+    fr.run("end", { runId = "r9", reason = "ended" })
+    eq(seen[#seen], "end ended", "after a failure a run end still restores")
+end
+
 H.done()
