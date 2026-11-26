@@ -32,7 +32,9 @@ local adapters = {
             return { kind = "tomtom", uid = uid }
         end,
         clear = function(api, h)
-            if isFn(api.TomTom, "RemoveWaypoint") then api.TomTom:RemoveWaypoint(h.uid) end
+            if not isFn(api.TomTom, "RemoveWaypoint") then return nil end
+            api.TomTom:RemoveWaypoint(h.uid)
+            return true
         end,
     },
     {
@@ -50,11 +52,12 @@ local adapters = {
         end,
         clear = function(api, h)
             local nav = api.WaypointUIAPI.Navigation
-            -- Only clear our own destination; if ownership cannot be checked, leave it alone.
-            if isFn(nav, "GetUserNavigation") then
-                local cur = nav.GetUserNavigation()
-                if cur and cur.flags == FLAG then nav.ClearUserNavigation(false, true) end
-            end
+            -- Only clear our own destination; if ownership cannot be checked, leave it alone (unknown).
+            -- A destination that is not ours means ours is gone already.
+            if not isFn(nav, "GetUserNavigation") then return nil end
+            local cur = nav.GetUserNavigation()
+            if cur and cur.flags == FLAG then nav.ClearUserNavigation(false, true) end
+            return true
         end,
     },
     {
@@ -79,11 +82,13 @@ local adapters = {
                 local p = cur and cur.position
                 if not (cur and p and cur.uiMapID == h.map
                         and math.abs(p.x - h.x) < N.SPOT and math.abs(p.y - h.y) < N.SPOT) then
-                    return
+                    return true -- replaced by the user: ours is gone already
                 end
             end
-            if isFn(m, "ClearUserWaypoint") then m.ClearUserWaypoint() end
+            if not isFn(m, "ClearUserWaypoint") then return nil end
+            m.ClearUserWaypoint()
             api.C_SuperTrack.SetSuperTrackedUserWaypoint(false)
+            return true
         end,
     },
     {
@@ -94,7 +99,7 @@ local adapters = {
             api.print(L["Closest vendor: %s in %s (%.1f, %.1f)"]:format(v[2], zone, v[4] * 100, v[5] * 100))
             return { kind = "chat" }
         end,
-        clear = function() end,
+        clear = function() return true end,
     },
 }
 
@@ -144,9 +149,15 @@ function N.Set(api, vendor, prefer)
     end
 end
 
+-- Remove a waypoint Set returned. True when the provider removed it (or it was gone already), false
+-- when the provider raised an error, nil when the removal cannot be confirmed (the provider lacks the
+-- call, such as WaypointUI without GetUserNavigation) or without a handle it knows. Never errors.
 function N.Clear(api, handle)
     local a = handle and byKind[handle.kind]
-    if a then pcall(a.clear, api, handle) end
+    if not a then return nil end
+    local ok, r = pcall(a.clear, api, handle)
+    if not ok then return false end
+    return r == true or nil
 end
 
 -- The game's own map waypoint (one slot, shared with the player): { map, x, y, tracked } or nil.

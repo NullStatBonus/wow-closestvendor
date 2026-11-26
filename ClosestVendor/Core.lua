@@ -121,14 +121,23 @@ end
 -- trainers whose title tells which tier they teach, on every map. Read after login, and again if
 -- NorgannonDB finishes loading later; never on bag, merchant or movement events.
 local EXTERNAL_MAPS = { [2482] = true, [2548] = true, [2652] = true, [2521] = true, [2665] = true, [2524] = true }
-local external = { list = {}, skipped = 0, trainers = {}, trainerIds = {} }
+local external = { list = {}, skipped = 0, trainers = {}, trainerIds = {}, byId = {} }
 local started = false
 
 local function readExternal()
     local list, skipped, schema = A.externalVendors(EXTERNAL_MAPS)
     external = { list = list or {}, skipped = list and skipped or 0, schema = schema, unsupported = skipped == "unsupported",
-                 trainers = list and A.externalTrainers() or {}, trainerIds = {} }
+                 trainers = list and A.externalTrainers() or {}, trainerIds = {}, byId = {} }
     for _, e in ipairs(external.trainers) do external.trainerIds[e[1]] = true end
+    for _, e in ipairs(external.list) do external.byId[e[1]] = e end
+end
+
+-- What NorgannonDB gave, for the report and the CheckThat external entry.
+local function externalText()
+    if external.schema then
+        return ("found, schema %s, %d vendors added, %d skipped, %d trainers with a tier"):format(external.schema, #external.list, external.skipped, #external.trainers)
+    end
+    return external.unsupported and "installed, but its data is not a supported schema" or "not found"
 end
 
 -- Trainer tiers are known (NorgannonDB gave trainers with titles), so Artisan is routed too.
@@ -279,6 +288,8 @@ evaluate = evaluateNow
 -- Remember the merchant that just opened (position is the player's, within interaction range).
 -- A vendor this character can see (target, mouseover, nameplate): remember whether it will trade
 -- with this character, and search again when that changed.
+local STANDING_QUIET = 30
+local lastKnown -- { id, at }: the last "already known" standing line
 local function learnStanding(unit)
     local id = A.npc(unit)
     -- Vendors, trainers and auctioneers: a goblin auction house or a neutral trainer refuses a
@@ -286,7 +297,20 @@ local function learnStanding(unit)
     local trainer, auctioneer = DB.trainers[id] ~= nil or external.trainerIds[id] == true, auctionIds[id]
     if not id or not (vendorIds[id] or trainer or auctioneer) then return end
     local can = A.canTrade(unit)
-    if can == nil or CHAR.standing[id] == can then return end
+    if can == nil then return end
+    if CHAR.standing[id] == can then
+        -- Targeting one already known to refuse says so again, so a check can see it after a reload: once,
+        -- and again only after another npc's line or STANDING_QUIET seconds, so retargeting does not flood.
+        if can == false and unit == "target" then
+            local now = A.now()
+            if not (lastKnown and lastKnown.id == id and now - lastKnown.at < STANDING_QUIET) then
+                lastKnown = { id = id, at = now }
+                log.Add(("standing: npc %d will not trade (Unfriendly or Hostile), already known"):format(id))
+            end
+        end
+        return
+    end
+    lastKnown = nil
     CHAR.standing[id] = can
     log.Add(("standing: npc %d %s"):format(id, can and "will trade" or "will not trade (Unfriendly or Hostile)"))
     if vendorIds[id] then rebuildBuckets() end
@@ -296,38 +320,74 @@ end
 -- A merchant list read before the game loaded every item is read again when item data arrives;
 -- until then it never replaces what is already known about that vendor.
 local relearnMerchant = false
-local function learnMerchant()
+-- What a window opening taught, once per window: show is true when the window opened (always logged),
+-- false for a later read of the same window (TRAINER_UPDATE, item data arriving), logged only when it
+-- stored something and the line differs from the last one.
+local lastLearned
+local function learnedLine(line, show, stored)
+    if show or (stored and line ~= lastLearned) then log.Add(line) end
+    lastLearned = line
+end
+local function learnMerchant(show)
     local m = A.merchant()
     if not m then return end
     local changed = CHAR.standing[m.id] ~= true
     CHAR.standing[m.id] = true -- its window opened: it trades with this character
     relearnMerchant = m.partial
     if m.partial and vendorIds[m.id] then
-        log.Add("merchant list not fully loaded: kept what is known about " .. tostring(m.name))
+        learnedLine("merchant list not fully loaded: kept what is known about " .. tostring(m.name), show, false)
         if changed then rebuildBuckets() end
         return
     end
     local map, x, y = A.mapPosition()
-    if not map then return end
-    if ns.Discovery.Record(DB.learned, { m.id, m.name, map, x, y, m.faction, m.repair, m.ammo, m.reagents, m.supplies }) or changed then
-        rebuildBuckets()
+    if not map then
+        learnedLine("vendor not learned: " .. tostring(m.name) .. " (npc " .. m.id .. "): no map position here", show, false)
+        return
     end
+    local known, pooled = DB.learned[m.id] ~= nil, vendorIds[m.id] == true
+    local stored = ns.Discovery.Record(DB.learned, { m.id, m.name, map, x, y, m.faction, m.repair, m.ammo, m.reagents, m.supplies })
+    -- For a NorgannonDB vendor: whether this position replaces NorgannonDB's (Discovery.Pool).
+    local e, note = external.byId[m.id], ""
+    local v = DB.learned[m.id]
+    if e and v then note = ns.Discovery.Moved(v, e) and "; replaces the NorgannonDB position" or "; the NorgannonDB position is kept" end
+    -- A vendor neither shipped, nor from NorgannonDB, nor learned before is new to the search.
+    if not pooled then note = "; it was not in the search pool" .. note end
+    learnedLine(("vendor learned: %s (npc %d), %s%s"):format(tostring(m.name), m.id,
+        not known and "new" or (stored and "updated" or "unchanged"), note), show, stored)
+    if stored or changed then rebuildBuckets() end
 end
 
 -- Remember the profession trainer whose window just opened, and the professions it teaches.
--- Returns the set of those professions, or nil if this is not a profession trainer.
-local function learnTrainer()
-    local t = A.trainer()
-    if not t then return end
+-- Returns the set of those professions, or nil if this is not a profession trainer, and true as a
+-- second value for the first readable read of this window (the one that writes the learned line).
+-- show is true when the window opened (TRAINER_SHOW), false for TRAINER_UPDATE. The first read that
+-- can name the trainer writes its line (once per window); a later one only when it stored something.
+local trainerPending -- this trainer window has not written its learned line yet
+local function learnTrainer(show)
+    if show then trainerPending = true end
+    local t, why = A.trainer()
+    if not t then
+        if show then log.Add("trainer window: nothing learned: " .. tostring(why)) end
+        return
+    end
+    -- The first readable read of the window writes its line, also when the services arrive late
+    -- (TRAINER_UPDATE after "no profession services listed yet").
+    show, trainerPending = trainerPending, false
     local set = {}
     for _, name in ipairs(t.trades) do CHAR.professions[name] = true; set[name] = true end
     local changed = CHAR.standing[t.id] ~= true
     CHAR.standing[t.id] = true -- its window opened: it trains this character
     local map, x, y = A.mapPosition()
-    if (map and ns.Discovery.RecordTrainer(DB.trainers, { t.id, t.name, map, x, y, t.faction }, t.trades)) or changed then
-        rebuildTrainers()
+    local known = DB.trainers[t.id] ~= nil
+    local stored = map and ns.Discovery.RecordTrainer(DB.trainers, { t.id, t.name, map, x, y, t.faction }, t.trades)
+    if map then
+        learnedLine(("trainer learned: %s (npc %d), %s, teaches %s"):format(tostring(t.name), t.id,
+            not known and "new" or (stored and "updated" or "unchanged"), table.concat(t.trades, ", ")), show, stored)
+    else
+        learnedLine(("trainer not learned: %s (npc %d): no map position here"):format(tostring(t.name), t.id), show, false)
     end
-    return set
+    if stored or changed then rebuildTrainers() end
+    return set, show
 end
 
 -- Remember the auctioneer whose window just opened (position is the player's).
@@ -571,7 +631,11 @@ local function buildWindow()
                     touchWindow()
                 end }
             end
-            if not A.menu(anchor, c.title, items) then log.Add("choice: no menu control") end
+            if A.menu(anchor, c.title, items) then
+                log.Add(("choice menu shown: %s, %d entries"):format(row.key, #items))
+            else
+                log.Add("choice: no menu control")
+            end
         end,
         openSettings = function()
             if not openSettings() then say(L["The settings page is not available here: %s. Use /cvn help."]:format(ns.Options.failure or colorNote)) end
@@ -604,6 +668,15 @@ local function reagentLine()
         tostring(A.classToken()), CHAR.cfg.reagentThreshold, #watching > 0 and table.concat(watching, ", ") or "none", #off > 0 and table.concat(off, ", ") or "none")
 end
 
+-- The waypoint method Nav.Select picks now, kept for the CheckThat nav entry (an entry call never
+-- reaches the game). Read again at login, at each world entry, after a slash command (/cvn nav) and
+-- when another addon loads (TomTom or WaypointUI late), and by the report.
+local navNow
+local function refreshNav()
+    navNow = ns.Nav.Select(A.navApi(say), CHAR.cfg.navProvider)
+    return navNow
+end
+
 -- The report: facts about this client and addon, then the debug log.
 local function reportText()
     local info = A.clientInfo()
@@ -621,15 +694,14 @@ local function reportText()
         "addon version: " .. tostring(info.addon),
         "game: " .. tostring(info.gameVersion) .. " build " .. tostring(info.build) .. ", interface " .. tostring(info.interface),
         "locale: " .. tostring(info.locale),
-        "navigation: " .. tostring(ns.Nav.Select(A.navApi(say), c.navProvider)) .. " (preference " .. tostring(c.navProvider) .. ")",
+        "navigation: " .. tostring(refreshNav()) .. " (preference " .. tostring(c.navProvider) .. ")",
         ("vendors: %d shipped, %d learned, per continent: %s"):format(#(ns.ShippedVendors or {}), learned, table.concat(continents, " ")),
         (function()
             local yes, no = 0, 0
             for _, v in pairs(CHAR.standing or {}) do if v then yes = yes + 1 else no = no + 1 end end
             return ("standing (this character): %d vendors trade, %d will not (Unfriendly or Hostile)"):format(yes, no)
         end)(),
-        external.schema and ("NorgannonDB: found, schema %s, %d vendors added, %d skipped, %d trainers with a tier"):format(external.schema, #external.list, external.skipped, #external.trainers)
-            or (external.unsupported and "NorgannonDB: installed, but its data is not a supported schema" or "NorgannonDB: not found"),
+        "NorgannonDB: " .. externalText(),
         ("settings: bags %s/%d, durability %s/%d, ammo %s/%d, professions %s/%d"):format(c.bagEnabled and "on" or "off", c.bagThreshold,
             c.durEnabled and "on" or "off", c.durThreshold, c.ammoEnabled and "on" or "off", c.ammoThreshold,
             c.tradeEnabled and "on" or "off", c.tradeThreshold),
@@ -665,12 +737,13 @@ end
 local function start()
     log.Add("---- login ----")
     readExternal()
+    log.Add("NorgannonDB: " .. externalText())
     started = true
     rebuildBuckets()
     rebuildTrainers()
     rebuildAuctioneers()
     local nav = { Set = function(v) return ns.Nav.Set(A.navApi(say), v, CHAR.cfg.navProvider) end,
-                  Clear = function(h) ns.Nav.Clear(A.navApi(say), h) end,
+                  Clear = function(h) return ns.Nav.Clear(A.navApi(say), h) end,
                   ReadGame = function() return ns.Nav.ReadGame(A.navApi(say)) end,
                   SetGame = function(p) return ns.Nav.SetGame(A.navApi(say), p) end }
     controller = ns.Controller.New({
@@ -700,6 +773,7 @@ local function start()
         questionOpen = function() return A.popupShown(POPUP) or A.popupShown(POPUP_MAP) or A.popupShown(POPUP_DIST) end,
         skills = A.skills,
         level = A.level,
+        now = A.now,
         known = CHAR.professions,
         trainerBuckets = trainerBuckets,
         trainerTiers = trainerTiers,
@@ -724,7 +798,7 @@ local function start()
         evaluate = evaluate, -- the controller's own re-checks also arm the position retry
     })
     -- The settings page is optional: if the client's settings API differs, only the page is lost.
-    local ok, category = pcall(ns.Options.Register, CHAR.cfg, DEFAULTS, function() evaluate(); applyWindow() end, A.classToken(),
+    local ok, category = pcall(ns.Options.Register, CHAR.cfg, DEFAULTS, function() refreshNav(); evaluate(); applyWindow() end, A.classToken(),
         A.hasColorPicker() and A.pickColor or nil,
         function(text) colorNote = text; log.Add(text) end, A.hasSwatchPicker())
     if not ok then colorNote = "settings page failed: " .. tostring(category) end
@@ -757,11 +831,19 @@ local function start()
     end
     touchWindow()
     -- Last, and guarded: a fault in the test-runner integration never stops the addon from starting.
+    refreshNav()
     local CT = ns.CheckThat
     if CT then
         local ok, err = pcall(CT.Start, { cfg = function() return CHAR.cfg end, version = A.addonVersion,
             log = function(msg) log.Add(msg) end,
-            active = function() if controller then return controller.Active() end end })
+            active = function() if controller then return controller.Active() end end,
+            learned = function(kind)
+                if kind == "vendors" then return DB.learned elseif kind == "trainers" then return DB.trainers
+                elseif kind == "auctioneers" then return DB.auctioneers end
+            end,
+            standing = function(id) return CHAR.standing[id] end,
+            nav = function() return navNow end,
+            external = externalText })
         if not ok then pcall(CT.Fail, "Start: " .. tostring(err)) end
     end
 end
@@ -871,6 +953,7 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
         log.Add("status window position reset")
     end
     if ns.Options.Refresh then ns.Options.Refresh() end
+    refreshNav() -- /cvn nav may have changed the waypoint method
     evaluate() -- a changed threshold may apply right away
     applyWindow() -- and so may a window setting or a row mode
 end
@@ -900,7 +983,7 @@ end
 ns.frame = CreateFrame("Frame")
 ns.frame:SetScript("OnEvent", function(_, event, arg1)
     -- Fires for every item the game loads, so it is handled before anything is logged.
-    if event == "GET_ITEM_INFO_RECEIVED" and relearnMerchant and DB then learnMerchant() end
+    if event == "GET_ITEM_INFO_RECEIVED" and relearnMerchant and DB then learnMerchant(false) end
     if event == "GET_ITEM_INFO_RECEIVED" then
         if #retryParts > 0 and retryItems[arg1] and retries < MAX_RETRIES and DB then
             retries = retries + 1
@@ -955,27 +1038,31 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
             init()
         elseif arg1 == "NorgannonDB" and started then
             readExternal()
+            log.Add("NorgannonDB: " .. externalText())
             rebuildBuckets()
             rebuildTrainers()
             evaluate()
             touchWindow()
         end
+        if started and arg1 ~= ADDON then refreshNav() end -- TomTom or WaypointUI may load late
     elseif event == "PLAYER_LOGIN" then
         start()
     elseif event == "MERCHANT_SHOW" then
         -- A gear check still waiting runs first, so a repair question it makes is the one the merchant answers.
         if burstQueued then flushBurst() end
-        if DB then learnMerchant() end
+        if DB then learnMerchant(true) end
         if controller then controller.OnMerchantShow() end
         if DB then
             retryParts, retryItems, retries = {}, {}, 0
             runMerchantParts({ "ammo", "reagents" })
         end
     elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
-        local trades = DB and learnTrainer()
+        local trades, first
+        if DB then trades, first = learnTrainer(event == "TRAINER_SHOW") end
         -- Probe for trainer tiers (which trainer teaches which rank): with debugging on, log every
-        -- service the window lists, with its level and skill requirements and the filter states.
-        if trades and event == "TRAINER_SHOW" and log and log.Enabled() then
+        -- service the window lists, with its level and skill requirements and the filter states. Once
+        -- per window, when its services first become readable (also on a late TRAINER_UPDATE).
+        if trades and first and log and log.Enabled() then
             local services, filters = A.trainerServices()
             log.Add(("trainer services: %d listed; filters available=%s unavailable=%s used=%s"):format(#services,
                 tostring(filters.available), tostring(filters.unavailable), tostring(filters.used)))
@@ -1001,6 +1088,7 @@ ns.frame:SetScript("OnEvent", function(_, event, arg1)
     else
         if event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
             if DB then learnHearth() end
+            if started then refreshNav() end
             if controller then controller.OnPlaceChange() end
         end
         evaluate()

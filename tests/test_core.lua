@@ -924,7 +924,7 @@ do
     local stored, fns = {}, {}
     local ct = { Entry = function(addon, name, fn) stored[#stored + 1] = addon .. "." .. name; fns[name] = fn; return true end }
     g = boot({ checkThat = ct }); login(g)
-    eq(table.concat(stored, ","), "ClosestVendor.version,ClosestVendor.setting,ClosestVendor.integration,ClosestVendor.active", "entries registered at login")
+    eq(table.concat(stored, ","), "ClosestVendor.version,ClosestVendor.setting,ClosestVendor.integration,ClosestVendor.active,ClosestVendor.learned,ClosestVendor.standing,ClosestVendor.nav,ClosestVendor.external", "entries registered at login")
     g.free = 20; g.onEvent("BAG_UPDATE_DELAYED")
     eq(select("#", fns.active()), 0, "active: no warning request, nothing")
     g.free = 1; g.onEvent("BAG_UPDATE_DELAYED")
@@ -1086,6 +1086,27 @@ do
     local gq = boot({ tomtom = true }); login(gq)
     visit(gq, 5513, "Gelman Stonehand", { "Mining" }, { map = 100, x = 0.6, y = 0.5 })
     eq(logged(gq, "trainer services"), false, "debugging off: nothing logged")
+    -- Services listed late: the probe runs once, on the first TRAINER_UPDATE that can read them.
+    local function times(game, text)
+        local n = 0
+        for _, e in ipairs(game.env.ClosestVendorCharDB.log.entries or {}) do if e.msg:find(text, 1, true) then n = n + 1 end end
+        return n
+    end
+    local gl = boot({ tomtom = true }); login(gl)
+    gl.env.ClosestVendorCharDB.log.enabled = true
+    gl.env.GetTrainerServiceInfo = function() return "Smelt Iron", "", "available" end
+    gl.env.GetTrainerServiceTypeFilter = function() return true end
+    gl.npc = { guid = "Creature-0-4372-0-55-5513-0000A1B2C3", name = "Gelman Stonehand" }
+    gl.trainer = {}
+    gl.onEvent("TRAINER_SHOW")
+    eq(times(gl, "trainer services: "), 0, "no services yet: no probe")
+    gl.trainer = { "Mining" }
+    gl.onEvent("TRAINER_UPDATE")
+    eq(times(gl, "trainer services: "), 1, "services arrive on TRAINER_UPDATE: probed")
+    gl.onEvent("TRAINER_UPDATE")
+    eq(times(gl, "trainer services: "), 1, "a later TRAINER_UPDATE: not probed again")
+    gl.onEvent("TRAINER_SHOW")
+    eq(times(gl, "trainer services: "), 2, "opened again: probed again")
 end
 
 -- A trainer that refused this character (Unfriendly with its faction) is not offered.
@@ -2568,8 +2589,6 @@ g.free = 1
 g.onEvent("BAG_UPDATE_DELAYED")
 eq(lastPrinted(g):find("(90.0, 50.0)", 1, true) ~= nil, true, "a vendor that moved: the learned position: " .. lastPrinted(g))
 
-H.done()
-
 -- Reagents have their own switch; a character saved before that keeps what the ammo switch said.
 do
     local old = boot({ charDb = { cfg = { ammoEnabled = false } } }); login(old)
@@ -2648,3 +2667,181 @@ do
     r.scripts.OnClick()
     eq(#n.tomtom, 1, "and the row click still pins a vendor")
 end
+
+-- Debug log lines and CheckThat entries for the in-game test plan (sections 3, 4, 6, 19, 21 and 24): exact text.
+do
+    local function msgs(gg) local t = {} for _, e in ipairs(gg.env.ClosestVendorCharDB.log.entries) do t[#t + 1] = e.msg end return t end
+    local function times(gg, line) local n = 0 for _, m in ipairs(msgs(gg)) do if m == line then n = n + 1 end end return n end
+    local function all(gg) return table.concat(msgs(gg), " / ") end
+    local fns = {}
+    local reads = 0
+    local opts = { checkThat = { Entry = function(_, name, fn) fns[name] = fn; return true end } }
+    local gl = boot(opts); login(gl)
+    local isLoaded = gl.env.C_AddOns.IsAddOnLoaded
+    gl.env.C_AddOns.IsAddOnLoaded = function(...) reads = reads + 1; return isLoaded(...) end
+    gl.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    gl.autoAccept = false
+
+    -- A vendor's window: new, unchanged, updated; a later read of the same window logs nothing again.
+    eq(fns.learned("vendors"), 0, "learned: no vendor yet")
+    gl.npc = { guid = "Creature-0-4372-0-55-1234-0000A1B2C3", name = "New Seller" }
+    gl.onEvent("MERCHANT_SHOW")
+    eq(times(gl, "vendor learned: New Seller (npc 1234), new; it was not in the search pool"), 1, "a vendor unknown to the addon: " .. all(gl))
+    eq(fns.learned("vendors"), 1, "learned: one vendor")
+    eq(fns.learned("vendors", 1234), true, "learned: that vendor")
+    gl.onEvent("MERCHANT_SHOW")
+    eq(times(gl, "vendor learned: New Seller (npc 1234), unchanged"), 1, "the same vendor again: unchanged")
+    gl.repairable = true
+    gl.onEvent("MERCHANT_SHOW")
+    eq(times(gl, "vendor learned: New Seller (npc 1234), updated"), 1, "now known to repair: updated")
+    -- A shipped vendor opened for the first time is new to the learned table, not to the search.
+    gl.npc = { guid = "Creature-0-4372-0-55-2-0000A1B2C3", name = "Far Repairer" }
+    gl.onEvent("MERCHANT_SHOW")
+    eq(times(gl, "vendor learned: Far Repairer (npc 2), new"), 1, "a shipped vendor: new, in the search pool")
+    gl.stock = { false }
+    gl.npc = { guid = "Creature-0-4372-0-55-4321-0000A1B2C3", name = "Slow Shop" }
+    gl.onEvent("MERCHANT_SHOW")
+    gl.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
+    gl.onEvent("GET_ITEM_INFO_RECEIVED", 17020)
+    eq(times(gl, "vendor learned: Slow Shop (npc 4321), new; it was not in the search pool"), 1, "a partial list read again: logged once")
+    eq(times(gl, "vendor learned: Slow Shop (npc 4321), unchanged"), 0, "and the rereads of the same window log nothing")
+    gl.stock = nil
+
+    -- A trainer's window: learned once per window; a class trainer says why nothing was learned.
+    gl.npc = { guid = "Creature-0-4372-0-55-5513-0000A1B2C3", name = "Gelman Stonehand" }
+    gl.trainer = { "Mining", "Engineering" }
+    gl.onEvent("TRAINER_SHOW")
+    gl.onEvent("TRAINER_UPDATE")
+    eq(times(gl, "trainer learned: Gelman Stonehand (npc 5513), new, teaches Mining, Engineering"), 1, "a new trainer, once: " .. all(gl))
+    eq(fns.learned("trainers", 5513), true, "learned: that trainer")
+    gl.onEvent("TRAINER_SHOW")
+    eq(times(gl, "trainer learned: Gelman Stonehand (npc 5513), unchanged, teaches Mining, Engineering"), 1, "opened again: unchanged")
+    gl.npc, gl.trainer = { guid = "Creature-0-4372-0-55-777-0000A1B2C3", name = "Class Trainer" }, nil
+    gl.onEvent("TRAINER_SHOW")
+    gl.onEvent("TRAINER_UPDATE")
+    eq(times(gl, "trainer window: nothing learned: not a profession trainer"), 1, "a class trainer: why, once")
+    gl.trainer = {}
+    gl.onEvent("TRAINER_SHOW")
+    eq(times(gl, "trainer window: nothing learned: no profession services listed yet"), 1, "services not listed yet: why")
+    -- The services arrive late (TRAINER_UPDATE): the first readable read writes the line, once.
+    gl.npc = { guid = "Creature-0-4372-0-55-5513-0000A1B2C3", name = "Gelman Stonehand" }
+    gl.trainer = {}
+    gl.onEvent("TRAINER_SHOW")
+    gl.trainer = { "Mining", "Engineering" }
+    gl.onEvent("TRAINER_UPDATE")
+    gl.onEvent("TRAINER_UPDATE")
+    eq(times(gl, "trainer learned: Gelman Stonehand (npc 5513), unchanged, teaches Mining, Engineering"), 2, "services listed late: the line once for this window: " .. all(gl))
+    -- No map position: says so, once per window.
+    local pos = gl.pos
+    gl.pos = nil
+    gl.onEvent("TRAINER_SHOW")
+    gl.onEvent("TRAINER_UPDATE")
+    eq(times(gl, "trainer not learned: Gelman Stonehand (npc 5513): no map position here"), 1, "a trainer with no map position: " .. all(gl))
+    gl.npc = { guid = "Creature-0-4372-0-55-1234-0000A1B2C3", name = "New Seller" }
+    gl.onEvent("MERCHANT_SHOW")
+    eq(times(gl, "vendor not learned: New Seller (npc 1234): no map position here"), 1, "a vendor with no map position")
+    gl.pos = pos
+    gl.trainer = nil
+
+    -- Standing: a change is logged; targeting one already known to refuse says so again.
+    local reaction = 3
+    gl.env.UnitReaction = function() return reaction end
+    gl.npc = { guid = "Creature-0-4372-0-55-1234-0000A1B2C3", name = "New Seller" }
+    eq(fns.standing(1234), true, "standing: its window opened")
+    gl.onEvent("PLAYER_TARGET_CHANGED")
+    eq(times(gl, "standing: npc 1234 will not trade (Unfriendly or Hostile)"), 1, "changed to Unfriendly: logged")
+    eq(fns.standing("1234"), false, "standing: will not trade")
+    gl.onEvent("PLAYER_TARGET_CHANGED")
+    eq(times(gl, "standing: npc 1234 will not trade (Unfriendly or Hostile), already known"), 1, "targeted again: already known")
+    gl.onEvent("UPDATE_MOUSEOVER_UNIT")
+    eq(times(gl, "standing: npc 1234 will not trade (Unfriendly or Hostile), already known"), 1, "a mouseover of a known one logs nothing")
+    gl.env.ClosestVendorCharDB.log.entries = {} -- the log keeps 300 lines: count from here
+    local t0 = (gl.time or 0) + 100
+    gl.time = t0
+    gl.onEvent("PLAYER_TARGET_CHANGED")
+    gl.time = t0 + 29
+    gl.onEvent("PLAYER_TARGET_CHANGED")
+    eq(times(gl, "standing: npc 1234 will not trade (Unfriendly or Hostile), already known"), 1, "targeted again and again: once in 30 seconds: " .. all(gl))
+    gl.time = t0 + 30
+    gl.onEvent("PLAYER_TARGET_CHANGED")
+    eq(times(gl, "standing: npc 1234 will not trade (Unfriendly or Hostile), already known"), 2, "and again after 30 seconds")
+    reaction = 4
+    gl.onEvent("PLAYER_TARGET_CHANGED")
+    eq(times(gl, "standing: npc 1234 will trade"), 1, "back to Neutral: logged")
+    eq(select("#", fns.standing(4242)), 0, "standing: never seen, nothing")
+
+    -- nav: the method Core keeps; the entry itself never reaches the game.
+    eq(fns.nav(), "chat", "nav: nothing installed, the chat line")
+    reads = 0
+    fns.nav(); fns.nav()
+    eq(reads, 0, "nav: an entry call reads nothing from the game")
+    opts.tomtom = true
+    gl.env.TomTom = { AddWaypoint = function() return {} end, RemoveWaypoint = function() end }
+    eq(fns.nav(), "chat", "nav: kept until something can change it")
+    gl.onEvent("ADDON_LOADED", "TomTom")
+    eq(fns.nav(), "tomtom", "nav: read again when another addon loads")
+    gl.env.SlashCmdList.CLOSESTVENDOR("nav native")
+    eq(fns.nav(), "tomtom", "nav: native is not available here, so the usual order")
+    opts.tomtom = false
+    gl.env.SlashCmdList.CLOSESTVENDOR("nav auto")
+    eq(fns.nav(), "chat", "nav: read again after a slash command")
+
+    -- external: what NorgannonDB gave, as the report says it; the same line is logged at login.
+    eq(fns.external(), "not found", "external: not found")
+    gl.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    gl.onEvent("PLAYER_LOGIN")
+    eq(times(gl, "NorgannonDB: not found"), 1, "login: the NorgannonDB line")
+    local gn = boot({ ng = fakeNG(), checkThat = { Entry = function(_, name, fn) fns[name] = fn; return true end } }); login(gn)
+    eq(fns.external(), "found, schema 1.5, 1 vendors added, 0 skipped, 0 trainers with a tier", "external: found")
+    -- A NorgannonDB vendor's window: whether its learned position replaces NorgannonDB's.
+    gn.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    gn.autoAccept = false
+    gn.npc = { guid = "Creature-0-4372-0-55-9001-0000A1B2C3", name = "Hyjal Seller" }
+    gn.pos = { map = 2482, x = 0.53, y = 0.50 }
+    gn.onEvent("MERCHANT_SHOW")
+    eq(times(gn, "vendor learned: Hyjal Seller (npc 9001), new; the NorgannonDB position is kept"), 1, "a NorgannonDB vendor is in the search pool; within 0.03: kept: " .. all(gn))
+    gn.pos = { map = 2482, x = 0.60, y = 0.50 }
+    gn.onEvent("MERCHANT_SHOW")
+    eq(times(gn, "vendor learned: Hyjal Seller (npc 9001), updated; replaces the NorgannonDB position"), 1, "moved: replaces")
+    -- A NorgannonDB vendor whose window stored nothing: no error, still one line.
+    local record = gn.ns.Discovery.Record
+    gn.ns.Discovery.Record = function() return false end
+    gn.env.ClosestVendorDB.learned[9001] = nil
+    eq(pcall(gn.onEvent, "MERCHANT_SHOW"), true, "nothing learned for a NorgannonDB vendor: no error")
+    eq(times(gn, "vendor learned: Hyjal Seller (npc 9001), new"), 1, "and its line, without the position note: " .. all(gn))
+    gn.ns.Discovery.Record = record
+
+    -- The row's arrow: the menu opening is logged, and it picks nothing by itself.
+    do
+        local gm = boot({ tomtom = true }); login(gm); gm.autoAccept = false
+        gm.env.SlashCmdList.CLOSESTVENDOR("debug on")
+        gm.env.MenuUtil = { CreateContextMenu = function(anchor, build)
+            build(anchor, { CreateTitle = function() end, CreateRadio = function() end, CreateButton = function() end })
+        end }
+        gm.env.SlashCmdList.CLOSESTVENDOR("hud row bags always"); flush(gm)
+        local row, more = window(gm).rows[1]
+        for _, f in ipairs(gm.frames) do if f.parent == row and f.kind == "Button" then more = f end end
+        more.scripts.OnClick()
+        local shown, picked = 0, 0
+        for _, e in ipairs(gm.env.ClosestVendorCharDB.log.entries) do
+            if e.msg:find("^choice menu shown: bags, %d+ entries$") then shown = shown + 1 end
+            if e.msg:find("^chosen pin: ") or e.msg:find("^accepted: ") then picked = picked + 1 end
+        end
+        eq(shown, 1, "the menu opening is logged once")
+        eq(picked, 0, "and nothing is picked or pinned")
+    end
+
+    -- The settings page's Waypoint choice is read again at once (the nav entry).
+    local fs = {}
+    local gs = boot({ settings = true, tomtom = true, checkThat = { Entry = function(_, name, fn) fs[name] = fn; return true end } })
+    gs.env.C_Map.CanSetUserWaypointOnMap = function() return true end
+    gs.env.C_Map.SetUserWaypoint = function() end
+    gs.env.C_SuperTrack = { SetSuperTrackedUserWaypoint = function() end }
+    gs.env.UiMapPoint = { CreateFromCoordinates = function(m, x, y) return { uiMapID = m, position = { x = x, y = y } } end }
+    login(gs)
+    eq(fs.nav(), "tomtom", "nav: TomTom first")
+    setting(gs, "navProvider"):SetValue("native")
+    eq(fs.nav(), "native", "nav: the settings page choice, at once")
+end
+
+H.done()

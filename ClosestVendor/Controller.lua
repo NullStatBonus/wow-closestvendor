@@ -32,6 +32,8 @@
 --   env.playSound(key)              optional: play the notification sound saved as key ("none" plays nothing)
 --   env.zoneName(mapId)             optional: the name of a map, or nil
 --   env.log(text)                   optional: record a decision in the debug log
+--   env.now()                       optional: seconds (GetTime); a repeated debug line is written again after
+--                                      30 of them
 --   env.auctionBuckets              optional: { [continentId] = { auctioneer records, same shape as vendors } }
 --   env.evaluate()                  optional: Core's check (arms the position retry); used for re-checks
 --   env.instanceType()              optional: "none", "party", "raid" or "pvp"; nil (unknown) counts as "none"
@@ -132,9 +134,34 @@ function C.New(env)
     local say = env.say or function() end
     local pinVendor -- the record the current waypoint is for, so a demo can put it back
     local demoing = false -- a /cvn demo is running: its notifications show even with On-screen notice off
+    -- Lines that can repeat on every craft or target (left out, skipped): each key's last text and when
+    -- it was written. The same text again is written only after QUIET seconds or a change of state (a
+    -- question shown or declined, a waypoint set or cleared), so a check rerun still sees its line.
+    local QUIET = 30
+    local said = {}
+    local function fresh() said = {} end
+    -- sig (default: the text) is what must differ: the left-out line passes its names and reasons
+    -- without the ranks, so a skill-up alone writes nothing new.
+    local function logChanged(key, text, sig)
+        sig = sig or text
+        local t = env.now and env.now()
+        local s = said[key]
+        if s and s.sig == sig and not (t and s.at and t - s.at >= QUIET) then return end
+        said[key] = { sig = sig, at = t }
+        log(text)
+    end
+
+    -- Ends the waypoint. False when the waypoint method raised an error while removing it, nil when it
+    -- could not confirm the removal (Nav.Clear), true otherwise (also when there was none).
     local function clearNav()
-        if handle then env.nav.Clear(handle) end
+        local ok = true
+        if handle then
+            local r = env.nav.Clear(handle)
+            if r == false then ok = false elseif r ~= true then ok = nil end
+        end
         handle, pinTrade, pinKind, pinId, pinVendor = nil, nil, nil, nil, nil
+        fresh()
+        return ok
     end
 
     -- Vendor triggers end a vendor waypoint, never a trainer's. With kind (and the item id for a
@@ -143,7 +170,7 @@ function C.New(env)
     local function clearVendorNav(kind, id)
         if pinTrade then return end
         if kind and (pinKind ~= kind or pinId ~= id) then return end
-        clearNav()
+        return clearNav()
     end
 
     -- "party", "raid" or "pvp" while the player is in an instance, else nil (unknown is the open world).
@@ -212,13 +239,22 @@ function C.New(env)
         if not quiet and env.playSound then env.playSound(env.cfg.remindSound) end
     end
 
+    -- Two targets for one need, for the debug log: the nearest one on the player's map, the nearest
+    -- overall (on another map), and the rule that puts one first (/cvn prefer).
+    local function logTwo(v, onMap)
+        log(("two targets: on your map %s (npc %s), closest %s (npc %s), %s"):format(onMap[2], tostring(onMap[1]),
+            v[2], tostring(v[1]), env.cfg.vendorPrefer ~= "distance" and "prefer map" or "prefer distance"))
+    end
+
     -- Pin without asking and say why, in chat and on screen: the nearest target v, or onMap (the nearest
     -- on the player's map) when there is one and the map is preferred. x, y is where the search started.
     local function autoPin(kind, v, onMap, x, y, trade, name, id)
         local cfg = env.cfg
         local i = kind == "trainer" and 8 or 9
         local pick = (onMap and cfg.vendorPrefer ~= "distance") and onMap or v
-        log(("auto: %s (npc %s)%s"):format(pick[2], tostring(pick[1]), onMap and " chosen from two candidates" or ""))
+        if onMap then logTwo(v, onMap) end
+        log(("auto: %s (npc %s)%s"):format(pick[2], tostring(pick[1]), not onMap and ""
+            or (pick == onMap and " chosen from two candidates: the one on your map" or " chosen from two candidates: the closest")))
         lastKind, lastTrade = kind, trade
         pin(pick, trade, kind, id)
         local function describe(t) return target(t, env.zoneName and env.zoneName(t[3]), yards(t, i, x, y)) end
@@ -285,6 +321,7 @@ function C.New(env)
         lastKind, lastTrade = kind, trade
         local first, second = v, nil
         if onMap and mapFirst then first, second = onMap, v elseif onMap then second = onMap end
+        if onMap then logTwo(v, onMap) end
         if trade then
             log(("question shown: trainer for %s, %s (npc %s), %d point(s) left"):format(trade, first[2], tostring(first[1]), count))
         elseif name then
@@ -292,6 +329,7 @@ function C.New(env)
         else
             log(("question shown: %s, %s (npc %s)"):format(kind, first[2], tostring(first[1])))
         end
+        fresh()
         local function answer(t)
             return function()
                 if mine ~= promptId then log("answer ignored: the question was withdrawn") return end
@@ -302,6 +340,7 @@ function C.New(env)
         local function decline()
             if mine ~= promptId then return end
             log("question declined: " .. kind)
+            fresh()
             if declined then declined() end
         end
         local two = second and { other = second, acceptOther = answer(second), mapFirst = mapFirst,
@@ -330,29 +369,48 @@ function C.New(env)
         for _, p in ipairs(near) do if p.name == pinTrade then return end end
         local learned = false
         for _, s in ipairs(skills) do if s.name == pinTrade then learned = true break end end
-        if learned then
-            log("trainer waypoint cleared: " .. pinTrade .. " is no longer near its cap")
-        else
-            log("trainer waypoint cleared: " .. pinTrade .. " was unlearned")
-        end
-        clearNav()
+        local why = pinTrade .. (learned and " is no longer near its cap" or " was unlearned")
+        local ok = clearNav()
+        if ok then log("trainer waypoint cleared: " .. why)
+        elseif ok == nil then log("trainer waypoint clear not confirmed: " .. why)
+        else log("FAILED: trainer waypoint not cleared: " .. why) end
     end
     -- skills: the player's skill list. Asks about the profession nearest its cap that has a
     -- known trainer. Runs on every skill change and craft: there is deliberately no latch.
     local function checkTrade(skills)
         local near = within(skills)
         dropTrainerPin(near, skills)
+        -- Each skill near its cap that is not asked about, and why (one line per check).
+        if env.cfg.tradeEnabled and type(skills) == "table" then
+            local out, sig = {}, {}
+            for _, p in ipairs(ns.Professions.LeftOut(skills, env.known or {}, env.cfg.tradeThreshold, env.level and env.level(), tiers())) do
+                out[#out + 1] = ("%s %d/%d (%s)"):format(p.name, p.rank, p.max, p.why)
+                sig[#sig + 1] = p.name .. "|" .. p.why
+            end
+            if #out > 0 then logChanged("left out", "profession check: left out: " .. table.concat(out, ", "), table.concat(sig, ";"))
+            else said["left out"] = nil end
+        end
         if not (env.cfg.tradeEnabled and near) or #near == 0 then return end
-        if env.inCombat() or dead() then log("profession check skipped: in combat or dead") return end
-        if instance() then log("profession check skipped: in an instance") return end
+        local function skip(line) logChanged("skip", line) end
+        if env.inCombat() or dead() then return skip("profession check skipped: in combat or dead") end
+        if instance() then return skip("profession check skipped: in an instance") end
         -- Lowest priority: never over an open question, an open or active vendor request, or a trainer trip.
-        if pinTrade or questionOpen() or triggers.Active() then return end
+        if pinTrade then return skip("profession check skipped: a " .. pinTrade .. " trainer waypoint is set") end
+        if questionOpen() then return skip("profession check skipped: a question is open") end
+        local act = triggers.Active()
+        if act then return skip("profession check skipped: the " .. act .. " request is open or active") end
+        said.skip = nil
         local continent, x, y, map = env.playerPos()
         if not continent then log("profession check: no map position") return end
         for _, p in ipairs(near) do
             local v, onMap = ns.Search.NearestTrainer((env.trainerBuckets or {})[continent] or {}, x, y, p.name, env.playerFaction, map, p.need)
             if v then
                 if onMap == v then onMap = nil end
+                if p.need then
+                    local tier = type(v[7]) == "table" and v[7][p.name]
+                    log(("trainer search: %s needs tier %d; nearest %s (npc %s) teaches %s"):format(p.name, p.need, v[2], tostring(v[1]),
+                        type(tier) == "number" and ("tier " .. tier) or "an unknown tier"))
+                end
                 return offer("trainer", v, onMap, x, y, p.remaining, p.name)
             end
             if not noticed[p.name] then
@@ -543,7 +601,12 @@ function C.New(env)
             end
         end
         if triggers.OnMerchantShow() then self.pending = nil end
-        clearVendorNav() -- any merchant counts as arriving, including after a test pin
+        local had, trade = handle, pinTrade
+        local ok = clearVendorNav() -- any merchant counts as arriving, including after a test pin
+        if trade then log("waypoint kept: it leads to a " .. trade .. " trainer")
+        elseif had and ok == false then log("FAILED: waypoint not cleared: a merchant window opened")
+        elseif had and ok == nil and not handle then log("waypoint clear not confirmed: a merchant window opened")
+        elseif had and not handle then log("waypoint cleared: a merchant window opened") end
     end
 
     -- The player's skills may have changed (SKILL_LINES_CHANGED).
@@ -566,7 +629,13 @@ function C.New(env)
     -- A trainer window opened; trades is the set of professions it teaches.
     function self.OnTrainerShow(trades)
         log("trainer window opened")
-        if pinTrade and trades[pinTrade] then clearNav() end
+        if pinTrade and trades[pinTrade] then
+            local trade = pinTrade
+            local ok = clearNav()
+            if ok then log("trainer waypoint cleared: the " .. trade .. " trainer window opened")
+            elseif ok == nil then log("trainer waypoint clear not confirmed: the " .. trade .. " trainer window opened")
+            else log("FAILED: trainer waypoint not cleared: the " .. trade .. " trainer window opened") end
+        end
         if lastKind == "trainer" and lastTrade and trades[lastTrade] then
             cancelPrompt()
             lastKind, lastTrade = nil, nil
@@ -699,10 +768,15 @@ function C.New(env)
                 if p.name == id then near, q.need = true, p.need end
             end
             if not near then
-                for _, s in ipairs(env.skills and env.skills() or {}) do
-                    if s.name == id and s.max == ns.Professions.NO_ROUTE_CAP then
+                -- Why it is not routed, as the profession check says it (Professions.LeftOut): only Artisan
+                -- near its cap without trainer tiers gets the Artisan reason (and chat); any other its own.
+                for _, p in ipairs(ns.Professions.LeftOut(env.skills and env.skills(), env.known or {}, env.cfg.tradeThreshold, env.level and env.level(), tiers())) do
+                    if p.name == id and p.why == "Artisan: trainer tiers unknown" then
+                        note("direct pin: Artisan " .. id .. " is not routed: trainer tiers unknown")
                         speak(L["Artisan %s is taught by only a few trainers, so the addon does not route to one."]:format(id))
                         return nil
+                    elseif p.name == id then
+                        return gone("direct pin: profession is not routed: " .. p.why)
                     end
                 end
                 return gone("direct pin: profession is not near its cap")
@@ -790,8 +864,10 @@ function C.New(env)
         cancelPrompt() -- a question about something else is answered by this choice
         autoPin(trade and "trainer" or q.find, v, onMap, q.at.x, q.at.y, trade, q.name, (q.item or kind == "supply") and id or nil)
         if q.which == "hearth" then
+            log("direct pin: the search started from your hearthstone point")
             say(L["You are in an instance, so the search started from your hearthstone point."])
         elseif q.which == "last" then
+            log("direct pin: the search started from your last position outside")
             say(L["You are in an instance, so the search started from your last position outside."])
         end
         -- A low condition is now handled and active, so it ends the usual way and is not asked about.

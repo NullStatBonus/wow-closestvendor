@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.11.2
+
+- **Changed: The debug log shows more of what the addon decides about vendors, trainers and waypoints.** CheckThat can check more of them without you.
+- Changed: A click on an Artisan profession row says that trainer tiers are unknown only when the skill is near its limit.
+
 ## 1.11.1
 
 - **Changed: The debug log shows more of what the addon decides about warnings.** CheckThat can check more warnings without you.

@@ -21,7 +21,10 @@ local function env(opts)
                           log[#log + 1] = ("tt:add %d %.3f %.3f %s %s"):format(map, x, y, o.title, tostring(o.crazy))
                           return opts.tomtomUid == nil and {} or opts.tomtomUid
                       end,
-                      RemoveWaypoint = function(_, uid) log[#log + 1] = "tt:remove" end }
+                      RemoveWaypoint = function(_, uid)
+                          if opts.removeThrows then error("no such waypoint") end
+                          log[#log + 1] = "tt:remove"
+                      end }
     end
     if opts.wui then
         local nav = { NewUserNavigation = function(o)
@@ -78,8 +81,10 @@ eq(N.FindProvider("x"), nil, "unknown")
 local api, log = env({ tomtom = true, loaded = { TomTom = true } })
 local h = N.Set(api, V)
 eq(log[1], "tt:add 1429 0.415 0.659 Corina Steele true", "tomtom add args")
-N.Clear(api, h)
+eq(N.Clear(api, h), true, "the clear ran: true")
 eq(log[2], "tt:remove", "tomtom remove")
+api, log = env({ tomtom = true, loaded = { TomTom = true }, removeThrows = true })
+eq(N.Clear(api, N.Set(api, V)), false, "TomTom raised while removing: false, no error escapes")
 
 -- TomTom returns no uid -> falls through (to chat here).
 api, log = env({ tomtom = true, loaded = { TomTom = true }, tomtomUid = false })
@@ -99,8 +104,11 @@ api, log = env({ wui = true, wuiCurrent = { flags = "SomeoneElse" } })
 h = N.Set(api, V); N.Clear(api, h)
 eq(log[#log], "wui:new 1429 41.5 65.9 Corina Steele", "leaves foreign destination")
 api, log = env({ wui = "nogetter" })
-h = N.Set(api, V); N.Clear(api, h)
+h = N.Set(api, V)
+eq(N.Clear(api, h), nil, "cannot verify ownership: nil (unknown), not true")
 eq(#log, 1, "cannot verify ownership -> no clear")
+api, log = env({ wui = true, wuiCurrent = { flags = "ClosestVendor" } })
+eq(N.Clear(api, N.Set(api, V)), true, "own destination cleared: true")
 
 -- WaypointUI reports failure (false) -> next adapter.
 api, log = env({ wui = true, wuiResult = false, native = true })
@@ -134,8 +142,8 @@ eq(log[#log]:sub(1, 6), "print:", "chat printed")
 eq(log[#log], "print:Closest vendor: Corina Steele in Elwynn Forest (41.5, 65.9)", "chat text")
 
 -- Clear with nothing is a no-op and never errors.
-N.Clear(api, nil)
-N.Clear(api, { kind = "unknown" })
+eq(N.Clear(api, nil), nil, "no handle: nil")
+eq(N.Clear(api, { kind = "unknown" }), nil, "a handle of no known method: nil")
 
 H.done()
 

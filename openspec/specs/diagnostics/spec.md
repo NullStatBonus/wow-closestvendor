@@ -50,6 +50,21 @@ While the log is on, the addon SHALL record each warning decision a test plan ch
 - **WHEN** an ammo purchase goes through for some batches and a game call fails for another
 - **THEN** the bought line counts only the batches the game took, and the failure is recorded with `FAILED:`
 
+### Requirement: Vendor, trainer and waypoint decisions are recorded
+While the log is on, the addon SHALL record each vendor, trainer and waypoint decision a test plan checks, after its effect: vendors and trainers learned or not, waypoints cleared, kept or not confirmed, trainer searches, profession checks skipped or skills left out, the choice between two candidates, and why a direct pin is not routed. A line repeats only when its text without ranks changes or after a quiet time. A clear that raises an error is recorded with `FAILED:`.
+
+#### Scenario: Vendor learned
+- **WHEN** the player opens a merchant the addon does not know
+- **THEN** one line `vendor learned: <name> (npc <id>), new` is recorded
+
+#### Scenario: Waypoint clear not confirmed
+- **WHEN** the addon removes its waypoint but the waypoint method cannot confirm the removal
+- **THEN** `waypoint clear not confirmed: ...` is recorded, not `waypoint cleared:`
+
+#### Scenario: Skill-ups do not flood the log
+- **WHEN** a weapon skill rises point by point near its cap
+- **THEN** its left-out line is recorded once, not once per point
+
 ### Requirement: Copyable report
 `/cvn log` SHALL show a report that can be selected and copied, containing the addon version, client interface and build, locale, the waypoint method in use and the chosen preference, vendor counts, current settings, the CheckThat status (`working`, `not detected`, `too old` or `failed: <why>`), and the recorded entries. If a window cannot be created, it SHALL print the most recent entries to chat.
 

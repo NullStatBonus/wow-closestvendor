@@ -15,7 +15,8 @@ preamble: 'These checks cover what the automated tests cannot check: the real ga
   |cff99ccffReport.lua|r or |cff99ccffOptions.lua|r. Run them when a new game build comes out.
 
 
-  Tick each item. Write down the client build.
+  Tick each item. Write down the client build. Wait 30 seconds before you repeat a check that failed:
+  the addon writes a repeated profession or standing line again only after 30 seconds.
 
 
   Each check has one player action, a |cff99ccffCheck:|r line with the result a player sees, and a |cff99ccffLog:|r
@@ -83,6 +84,48 @@ offline:
       addon: ClosestVendor
       entry: active
     returns: []
+  - label: A fresh account has learned no vendor yet
+    call:
+      addon: ClosestVendor
+      entry: learned
+      args:
+      - vendors
+    returns:
+    - 0
+  - label: An npc id that is not learned returns nothing
+    call:
+      addon: ClosestVendor
+      entry: learned
+      args:
+      - vendors
+      - 999999
+    returns: []
+  - label: An unknown kind returns nothing
+    call:
+      addon: ClosestVendor
+      entry: learned
+      args:
+      - bankers
+    returns: []
+  - label: An npc this character never saw has no standing
+    call:
+      addon: ClosestVendor
+      entry: standing
+      args:
+      - 999999
+    returns: []
+  - label: The fake client has no TomTom, WaypointUI or game waypoint, so the waypoint is a chat line
+    call:
+      addon: ClosestVendor
+      entry: nav
+    returns:
+    - chat
+  - label: The fake client has no NorgannonDB
+    call:
+      addon: ClosestVendor
+      entry: external
+    returns:
+    - not found
 sections:
 - id: s0
   title: Setup
@@ -93,7 +136,7 @@ sections:
     action:
       kind: manual
       text: CheckThat reads the ClosestVendor version.
-    expect: The ClosestVendor version is 1.11.1 or newer. If the step fails, copy ClosestVendor 1.11.1
+    expect: The ClosestVendor version is 1.11.2 or newer. If the step fails, copy ClosestVendor 1.11.2
       into the game again.
     verify:
     - assertions
@@ -107,9 +150,9 @@ sections:
       addon: ClosestVendor
       key: entry.version
       op: ge
-      value: 11101
-      label: ClosestVendor is 1.11.1 or newer
-    notes: The entry returns major*10000 + minor*100 + patch, so 1.11.1 is 11101. It reads a fact, not
+      value: 11102
+      label: ClosestVendor is 1.11.2 or newer
+    notes: The entry returns major*10000 + minor*100 + patch, so 1.11.2 is 11102. It reads a fact, not
       the debug log, so it runs before debug logging is on. CheckThat too old to offer entries leaves
       this step unverified.
   - id: cv.s0.2
@@ -652,132 +695,290 @@ sections:
   intro: 'Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults. Use |cff99ccff/cvn choice ask|r so questions show. No ammo, reagent, food, water or pet food warning may be due.'
 - id: s3
   title: Navigation
+  intro: Start with the default waypoint choice, Automatic, and the question mode Ask. A check for one
+    navigation setup says so in its first words; press Skip when your setup differs.
   steps:
   - id: cv.s3.1
     title: With TomTom, trigger a question and click Yes
     action:
       kind: manual
-      text: With TomTom, trigger a question and click |cffffd100Yes|r.
-    expect: The arrow points at the vendor. Press Pass.
+      text: TomTom only; press Skip otherwise. Press Run (|cff99ccff/cvn test sell|r) and click |cffffd100Yes|r
+        (|cffffd100This map|r or |cffffd100Closest|r when it names two vendors).
+      commands:
+      - /cvn test sell
+    expect: The TomTom arrow points at the vendor. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"accepted: <vendor> via <provider>".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'accepted: .+ via tomtom'
+      scope: attempt
+      label: TomTom took the waypoint
+    notes: 'Player step. Drawing: the TomTom arrow. The log proves Yes was taken and TomTom set the waypoint.'
   - id: cv.s3.2
     title: On WoW Forever with WaypointUI, trigger a question and click Yes
     action:
       kind: manual
-      text: On WoW Forever with WaypointUI, trigger a question and click |cffffd100Yes|r.
-    expect: The destination shows. Press Pass.
+      text: WaypointUI without TomTom only (TomTom comes first); press Skip otherwise. Press Run (|cff99ccff/cvn
+        test sell|r) and click |cffffd100Yes|r (|cffffd100This map|r or |cffffd100Closest|r when it names
+        two vendors).
+      commands:
+      - /cvn test sell
+    expect: The WaypointUI destination shows. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"accepted: <vendor> via <provider>".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'accepted: .+ via waypointui'
+      scope: attempt
+      label: WaypointUI took the waypoint
+    notes: 'Player step. Drawing: the WaypointUI destination.'
+    clients:
+    - forever-camelot
   - id: cv.s3.3
     title: On WoW Forever with neither addon, trigger a question and click Yes
     action:
       kind: manual
-      text: On WoW Forever with neither addon, trigger a question and click |cffffd100Yes|r.
+      text: Neither TomTom nor WaypointUI only; press Skip otherwise. Press Run (|cff99ccff/cvn test sell|r)
+        and click |cffffd100Yes|r (|cffffd100This map|r or |cffffd100Closest|r when it names two vendors).
+      commands:
+      - /cvn test sell
     expect: The map waypoint shows and is tracked. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"accepted: <vendor> via <provider>".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'accepted: .+ via native'
+      scope: attempt
+      label: The game waypoint took it
+    notes: 'Player step. Drawing: the game waypoint and its tracking.'
+    clients:
+    - forever-camelot
   - id: cv.s3.4
     title: On Classic Era with neither addon, trigger a question and click Yes
     action:
       kind: manual
-      text: On Classic Era with neither addon, trigger a question and click |cffffd100Yes|r.
+      text: Neither TomTom nor WaypointUI only; press Skip otherwise. Press Run (|cff99ccff/cvn test sell|r)
+        and click |cffffd100Yes|r (|cffffd100This map|r or |cffffd100Closest|r when it names two vendors).
+      commands:
+      - /cvn test sell
     expect: A chat line shows the vendor, the zone and the coordinates. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"accepted: <vendor> via <provider>".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'accepted: .+ via chat'
+      scope: attempt
+      label: The chat line took the waypoint
+    notes: 'Player step. Drawing: the chat line text. Classic Era has no game waypoint, so the chat line
+      is the waypoint.'
+    clients:
+    - classic-era
   - id: cv.s3.5
     title: With TomTom, set a waypoint and open any vendor window
     action:
       kind: manual
-      text: With TomTom, set a waypoint and open any vendor window.
-    expect: The arrow goes away. Press Pass.
-    verify:
-    - player
-    - reviewer
-    reviewer: '"merchant window opened".'
-  - id: cv.s3.6
-    title: With WaypointUI, set a waypoint and arrive at the vendor
-    action:
-      kind: manual
-      text: With WaypointUI, set a waypoint and arrive at the vendor.
-    expect: The destination goes away. Press Pass.
-    verify:
-    - player
-    - reviewer
-    reviewer: '"merchant window opened".'
-  - id: cv.s3.7
-    title: Enter /cvn log
-    action:
-      kind: manual
-      text: Enter |cff99ccff/cvn log|r.
+      text: TomTom only; press Skip otherwise. Press Run (|cff99ccff/cvn test sell|r) and click |cffffd100Yes|r
+        (|cffffd100This map|r or |cffffd100Closest|r when it names two vendors). Then open any vendor's
+        window.
       commands:
-      - /cvn log
-    expect: The report names the navigation method used. Press Pass.
+      - /cvn test sell
+    expect: The TomTom arrow goes away when the window opens. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: 'the report line "navigation: <provider> (preference <choice>)".'
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - pattern: 'accepted: .+ via tomtom'
+      - contains: merchant window opened
+      - contains: 'waypoint cleared: a merchant window opened'
+      scope: attempt
+      label: TomTom set the waypoint, then the merchant window cleared it
+    notes: 'Player step. Drawing: the arrow going away. The log proves the clear happened after the window
+      opened.'
+  - id: cv.s3.6
+    title: With WaypointUI, set a waypoint and open the vendor window
+    action:
+      kind: manual
+      text: WaypointUI without TomTom only; press Skip otherwise. Press Run (|cff99ccff/cvn test sell|r)
+        and click |cffffd100Yes|r (|cffffd100This map|r or |cffffd100Closest|r when it names two vendors).
+        Then open any vendor's window.
+      commands:
+      - /cvn test sell
+    expect: The WaypointUI destination goes away when the window opens. Press Pass.
+    verify:
+    - player
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - pattern: 'accepted: .+ via waypointui'
+      - contains: merchant window opened
+      - contains: 'waypoint cleared: a merchant window opened'
+      scope: attempt
+      label: WaypointUI set the waypoint, then the merchant window cleared it
+    notes: 'Player step. Drawing: the destination going away.'
+    clients:
+    - forever-camelot
+  - id: cv.s3.7
+    title: Read the waypoint method the addon uses
+    setup: TomTom installed and enabled, with the Waypoint choice Automatic (the setup of check 1); press
+      Skip otherwise.
+    action:
+      kind: manual
+      text: CheckThat reads the waypoint method the addon uses now.
+    expect: The method is TomTom.
+    verify:
+    - assertions
+    auto: true
+    timeout: 30
+    call:
+      addon: ClosestVendor
+      entry: nav
+    assertions:
+    - kind: fact
+      source: facts
+      addon: ClosestVendor
+      key: entry.nav
+      op: eq
+      value: tomtom
+      label: The addon uses TomTom
+    notes: Replaces the report line "navigation:", which is not in the debug log. The entry returns the
+      value Core keeps (login, world entry, slash command, settings page, addon load), so the call reads
+      nothing from the game. With TomTom loaded and the choice Automatic, TomTom comes first.
 - id: s4
   title: Vendors and learning
+  intro: 'Each check needs a vendor no character on this account has opened, so it is learned as new.
+    Open its window first, close it, then press Run: Run before the window would let the window close
+    the test question. Use the question mode Ask.'
   steps:
   - id: cv.s4.1
     title: Open a repair vendor the addon does not know, then test repair
+    setup: Stand at a repair vendor no character on this account has opened (a new WoW Forever zone, for
+      example Mount Hyjal or Zephras Isle).
     action:
       kind: manual
-      text: Open a repair vendor the addon does not know (a new WoW Forever zone, for example Mount Hyjal
-        or Zephras Isle). Then enter |cff99ccff/cvn test repair|r.
+      text: Open the vendor's window and close it. Then press Run (|cff99ccff/cvn test repair|r).
       commands:
       - /cvn test repair
     expect: The question names that vendor. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"merchant window opened" and "question shown:" naming that vendor.'
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - pattern: 'vendor learned: .+ %(npc %d+%), [nu][ep]'
+      - contains: 'test command: repair'
+      - contains: 'question shown: repair, '
+      scope: attempt
+      label: The vendor was learned as new or updated, then the repair question was asked
+    - kind: log
+      source: debug
+      contains: it was not in the search pool
+      diagnostic: true
+      scope: attempt
+      label: The vendor was new to the search (not shipped, not from NorgannonDB, not learned before)
+    notes: 'Player step. Drawing: the dialog names the vendor you opened. The vendor stands next to you,
+      so it is the closest repairer. The learned line says new or updated (a vendor already learned
+      and unchanged fails: choose one the addon does not know). "it was not in the search pool", a
+      diagnostic, means the vendor was neither shipped, nor from NorgannonDB, nor learned before; a shipped
+      or NorgannonDB vendor rightly lacks it. The sequence fails when Run came first.'
   - id: cv.s4.2
     title: Open an ammo vendor the addon does not know, as a Hunter
+    setup: Hunter only; press Skip on other classes. Stand at an ammo vendor no character on this account
+      has opened.
     action:
       kind: manual
-      text: Open an ammo vendor the addon does not know, as a Hunter. Then enter |cff99ccff/cvn test arrows|r.
+      text: Open the vendor's window and close it. Then press Run (|cff99ccff/cvn test arrows|r).
       commands:
       - /cvn test arrows
     expect: The question names that vendor. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"merchant window opened" and "question shown:" naming that vendor.'
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - pattern: 'vendor learned: .+ %(npc %d+%), [nu][ep]'
+      - contains: 'test command: arrow'
+      - contains: 'question shown: arrow, '
+      scope: attempt
+      label: The vendor was learned as new or updated, then the arrow question was asked
+    - kind: log
+      source: debug
+      contains: it was not in the search pool
+      diagnostic: true
+      scope: attempt
+      label: The vendor was new to the search (not shipped, not from NorgannonDB, not learned before)
+    notes: 'Player step. Drawing: the dialog names the vendor you opened. The command says arrows; the
+      log names the kind arrow.'
   - id: cv.s4.3
     title: Open a general vendor the addon does not know
+    setup: Stand at a vendor no character on this account has opened.
     action:
       kind: manual
-      text: Open a general vendor the addon does not know. Then enter |cff99ccff/cvn test sell|r.
+      text: Open the vendor's window and close it. Then press Run (|cff99ccff/cvn test sell|r).
       commands:
       - /cvn test sell
     expect: The question names that vendor. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"merchant window opened" and "question shown:" naming that vendor.'
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - pattern: 'vendor learned: .+ %(npc %d+%), [nu][ep]'
+      - contains: 'test command: sell'
+      - contains: 'question shown: sell, '
+      scope: attempt
+      label: The vendor was learned as new or updated, then the sell question was asked
+    - kind: log
+      source: debug
+      contains: it was not in the search pool
+      diagnostic: true
+      scope: attempt
+      label: The vendor was new to the search (not shipped, not from NorgannonDB, not learned before)
+    notes: 'Player step. Drawing: the dialog names the vendor you opened.'
   - id: cv.s4.4
-    title: Open a vendor that will not trade with you (Unfriendly or Hostile)
+    title: Target a vendor that will not trade with you, then test sell
+    setup: Stand near a vendor the addon knows that is Unfriendly or Hostile to you (its name shows red
+      or orange), with other vendors further away.
     action:
       kind: manual
-      text: Open a vendor that will not trade with you (Unfriendly or Hostile). Then enter |cff99ccff/cvn
-        test sell|r.
+      text: Target that vendor. Then press Run (|cff99ccff/cvn test sell|r).
       commands:
       - /cvn test sell
     expect: The question does not name that vendor. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"standing: npc <id> will not trade (Unfriendly or Hostile)".'
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - pattern: 'standing: npc %d+ will not trade'
+      - contains: 'test command: sell'
+      - contains: 'question shown: sell, '
+      scope: attempt
+      label: The vendor was seen as refusing, then the sell question was asked
+    notes: 'Player step. Drawing: the dialog names another vendor. A vendor that refuses cannot open its
+      window, so the target gives the standing. A vendor this character already saw refusing writes the
+      line again with ", already known". Sections 21 and 24 check named NPCs.'
 - id: s5
   title: Ammo
   steps:
@@ -968,43 +1169,74 @@ sections:
   intro: Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults. Use |cff99ccff/cvn choice ask|r. Press Skip on a check your class cannot do.
 - id: s6
   title: Professions
+  intro: Run these checks on a character with the default thresholds; the checks change thresholds and
+    set them back to the defaults. Use the question mode Ask with no warning due. A profession counts
+    once you opened its trainer or crafting window.
   steps:
   - id: cv.s6.1
-    title: Open a profession trainer, then enter /cvn log
+    title: Open a profession trainer
+    setup: Stand at a profession trainer.
     action:
       kind: manual
-      text: Open a profession trainer, then enter |cff99ccff/cvn log|r.
-      commands:
-      - /cvn log
-    expect: 'The report lists the profession trainer (|cff99ccfftrainers: 1 learned|r and the profession).
-      Press Pass.'
+      text: Open the trainer's window.
+    expect: The addon learns the trainer and the professions it teaches.
     verify:
-    - player
-    - reviewer
-    reviewer: '"trainer window opened" and "trainer services:" line.'
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'trainer learned: '
+      - contains: trainer window opened
+      scope: attempt
+      label: The trainer was learned when its window opened
+    notes: 'The line names the trainer, its npc id, new or unchanged, and what it teaches. The report
+      line "trainers: N learned" is not in the debug log, so it is not asserted.'
   - id: cv.s6.2
-    title: Open a class trainer, then enter /cvn log
+    title: Open a class trainer
+    setup: Stand at a class trainer (the trainer that teaches your spells).
     action:
       kind: manual
-      text: Open a class trainer, then enter |cff99ccff/cvn log|r.
-      commands:
-      - /cvn log
-    expect: The report records nothing for the class trainer. Press Pass.
+      text: Open the trainer's window.
+    expect: The addon learns nothing from it.
     verify:
-    - player
-    - reviewer
-    reviewer: '"trainer window opened" with no "trainer services:" line.'
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'trainer window: nothing learned: not a profession trainer'
+      scope: attempt
+      label: The class trainer was recognised and not learned
+    - kind: log
+      source: debug
+      contains: 'trainer learned: '
+      absent: true
+      scope: attempt
+      label: No trainer was learned
   - id: cv.s6.3
     title: Reach the profession threshold and gather
+    setup: No question is open, no warning is due and no trainer waypoint is set.
     action:
       kind: manual
-      text: Reach the threshold (default 10 points from the limit, for example 65/75 Mining) and gather.
-    expect: The trainer question appears on the skill-up. It names the profession, the points left and
+      text: Gather or craft until a profession is 10 points or fewer from its limit (for example 65 of
+        75 Mining).
+    expect: The trainer question appears on that skill-up. It names the profession, the points left and
       the trainer. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"question shown: trainer for <profession>".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      scope: attempt
+      label: The trainer question was asked
+    notes: 'Player step. Drawing: the dialog text. Reaching the threshold can take longer than an automatic
+      check waits.'
   - id: cv.s6.4
     title: Click Yes on the trainer question
     action:
@@ -1013,120 +1245,285 @@ sections:
     expect: A waypoint to the trainer is set. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"accepted: <trainer> via <provider>".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'accepted: '
+      scope: attempt
+      label: Yes set a waypoint
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: A waypoint provider took the waypoint
+    notes: 'Player step. Drawing: the waypoint. A trainer waypoint holds back new trainer questions, so
+      check 5 replaces it first.'
   - id: cv.s6.5
     title: Craft near the limit with a tradeskill window open and no skill-up
+    setup: The profession from check 3 is still 10 points or fewer from its limit.
     action:
       kind: manual
-      text: Craft near the limit with a tradeskill window open, with no skill-up.
-    expect: The trainer question still appears after the craft. Press Pass.
+      text: Press Run (|cff99ccff/cvn test sell|r) and click |cffffd100Yes|r (|cffffd100This map|r or
+        |cffffd100Closest|r when it names two vendors), so a vendor waypoint replaces the trainer waypoint.
+        Then craft one item that gives no skill-up, with the crafting window open.
+      commands:
+      - /cvn test sell
+    expect: The trainer question appears after the craft.
     verify:
-    - player
-    - reviewer
-    reviewer: '"a craft finished".'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'accepted: '
+      - contains: a craft finished
+      - contains: 'question shown: trainer for '
+      scope: attempt
+      label: The trainer waypoint was replaced, then the craft asked
   - id: cv.s6.6
     title: Answer No to the trainer question, then craft again
+    setup: The trainer question from check 5 is open.
     action:
       kind: manual
-      text: Answer |cffffd100No|r to the trainer question, then craft again.
-    expect: The question appears again. Press Pass.
+      text: Click |cffffd100No|r on the trainer question, then craft one item.
+    expect: The question appears again after the craft.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question declined: trainer".'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'question declined: trainer'
+      - contains: a craft finished
+      - contains: 'question shown: trainer for '
+      scope: attempt
+      label: No was taken, then the craft asked again
   - id: cv.s6.7
     title: Leave the trainer question open, then craft again
+    setup: The trainer question from check 6 is open.
     action:
       kind: manual
-      text: Leave the trainer question open, then craft again.
-    expect: The question does not show a second time. Press Pass.
+      text: Leave the question open and craft one item.
+    expect: The question does not show a second time.
     verify:
-    - player
-    - reviewer
-    reviewer: 'one "question shown: trainer" line.'
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: a craft finished
+      - contains: 'profession check skipped: a question is open'
+      scope: attempt
+      label: The craft was checked and skipped for the open question
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      absent: true
+      scope: attempt
+      label: No trainer question
   - id: cv.s6.8
     title: Reach the tier limit (for example 75/75)
+    setup: Click |cffffd100No|r on the open trainer question. The profession is 1 point below its limit
+      (for example 74 of 75), at the level its next tier needs (10, 20 or 35).
     action:
       kind: manual
-      text: Reach the tier limit (for example 75/75).
-    expect: The addon still asks. Press Pass.
+      text: Gain the last point (gather or craft).
+    expect: The addon asks at the limit too.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question shown: trainer" at the tier limit.'
+    - assertions
+    auto: true
+    timeout: 300
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'question shown: trainer for .+, 0 point%(s%) left'
+      scope: attempt
+      label: The trainer question was asked at the limit
   - id: cv.s6.9
     title: Reach the final tier (300/300)
+    setup: 'Only with a profession at 290 to 300 of 300; press Skip otherwise. Leave the trainer question
+      from check 8 open: the check still names what it leaves out, then skips for the open question.'
     action:
       kind: manual
-      text: Reach the final tier (300/300).
-    expect: The addon never asks. Press Pass.
+      text: Open its crafting window and craft one item.
+    expect: The addon does not ask.
     verify:
-    - player
-    - reviewer
-    reviewer: 'no "question shown: trainer" line.'
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: a craft finished
+      - contains: the last tier
+      scope: attempt
+      label: The craft was checked and the last tier left out
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      absent: true
+      scope: attempt
+      label: No trainer question
+    notes: The open question keeps this check from asking anything, so it proves only the left-out line.
+      Check 19 proves that a profession at the last tier is never asked about.
   - id: cv.s6.10
     title: With a trainer waypoint set, open a vendor window
+    setup: Click |cffffd100Yes|r on the trainer question from check 8, or click the profession row in
+      the status window, so a trainer waypoint is set.
     action:
       kind: manual
-      text: With a trainer waypoint set, open a vendor window.
-    expect: The waypoint stays. Press Pass.
+      text: Open any vendor's window.
+    expect: The trainer waypoint stays.
     verify:
-    - player
-    - reviewer
-    reviewer: no "trainer waypoint cleared:" line.
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: merchant window opened
+      - contains: 'waypoint kept: it leads to a '
+      scope: attempt
+      label: The merchant window kept the trainer waypoint
+    - kind: log
+      source: debug
+      contains: 'trainer waypoint cleared: '
+      absent: true
+      scope: attempt
+      label: The trainer waypoint was not cleared
   - id: cv.s6.11
     title: With a trainer waypoint set, open that profession's trainer window
+    setup: The trainer waypoint from check 10 is set. Stand next to a trainer of that profession.
     action:
       kind: manual
-      text: With a trainer waypoint set, open that profession's trainer window.
-    expect: The waypoint goes away. Press Pass.
+      text: Open the trainer's window. Then learn the next tier, so no profession is at its limit for
+        checks 12 to 14 and 19.
+    expect: The trainer waypoint goes away.
     verify:
-    - player
-    - reviewer
-    reviewer: '"trainer waypoint cleared:".'
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: trainer window opened
+      - contains: 'trainer waypoint cleared: the '
+      scope: attempt
+      label: The trainer window cleared the trainer waypoint
+    notes: The cleared line is written only when the waypoint method confirms the removal; otherwise the
+      line says "clear not confirmed" or FAILED.
   - id: cv.s6.12
     title: Use a profession whose trainer or crafting window you never opened
+    setup: Only with a profession whose trainer or crafting window you never opened, 10 points or fewer
+      from its limit (for example Skinning); press Skip otherwise. No other known profession is 10 points
+      or fewer from its limit. No weapon skill is near its limit either.
     action:
       kind: manual
-      text: Use a profession whose trainer or crafting window you never opened.
-    expect: The addon stays silent. Press Pass.
+      text: Gain a point in it.
+    expect: The addon stays silent.
     verify:
-    - player
-    - reviewer
-    reviewer: no "question shown:" line.
+    - assertions
+    auto: true
+    timeout: 300
+    assertions:
+    - kind: log
+      source: debug
+      contains: no trainer or crafting window seen
+      scope: attempt
+      label: The skill was left out as never seen
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      absent: true
+      scope: attempt
+      label: No trainer question
+    notes: A weapon skill near its limit writes the same reason, so the setup rules it out.
   - id: cv.s6.13
     title: Use a weapon skill near its limit
+    setup: Below level 60 only, with a weapon skill 10 points or fewer from its limit; press Skip otherwise
+      (at level 60 every weapon skill limit is 300, which the addon leaves out). No other known profession
+      is 10 points or fewer from its limit.
     action:
       kind: manual
-      text: Use a weapon skill near its limit.
-    expect: The addon stays silent. Press Pass.
+      text: Fight until that weapon skill rises; keep fighting until the check passes.
+    expect: The addon stays silent.
     verify:
-    - player
-    - reviewer
-    reviewer: no "question shown:" line.
+    - assertions
+    auto: true
+    timeout: 300
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'left out: .*%(no trainer or crafting window seen%)'
+      scope: attempt
+      label: The weapon skill was left out as never seen
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      absent: true
+      scope: attempt
+      label: No trainer question
+    notes: A weapon skill is never a known profession, so it is left out with the same reason as a profession
+      never seen. A skill-up alone writes the same left-out line again only after 30 seconds, so a rerun
+      may need a second skill-up.
   - id: cv.s6.14
     title: Use a known profession that has no trainer on this continent
+    setup: Log out and back in first. A known profession 10 points or fewer from its limit, with no trainer
+      known on this continent. No other known profession is 10 points or fewer from its limit. No question
+      is open.
     action:
       kind: manual
-      text: Use a known profession that has no trainer on this continent.
-    expect: One chat line appears, once. Press Pass.
+      text: With its crafting window open, craft two items.
+    expect: One chat line says no trainer is known, once.
     verify:
-    - player
-    - reviewer
-    reviewer: '"no known trainer for <profession>" once.'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log
+      source: debug
+      contains: a craft finished
+      count:
+        min: 2
+      scope: attempt
+      label: Both crafts were checked
+    - kind: log
+      source: debug
+      contains: 'no known trainer for '
+      count:
+        exactly: 1
+      scope: attempt
+      label: The no-trainer line came once
+    notes: The line shows once per profession in a session, so the step starts from a fresh login.
   - id: cv.s6.15
     title: Open a tradeskill window. Enter /cvn log
     action:
       kind: manual
-      text: Open a tradeskill window. Enter |cff99ccff/cvn log|r.
+      text: Open a tradeskill window. Then enter |cff99ccff/cvn log|r.
       commands:
       - /cvn log
-    expect: The report lists the profession under the professions seen. Press Pass.
+    expect: The report lists the profession under "professions seen". Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"trainers: N learned, professions seen: <list>" in the report.'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: event TRADE_SKILL_SHOW
+      scope: attempt
+      label: The crafting window opened
+    notes: Player step. The report header is not in the debug log, so the player reads the report.
   - id: cv.s6.16
     title: Enter /cvn trade 25 and open the settings page
     action:
@@ -1137,6 +1534,7 @@ sections:
     expect: The Professions slider shows 25. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: the settings page. Check 18 types the default back.'
   - id: cv.s6.17
     title: Enter /cvn trade off and open the settings page
     action:
@@ -1147,6 +1545,7 @@ sections:
     expect: The Professions checkbox is cleared. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: the settings page. Check 18 turns the warning back on.'
   - id: cv.s6.18
     title: Turn the profession warning back on at the default threshold
     action:
@@ -1158,8 +1557,45 @@ sections:
     expect: Chat shows the profession warning on at 10. Press Pass.
     verify:
     - player
-    notes: 'Player step. Cleanup: checks 16 and 17 set the profession threshold to 25 and turned it off. Nothing to log.'
-  intro: Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults.
+    notes: 'Player step. Cleanup: checks 16 and 17 set the profession threshold to 25 and turned it off.
+      Nothing to log.'
+  - id: cv.s6.19
+    title: Craft at the final tier with no other profession near its limit
+    setup: Only with a profession at 290 to 298 of 300 and no other known profession 10 points or fewer
+      from its limit (check 11 trained the profession from check 8); press Skip otherwise. Click |cffffd100No|r
+      on any open question first.
+    action:
+      kind: manual
+      text: Open its crafting window and craft one item. If the check has not passed after 30 seconds,
+        craft one more.
+    expect: The addon does not ask.
+    verify:
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: a craft finished
+      - contains: the last tier
+      scope: attempt
+      label: The craft was checked and the last tier left out
+    - kind: log
+      source: debug
+      contains: 'profession check skipped: '
+      absent: true
+      scope: attempt
+      label: Nothing suppressed the check
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      absent: true
+      scope: attempt
+      label: No trainer question
+    notes: Unlike check 9, no question is open and no other profession is near its limit, so a trainer
+      question here would be for the last tier. At 290 to 298 one craft leaves at least one point. The same
+      left-out line is written again only after 30 seconds, hence the second craft.
 - id: s7
   title: Report and debug log
   steps:
@@ -1674,162 +2110,388 @@ sections:
   intro: Use a Hunter with a bow (or a gun) and a quiver (or ammo pouch).
 - id: s11
   title: Targets on another map
+  intro: 'Stand near a zone edge, where the closest vendor is across the border. Start from the defaults:
+    question mode Ask, prefer map, on-screen notice on. The checks change them; check 28 sets them back.
+    Run repeats the question.'
   steps:
   - id: cv.s11.1
     title: Trigger the question when a vendor on another map is closer
     action:
       kind: manual
-      text: Trigger the question where a vendor on another map is closer than the vendor on your map.
+      text: Where a vendor on another map is closer than the vendor on your map, press Run (|cff99ccff/cvn
+        test sell|r).
+      commands:
+      - /cvn test sell
     expect: The question lists both vendors, each with zone and distance in yards. It has three buttons.
       Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"question shown: ".'
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'two targets: '
+      - contains: 'question shown: sell, '
+      scope: attempt
+      label: Two targets were found and the question was asked
+    notes: 'Player step. Drawing: the dialog text and its buttons.'
   - id: cv.s11.2
     title: Check the button order with /cvn prefer map (the default)
     action:
       kind: manual
-      text: Check the order of the buttons with |cff99ccff/cvn prefer map|r (the default).
+      text: Close the question. Press Run (|cff99ccff/cvn prefer map|r, then |cff99ccff/cvn test sell|r)
+        and look at the order of the buttons.
       commands:
       - /cvn prefer map
+      - /cvn test sell
     expect: The first button is the vendor on your map. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"question shown: ".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'two targets: .+prefer map'
+      scope: attempt
+      label: The map vendor was put first
+    notes: 'Player step. Drawing: the button order. The question stays open for check 3.'
   - id: cv.s11.3
     title: Click the first button
+    setup: The question from check 2 is open.
     action:
       kind: manual
       text: Click the first button.
     expect: The waypoint goes to the vendor on your map. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"accepted: <vendor> via <provider>".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'accepted: '
+      scope: attempt
+      label: Yes set a waypoint
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: A waypoint provider took the waypoint
+    notes: 'Player step. Drawing: where the waypoint points.'
   - id: cv.s11.4
     title: Repeat the question, then click the second button
     action:
       kind: manual
-      text: Repeat the question, then click the second button.
+      text: Press Run (|cff99ccff/cvn test sell|r), then click the second button.
+      commands:
+      - /cvn test sell
     expect: The waypoint goes to the closer vendor on the other map. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"accepted: <vendor> via <provider>".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'accepted: '
+      scope: attempt
+      label: Yes set a waypoint
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: A waypoint provider took the waypoint
+    notes: 'Player step. Drawing: where the waypoint points.'
   - id: cv.s11.5
     title: Repeat the question, then click Cancel
     action:
       kind: manual
-      text: Repeat the question, then click Cancel.
-    expect: No waypoint is set. Press Pass.
+      text: Press Run (|cff99ccff/cvn test sell|r), then click |cffffd100Cancel|r.
+      commands:
+      - /cvn test sell
+    expect: No waypoint is set.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question declined: ".'
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'two targets: '
+      - contains: 'question declined: sell'
+      scope: attempt
+      label: The two-target question was cancelled
+    - kind: log
+      source: debug
+      contains: 'accepted: '
+      absent: true
+      scope: attempt
+      label: No waypoint was set
   - id: cv.s11.6
     title: Repeat the question, then press Esc
     action:
       kind: manual
-      text: Repeat the question, then press Esc.
-    expect: No waypoint is set. Press Pass.
+      text: Press Run (|cff99ccff/cvn test sell|r), then press Esc.
+      commands:
+      - /cvn test sell
+    expect: No waypoint is set.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question declined: ".'
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'two targets: '
+      - contains: 'question declined: sell'
+      scope: attempt
+      label: Escape was taken as No
+    - kind: log
+      source: debug
+      contains: 'accepted: '
+      absent: true
+      scope: attempt
+      label: No waypoint was set
   - id: cv.s11.7
     title: Type /cvn prefer distance and trigger the question
     action:
       kind: manual
-      text: Type |cff99ccff/cvn prefer distance|r and trigger the question.
+      text: Press Run (|cff99ccff/cvn prefer distance|r, then |cff99ccff/cvn test sell|r).
       commands:
       - /cvn prefer distance
+      - /cvn test sell
     expect: The closer vendor is now the first button. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"question shown: ".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'two targets: .+prefer distance'
+      scope: attempt
+      label: The closer vendor was put first
+    notes: 'Player step. Drawing: the button order. Prefer distance stays until check 10.'
   - id: cv.s11.8
     title: Trigger the question where the closest vendor is on your map
     action:
       kind: manual
-      text: Stand where the closest vendor is on your own map and trigger the question.
+      text: Close the question. Stand where the closest vendor is on your own map, then press Run (|cff99ccff/cvn
+        test sell|r).
+      commands:
+      - /cvn test sell
     expect: You get the plain Yes / No question, naming that vendor. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"question shown: ".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'question shown: sell, '
+      scope: attempt
+      label: The question was asked
+    - kind: log
+      source: debug
+      contains: 'two targets: '
+      absent: true
+      scope: attempt
+      label: Only one target
+    notes: 'Player step. Drawing: the dialog names the vendor on your map.'
   - id: cv.s11.9
     title: Stand on a map with no known vendor and trigger the question
     action:
       kind: manual
-      text: Stand on a map with no known vendor and trigger the question.
+      text: Close the question. Stand on a map with no known vendor, then press Run (|cff99ccff/cvn test
+        sell|r).
+      commands:
+      - /cvn test sell
     expect: You get the plain Yes / No question, naming the closest vendor on another map. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"question shown: ".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'question shown: sell, '
+      scope: attempt
+      label: The question was asked
+    - kind: log
+      source: debug
+      contains: 'two targets: '
+      absent: true
+      scope: attempt
+      label: Only one target
+    notes: 'Player step. Drawing: the dialog names a vendor on another map.'
   - id: cv.s11.10
     title: Type /cvn choice auto and trigger the question with prefer map
+    setup: A waypoint method is in use (TomTom, WaypointUI or the game waypoint), not chat alone; checks
+      11, 20 and 23 need it too.
     action:
       kind: manual
-      text: Type |cff99ccff/cvn choice auto|r and trigger the question with |cff99ccffprefer map|r.
+      text: Close the question. Back near the zone edge, press Run (|cff99ccff/cvn choice auto|r, |cff99ccff/cvn
+        prefer map|r, then |cff99ccff/cvn test sell|r).
       commands:
       - /cvn choice auto
-    expect: No question opens. The waypoint goes at once to the vendor on your map. Press Pass.
+      - /cvn prefer map
+      - /cvn test sell
+    expect: No question opens. The waypoint goes at once to the vendor on your map.
     verify:
-    - player
-    - reviewer
-    reviewer: '"auto: <vendor> (npc <id>) chosen from two candidates".'
+    - assertions
+    auto: true
+    timeout: 60
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - pattern: 'two targets: .+prefer map'
+      - contains: 'chosen from two candidates: the one on your map'
+      - pattern: 'accepted: .+ via '
+      scope: attempt
+      label: The vendor on your map was chosen from two and its waypoint set at once
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: The vendor had a waypoint method
+    - kind: log
+      source: debug
+      contains: via chat
+      absent: true
+      scope: attempt
+      label: The vendor got a waypoint, not only a chat line
+    - kind: log
+      source: debug
+      contains: 'question shown: '
+      absent: true
+      scope: attempt
+      label: No question
+    notes: 'Run is the action here: the test command is what the addon answers. The auto line names which
+      of the two was taken (the one on your map or the closest), so a reversed preference fails. Needs a
+      waypoint method (TomTom, WaypointUI or the game waypoint).'
   - id: cv.s11.11
     title: With choice auto, type /cvn prefer distance and trigger the question
+    setup: The question mode is still automatic from check 10, with a waypoint method in use.
     action:
       kind: manual
-      text: With |cff99ccff/cvn choice auto|r, type |cff99ccff/cvn prefer distance|r and trigger the question.
+      text: Press Run (|cff99ccff/cvn prefer distance|r, then |cff99ccff/cvn test sell|r).
       commands:
-      - /cvn choice auto
       - /cvn prefer distance
-    expect: No question opens. The waypoint goes at once to the closer vendor. Press Pass.
+      - /cvn test sell
+    expect: No question opens. The waypoint goes at once to the closer vendor.
     verify:
-    - player
-    - reviewer
-    reviewer: '"auto: <vendor> (npc <id>) chosen from two candidates".'
+    - assertions
+    auto: true
+    timeout: 60
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - pattern: 'two targets: .+prefer distance'
+      - contains: 'chosen from two candidates: the closest'
+      - pattern: 'accepted: .+ via '
+      scope: attempt
+      label: The closer vendor was chosen from two and its waypoint set at once
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: The vendor had a waypoint method
+    - kind: log
+      source: debug
+      contains: via chat
+      absent: true
+      scope: attempt
+      label: The vendor got a waypoint, not only a chat line
+    - kind: log
+      source: debug
+      contains: 'question shown: '
+      absent: true
+      scope: attempt
+      label: No question
   - id: cv.s11.12
     title: Trigger an automatic waypoint with two candidates
+    setup: The question mode is still automatic and the rule is prefer distance from checks 10 and 11. Stand
+      near the zone edge, as in check 10, so a vendor on your map and a closer one on another map are known.
     action:
       kind: manual
-      text: Trigger an automatic waypoint with two candidates.
+      text: Press Run (|cff99ccff/cvn test sell|r).
+      commands:
+      - /cvn test sell
     expect: One chat line and the same on-screen text name the target with zone and distance in yards,
       and the other choice. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"auto: <vendor> (npc <id>) chosen from two candidates".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: chosen from two candidates
+      scope: attempt
+      label: An automatic waypoint from two candidates
+    notes: 'Player step. Drawing: the chat line and the on-screen text.'
   - id: cv.s11.13
     title: Trigger an automatic waypoint
     action:
       kind: manual
-      text: Trigger an automatic waypoint.
+      text: Press Run (|cff99ccff/cvn test sell|r).
+      commands:
+      - /cvn test sell
     expect: The notification sound plays once. Press Pass.
     verify:
     - player
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'auto: '
+      scope: attempt
+      label: An automatic waypoint was set
+    notes: 'Player step. Sound: no line records it.'
   - id: cv.s11.14
     title: Trigger an automatic waypoint and watch the on-screen text
     action:
       kind: manual
-      text: Trigger an automatic waypoint and watch the on-screen text.
+      text: Press Run (|cff99ccff/cvn test sell|r) and watch the on-screen text.
+      commands:
+      - /cvn test sell
     expect: The text stays about five seconds, high and centered, then goes. Press Pass.
     verify:
     - player
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'auto: '
+      scope: attempt
+      label: An automatic waypoint was set
+    notes: 'Player step. Drawing: where the text shows and how long it stays.'
   - id: cv.s11.15
     title: Set a second waypoint while the on-screen text shows
     action:
       kind: manual
-      text: Set a second waypoint while the on-screen text shows.
+      text: Do not press Run. Enter |cff99ccff/cvn test sell|r from its box. While the on-screen text
+        shows, enter |cff99ccff/cvn test repair|r from its box.
+      commands:
+      - /cvn test sell
+      - /cvn test repair
     expect: The new text replaces the old one and the time restarts. Press Pass.
     verify:
     - player
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'auto: '
+      count:
+        min: 2
+      scope: attempt
+      label: Two automatic waypoints were set
+    notes: 'Player step. Drawing: the text replacement. Run would enter both lines at once, too fast to
+      see the first text.'
   - id: cv.s11.16
     title: Cause a game error, for example try an action that fails
     action:
@@ -1838,94 +2500,212 @@ sections:
     expect: The error text looks the same and lasts as long as usual. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: the game error text. The addon writes nothing for it.'
   - id: cv.s11.17
     title: Type /cvn notice off and trigger an automatic waypoint
     action:
       kind: manual
-      text: Type |cff99ccff/cvn notice off|r and trigger an automatic waypoint.
+      text: Press Run (|cff99ccff/cvn notice off|r, then |cff99ccff/cvn test sell|r).
       commands:
       - /cvn notice off
+      - /cvn test sell
     expect: The on-screen text does not show. The chat line stays. Press Pass.
     verify:
     - player
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'auto: '
+      scope: attempt
+      label: An automatic waypoint was set
+    notes: 'Player step. Drawing: no on-screen text.'
   - id: cv.s11.18
     title: Type /cvn notice on and trigger an automatic waypoint
     action:
       kind: manual
-      text: Type |cff99ccff/cvn notice on|r and trigger an automatic waypoint.
+      text: Press Run (|cff99ccff/cvn notice on|r, then |cff99ccff/cvn test sell|r).
       commands:
       - /cvn notice on
+      - /cvn test sell
     expect: The on-screen text comes back. Press Pass.
     verify:
     - player
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'auto: '
+      scope: attempt
+      label: An automatic waypoint was set
+    notes: 'Player step. Drawing: the on-screen text.'
   - id: cv.s11.19
     title: Type /cvn notice off, then open the settings page
     action:
       kind: manual
-      text: Type |cff99ccff/cvn notice off|r, then open the settings page.
+      text: Press Run (|cff99ccff/cvn notice off|r), then open the settings page.
       commands:
       - /cvn notice off
     expect: The notice checkbox is cleared. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: the settings page. Check 20 turns the notice back on.'
   - id: cv.s11.20
     title: With /cvn choice auto, trigger with only one candidate
+    setup: The question mode is still automatic from check 10, with a waypoint method in use.
     action:
       kind: manual
-      text: With |cff99ccff/cvn choice auto|r, trigger with only one candidate.
+      text: Stand where the closest vendor is on your map, then press Run. It turns the notice back on
+        (|cff99ccff/cvn notice on|r) and asks (|cff99ccff/cvn test sell|r).
       commands:
-      - /cvn choice auto
-    expect: The single candidate gets a waypoint at once. Press Pass.
+      - /cvn notice on
+      - /cvn test sell
+    expect: The single candidate gets a waypoint at once.
     verify:
-    - player
-    - reviewer
-    reviewer: '"auto: ".'
+    - assertions
+    auto: true
+    timeout: 60
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - pattern: 'auto: .+%(npc %d+%)$'
+      - pattern: 'accepted: .+ via '
+      scope: attempt
+      label: One candidate was chosen and its waypoint set at once
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: The vendor had a waypoint method
+    - kind: log
+      source: debug
+      contains: via chat
+      absent: true
+      scope: attempt
+      label: The vendor got a waypoint, not only a chat line
+    - kind: log
+      source: debug
+      contains: chosen from two candidates
+      absent: true
+      scope: attempt
+      label: Not chosen from two
   - id: cv.s11.21
     title: With /cvn choice auto, trigger while in combat
+    setup: The question mode is still automatic from check 10. Have at least 3 free bag slots. Start a
+      fight first. The Run button hides in combat, so copy the line from its box into chat.
     action:
       kind: manual
-      text: With |cff99ccff/cvn choice auto|r, trigger while in combat.
+      text: During the fight, enter |cff99ccff/cvn bags 200|r from its box.
       commands:
-      - /cvn choice auto
-    expect: No waypoint is set. Press Pass.
+      - /cvn bags 200
+    expect: No waypoint is set during the fight.
     verify:
-    - player
-    - reviewer
-    reviewer: '"trigger" shows combat=true.'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'trigger held in combat: sell'
+      scope: attempt
+      label: The sell warning waited for the fight
+    - kind: log
+      source: debug
+      contains: 'auto: '
+      absent: true
+      scope: attempt
+      diagnostic: true
+      label: No automatic waypoint during the fight
+    notes: 'The absent check is diagnostic: the fight may end inside the step and the waypoint then comes.
+      Check 22 types the bag threshold back.'
   - id: cv.s11.22
     title: Trigger the trainer question with choice set to ask
+    setup: A known profession 10 points or fewer from its limit, with a known trainer. The fight from
+      check 21 is over.
     action:
       kind: manual
-      text: With a profession near its cap, trigger the trainer question under |cff99ccff/cvn choice ask|r.
+      text: 'Press Run: |cff99ccff/cvn bags 2|r ends the sell warning and |cff99ccff/cvn choice ask|r
+        sets the question mode back. Then craft one item or gain a point in that profession.'
       commands:
+      - /cvn bags 2
       - /cvn choice ask
-    expect: The trainer question opens, as it does for vendors. Press Pass.
+    expect: The trainer question opens, as it does for vendors.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question shown: trainer for <profession>".'
+    - assertions
+    auto: true
+    timeout: 300
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      scope: attempt
+      label: The trainer question was asked
+    notes: 'Run comes first: it ends the sell warning that check 21 left due, which would hold back the
+      trainer question.'
   - id: cv.s11.23
     title: Trigger the trainer question with choice set to auto
+    setup: The trainer question from check 22 is open, with a waypoint method in use.
     action:
       kind: manual
-      text: With a profession near its cap, trigger the trainer question under |cff99ccff/cvn choice auto|r.
+      text: Press Run (|cff99ccff/cvn choice auto|r). Click |cffffd100No|r on the trainer question, then
+        craft one item or gain a point.
       commands:
       - /cvn choice auto
-    expect: No question opens. The waypoint goes at once to the trainer. Press Pass.
+    expect: No question opens. The waypoint goes at once to the trainer.
     verify:
-    - player
-    - reviewer
-    reviewer: '"auto: ".'
+    - assertions
+    auto: true
+    timeout: 300
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'question declined: trainer'
+      - contains: 'auto: '
+      - pattern: 'accepted: .+ via '
+      scope: attempt
+      label: After No, the trainer was chosen and its waypoint set at once
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: The trainer had a waypoint method
+    - kind: log
+      source: debug
+      contains: via chat
+      absent: true
+      scope: attempt
+      label: The trainer got a waypoint, not only a chat line
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      absent: true
+      scope: attempt
+      label: No second trainer question
   - id: cv.s11.24
     title: Stand in a city and trigger the question
     action:
       kind: manual
-      text: Stand in a city and trigger the question.
+      text: Stand in a city, then press Run. It sets the question mode back (|cff99ccff/cvn choice ask|r),
+        prefers your map (|cff99ccff/cvn prefer map|r) and asks (|cff99ccff/cvn test sell|r).
+      commands:
+      - /cvn choice ask
+      - /cvn prefer map
+      - /cvn test sell
     expect: The vendor on "your map" is a vendor inside the city. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"question shown: ".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'question shown: sell, '
+      scope: attempt
+      label: The question was asked
+    notes: Player step. Which vendor stands inside the city is map knowledge.
   - id: cv.s11.25
     title: Open the settings page
     action:
@@ -1935,6 +2715,7 @@ sections:
       prefer|r. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: the settings page.'
   - id: cv.s11.26
     title: Type /cvn
     action:
@@ -1945,6 +2726,7 @@ sections:
     expect: It shows both target settings. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: the chat text.'
   - id: cv.s11.27
     title: Type /cvn log
     action:
@@ -1956,10 +2738,22 @@ sections:
       Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"accepted: " or "auto: ".'
-  intro: Stand near a zone edge, where the closest vendor is across the border. Type |cff99ccff/cvn test
-    sell|r (or |cff99ccff/cvn test repair|r) to repeat the question.
+    notes: Player step. The report header is not in the debug log, so the player reads the report.
+  - id: cv.s11.28
+    title: Set the target choices back to the defaults
+    action:
+      kind: manual
+      text: 'Press Run to type the defaults back: |cff99ccff/cvn choice ask|r, |cff99ccff/cvn prefer map|r
+        and |cff99ccff/cvn notice on|r.'
+      commands:
+      - /cvn choice ask
+      - /cvn prefer map
+      - /cvn notice on
+    expect: Chat shows the question mode Ask, prefer map and the notice on. Press Pass.
+    verify:
+    - player
+    notes: 'Player step. Cleanup: checks 7 to 23 changed the question mode, the preference and the notice.
+      Nothing to log.'
 - id: s12
   title: Reagents
   steps:
@@ -4242,37 +5036,77 @@ sections:
   intro: Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults.
 - id: s16
   title: Profession level gate
+  intro: Use a character below level 20 with a profession at 140 to 150 of 150 whose crafting window it
+    opened. Use the question mode Ask with no question open and no warning due.
   steps:
   - id: cv.s16.1
     title: Below level 20 with a profession at 150/150, change a skill or craft
     action:
       kind: manual
-      text: Below level 20 with a profession at 150/150, change a skill or craft.
-    expect: No trainer question shows. Press Pass.
+      text: Only below level 20 with a profession at 140 to 150 of 150 whose crafting window you opened;
+        press Skip otherwise. Craft one item with that profession, or gain a point in it.
+    expect: No trainer question shows.
     verify:
-    - player
-    - reviewer
-    reviewer: 'no "question shown: trainer for <profession>" line.'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log
+      source: debug
+      contains: level 20 needed
+      scope: attempt
+      label: The profession was left out until level 20
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      absent: true
+      scope: attempt
+      label: No trainer question
+    setup: No other known profession is 10 points or fewer from its limit.
   - id: cv.s16.2
     title: Below level 20, set Professions to Always in the status window
     action:
       kind: manual
-      text: Below level 20, set Professions to Always in the status window.
+      text: Only below level 20 with a profession at 140 to 150 of 150; press Skip otherwise. Press Run
+        (|cff99ccff/cvn hud row professions always|r) and look at the profession row.
+      commands:
+      - /cvn hud row professions always
     expect: The profession row shows but is not red. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: the row colour. Check 4 sets the row back.'
   - id: cv.s16.3
     title: Reach level 20 and change a skill or craft
     action:
       kind: manual
-      text: Reach level 20 and change a skill or craft.
+      text: Optional, and only with that profession still at 140 to 150 of 150; press Skip otherwise. Reach
+        level 20, then craft one item with that profession or gain a point in it.
     expect: The trainer question appears. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"question shown: trainer for <profession>".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      scope: attempt
+      label: The trainer question was asked
+    notes: Player step. Reaching a level takes longer than an automatic check waits.
+  - id: cv.s16.4
+    title: Set the profession row back to its default
+    action:
+      kind: manual
+      text: 'Only if check 2 ran; press Skip otherwise. Press Run to type the default back: |cff99ccff/cvn
+        hud row professions low|r.'
+      commands:
+      - /cvn hud row professions low
+    expect: The profession row shows only when a profession is near its limit. Press Pass.
+    verify:
+    - player
+    notes: 'Player step. Cleanup: check 2 set the row to always. Nothing to log.'
 - id: s17
   title: Waypoint choice
+  intro: Start with the default waypoint choice, Automatic. Check 6 sets it back.
   steps:
   - id: cv.s17.1
     title: Type /cvn nav
@@ -4284,48 +5118,84 @@ sections:
     expect: 'Chat shows Waypoint: Automatic and the choices. Press Pass.'
     verify:
     - player
+    notes: 'Player step. Drawing: the chat text.'
   - id: cv.s17.2
     title: With TomTom, type /cvn nav native, then test sell, answer Yes
     action:
       kind: manual
-      text: With TomTom loaded, type |cff99ccff/cvn nav native|r, then |cff99ccff/cvn test sell|r and
-        answer Yes.
+      text: TomTom only; press Skip otherwise. Press Run (|cff99ccff/cvn nav native|r, then |cff99ccff/cvn
+        test sell|r) and click |cffffd100Yes|r (|cffffd100This map|r or |cffffd100Closest|r when it names
+        two vendors).
       commands:
       - /cvn nav native
       - /cvn test sell
     expect: The game's own waypoint shows, with no TomTom arrow. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"accepted: <seller> via <provider>" names the native provider.'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'accepted: .+ via native'
+      scope: attempt
+      label: The game waypoint took it
+    notes: 'Player step. Drawing: the game waypoint and no arrow. Classic Era has no game waypoint.'
+    clients:
+    - forever-camelot
   - id: cv.s17.3
     title: With TomTom, type /cvn nav tomtom, then test sell, answer Yes
     action:
       kind: manual
-      text: With TomTom loaded, type |cff99ccff/cvn nav tomtom|r, then |cff99ccff/cvn test sell|r and
-        answer Yes.
+      text: TomTom only; press Skip otherwise. Press Run (|cff99ccff/cvn nav tomtom|r, then |cff99ccff/cvn
+        test sell|r) and click |cffffd100Yes|r (|cffffd100This map|r or |cffffd100Closest|r when it names
+        two vendors).
       commands:
       - /cvn nav tomtom
       - /cvn test sell
     expect: A TomTom arrow shows. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"accepted: <seller> via <provider>" names TomTom.'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'accepted: .+ via tomtom'
+      scope: attempt
+      label: TomTom took the waypoint
+    notes: 'Player step. Drawing: the TomTom arrow.'
   - id: cv.s17.4
     title: Without WaypointUI, type /cvn nav waypointui, then test sell
     action:
       kind: manual
-      text: Without WaypointUI installed, type |cff99ccff/cvn nav waypointui|r, then |cff99ccff/cvn test
-        sell|r and answer Yes.
+      text: Without WaypointUI only; press Skip otherwise. Press Run (|cff99ccff/cvn nav waypointui|r,
+        then |cff99ccff/cvn test sell|r) and click |cffffd100Yes|r (|cffffd100This map|r or |cffffd100Closest|r
+        when it names two vendors).
       commands:
       - /cvn nav waypointui
       - /cvn test sell
     expect: A waypoint still appears, using the usual order. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"accepted: <seller> via <provider>" names a provider that is installed.'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'accepted: '
+      scope: attempt
+      label: Yes set a waypoint
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: A waypoint provider took the waypoint
+    - kind: log
+      source: debug
+      contains: via waypointui
+      absent: true
+      scope: attempt
+      label: WaypointUI was not used
+    notes: 'Player step. Drawing: the waypoint of the next method in the usual order.'
   - id: cv.s17.5
     title: Open the settings page
     action:
@@ -4334,6 +5204,18 @@ sections:
     expect: A Waypoint dropdown under Navigation has the same four choices. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: the settings page.'
+  - id: cv.s17.6
+    title: Set the waypoint choice back to Automatic
+    action:
+      kind: manual
+      text: 'Press Run to type the default back: |cff99ccff/cvn nav auto|r.'
+      commands:
+      - /cvn nav auto
+    expect: 'Chat shows Waypoint: Automatic. Press Pass.'
+    verify:
+    - player
+    notes: 'Player step. Cleanup: checks 2 to 4 changed the waypoint choice. Nothing to log.'
 - id: s18
   title: Fewer reads and late item data
   steps:
@@ -4384,67 +5266,126 @@ sections:
     reviewer: '"merchant window opened", then one "question shown" line for the reagent.'
 - id: s19
   title: NorgannonDB
+  intro: Check 1 is for a client without NorgannonDB. Checks 2 to 5 are for WoW Forever with NorgannonDB
+    installed. Press Skip on the checks that do not fit your setup.
   steps:
   - id: cv.s19.1
-    title: Without NorgannonDB, type /cvn log
+    title: Without NorgannonDB, the addon finds none
     action:
       kind: manual
-      text: Without NorgannonDB, type |cff99ccff/cvn log|r.
-      commands:
-      - /cvn log
-    expect: Vendors work as before. Press Pass.
+      text: Without NorgannonDB only; press Skip otherwise. CheckThat reads the NorgannonDB line the addon
+        wrote at login.
+    expect: The addon found no NorgannonDB at login.
     verify:
-    - player
-    - reviewer
-    reviewer: '"NorgannonDB: not found".'
+    - assertions
+    auto: true
+    timeout: 60
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'NorgannonDB: not found'
+      scope: session
+      label: No NorgannonDB at login
+    notes: 'The line is written at each login, after the login marker, so it comes from the reload of
+      check 0.2. Vendors then work as before: the other sections cover them.'
   - id: cv.s19.2
-    title: On WoW Forever with NorgannonDB, log in and show the log
+    title: On WoW Forever with NorgannonDB, the addon reads it
     action:
       kind: manual
-      text: WoW Forever with NorgannonDB installed. Log in and type |cff99ccff/cvn log|r.
-      commands:
-      - /cvn log
-    expect: Nothing to see in game. Press Pass.
+      text: With NorgannonDB installed only; press Skip otherwise. CheckThat reads the NorgannonDB line
+        the addon wrote at login.
+    expect: The addon found NorgannonDB at login and names its schema.
     verify:
-    - player
-    - reviewer
-    reviewer: '"NorgannonDB: found, schema 1.5" with a number of vendors added.'
+    - assertions
+    auto: true
+    timeout: 60
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'NorgannonDB: found, schema '
+      scope: session
+      label: NorgannonDB was found at login
+    notes: Replaces the report line, which is not in the debug log. The same text is the external entry
+      (section 27 calls it).
+    clients:
+    - forever-camelot
   - id: cv.s19.3
     title: On WoW Forever, test sell in Riverglades and Zephras Isle
     action:
       kind: manual
-      text: WoW Forever. Stand in Riverglades, with bags nearly full, and type |cff99ccff/cvn test sell|r.
-        Repeat in Zephras Isle.
+      text: Stand in Riverglades and press Run (|cff99ccff/cvn test sell|r). Then stand in Zephras Isle
+        and enter |cff99ccff/cvn test sell|r from its box.
       commands:
       - /cvn test sell
-    expect: A vendor in that zone is named and the pin points to a real vendor. Press Pass.
+    expect: Each time a vendor in that zone is named and the pin points to a real vendor. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"question shown: ..." names the vendor.'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'question shown: sell, '
+      count:
+        min: 2
+      scope: attempt
+      label: The question was asked in both zones
+    notes: 'Player step. Map knowledge: the vendor stands where the pin is.'
+    clients:
+    - forever-camelot
   - id: cv.s19.4
     title: Open the vendor you were sent to
+    setup: Stand next to the vendor the last question in check 3 named.
     action:
       kind: manual
-      text: Open the vendor you were sent to.
-    expect: The next pin uses where the vendor stood when you opened it, if that differs. Press Pass.
+      text: Open the vendor's window.
+    expect: The addon records whether the vendor stands where NorgannonDB says.
     verify:
-    - player
-    - reviewer
-    reviewer: '"merchant window opened".'
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'vendor learned: '
+      scope: attempt
+      label: The vendor was learned
+    - kind: log
+      source: debug
+      contains: NorgannonDB position
+      scope: attempt
+      label: The addon decided whose position to use
+    notes: The line ends with "replaces the NorgannonDB position" (another map, or more than 0.03 of the
+      map away) or "the NorgannonDB position is kept". The next pin uses the position named.
+    clients:
+    - forever-camelot
   - id: cv.s19.5
     title: Disable NorgannonDB and type /reload
     action:
       kind: manual
-      text: Disable NorgannonDB and type |cff99ccff/reload|r.
+      text: With NorgannonDB installed only; press Skip otherwise. Disable NorgannonDB in the AddOns list,
+        then press Run (|cff99ccff/reload|r).
       commands:
       - /reload
-    expect: No errors show. Press Pass.
+    expect: No errors show and the addon finds no NorgannonDB.
     verify:
-    - player
-    - reviewer
+    - assertions
+    auto: true
+    timeout: 120
     reload: after_action
-    reviewer: '"NorgannonDB: not found".'
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'NorgannonDB: not found'
+      scope: attempt
+      label: The addon loaded without NorgannonDB
+    - kind: log
+      source: errors
+      pattern: '%[ClosestVendor%]'
+      absent: true
+      scope: attempt
+      label: No ClosestVendor Lua error
+    clients:
+    - forever-camelot
 - id: s20
   title: Settings and appearance acceptance
   steps:
@@ -4830,51 +5771,121 @@ sections:
     client build and addon version from |cff99ccff/cvn log|r.'
 - id: s21
   title: Reputation standing
+  intro: WoW Forever. Gorhak is the Magram Clan quartermaster in Magram Village, Desolace. Checks 1 to 3 are
+    optional, as another character on this account must have opened his window. Checks 2 to 4 need you Unfriendly
+    or Hostile with the Magram Clan.
   steps:
   - id: cv.s21.1
     title: Trigger a sell warning near a clan quartermaster
+    setup: Optional. Only when another character on this account opened Gorhak's window and this character
+      never targeted, moused over or opened him (not on a rerun after check 2); press Skip otherwise. Turn
+      nameplates off, since they count too. Stand in Magram Village.
     action:
       kind: manual
-      text: On a character that opened a clan quartermaster's window (Gorhak in Magram Village or Molkar
-        in Gelkis Village), then on another character that never saw it, trigger a sell warning nearby.
-    expect: The second character is not sent to the quartermaster. Press Pass.
+      text: Press Run (|cff99ccff/cvn test sell|r).
+      commands:
+      - /cvn test sell
+    expect: This character is not sent to Gorhak.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question shown: ..." names a vendor other than the quartermaster.'
+    - assertions
+    auto: true
+    timeout: 60
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'question shown: sell, '
+      scope: attempt
+      label: The sell question was asked
+    - kind: log
+      source: debug
+      contains: Gorhak
+      absent: true
+      scope: attempt
+      label: Gorhak was not named
+    notes: Check 2 proves the addon knows Gorhak as a vendor (a standing line is written only for a known
+      vendor, trainer or auctioneer). A vendor of no side that only another character saw is left out until
+      this character sees it trade. Gorhak's npc id is not in the shipped data, so the checks match his name
+      and the standing line's form, not a fixed id.
+    clients:
+    - forever-camelot
   - id: cv.s21.2
     title: Trigger a warning that routes to an unfriendly clan quartermaster
+    setup: Optional. Only when check 1 ran (another character opened Gorhak's window, so the addon knows
+      him) and this character is Unfriendly or Hostile with the Magram Clan; press Skip otherwise. Stand
+      in Magram Village.
     action:
       kind: manual
-      text: Unfriendly with that clan, target or mouse over the quartermaster, then trigger a warning
-        that would route there.
-    expect: No route goes to the quartermaster. Press Pass.
-    verify:
-    - player
-    - reviewer
-    reviewer: '"standing: npc <id> will not trade (Unfriendly or Hostile)"'
-  - id: cv.s21.3
-    title: Unfriendly with that clan, type /cvn log
-    action:
-      kind: manual
-      text: Unfriendly with that clan, type |cff99ccff/cvn log|r.
+      text: Mouse over no other NPC. Target Gorhak directly (click him or type /target Gorhak), then press
+        Run (|cff99ccff/cvn test sell|r).
       commands:
-      - /cvn log
-    expect: Nothing to see in game. Press Pass.
+      - /cvn test sell
+    expect: No route goes to Gorhak.
     verify:
-    - player
-    - reviewer
-    reviewer: '"standing (this character): N vendors trade, N will not"'
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - pattern: 'standing: npc %d+ will not trade'
+      - contains: 'question shown: sell, '
+      scope: attempt
+      label: Gorhak was seen refusing, then the question was asked
+    - kind: log
+      source: debug
+      contains: Gorhak
+      absent: true
+      scope: attempt
+      label: Gorhak was not named
+    notes: Target only Gorhak during this check, so the standing line is his. It also proves the addon knows
+      him as a vendor.
+    clients:
+    - forever-camelot
+  - id: cv.s21.3
+    title: After a reload, target the quartermaster again
+    action:
+      kind: manual
+      text: Optional. Only when check 2 ran; press Skip otherwise. Press Run (|cff99ccff/reload|r). After
+        the reload, mouse over nothing, not even Gorhak; type /target Gorhak to target him directly.
+      commands:
+      - /reload
+    expect: The addon remembers that Gorhak will not trade with this character.
+    verify:
+    - assertions
+    auto: true
+    timeout: 120
+    reload: after_action
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'standing: npc %d+ will not trade %(Unfriendly or Hostile%), already known'
+      scope: attempt
+      label: Gorhak is remembered as refusing after the reload
+    notes: Replaces the report line "standing (this character)", which is not in the debug log. The
+      "already known" line comes only from what this character saved, so it proves the standing survived
+      the reload. Mousing over him first would write the line from the mouseover; /target keeps it
+      to the target.
+    clients:
+    - forever-camelot
   - id: cv.s21.4
     title: Raise reputation to Neutral and target the quartermaster again
     action:
       kind: manual
-      text: Raise reputation to Neutral and target the quartermaster again.
-    expect: It can be offered again. Press Pass.
+      text: Optional. Raise your Magram reputation to Neutral, then target Gorhak again.
+    expect: He can be offered again. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"standing: npc <id> will trade".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'standing: npc %d+ will trade$'
+      scope: attempt
+      label: Gorhak now trades with this character
+    notes: Player step. Raising reputation takes longer than an automatic check waits.
+    clients:
+    - forever-camelot
 - id: s22
   title: AddOns list icon and pages
   steps:
@@ -5152,109 +6163,217 @@ sections:
   intro: Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults. Use |cff99ccff/cvn choice ask|r. Press Skip on a check your class cannot do.
 - id: s24
   title: Zone changes, hearth, partial merchants and standing
+  intro: Run these checks on a character with the default thresholds; the checks change thresholds and
+    set them back to the defaults (check 9). Use the question mode Ask.
   steps:
   - id: cv.s24.1
     title: With the sell question open, enter a dungeon
+    setup: Have at least 3 free bag slots. Stand at a dungeon entrance.
     action:
       kind: manual
-      text: With the sell question open, enter a dungeon.
-    expect: The question closes and nothing is asked inside. Press Pass.
+      text: Press Run (|cff99ccff/cvn bags 200|r) so the sell question shows. Leave it open and enter
+        the dungeon.
+      commands:
+      - /cvn bags 200
+    expect: The question closes and nothing is asked inside.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question withdrawn: the player changed zone".'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'question shown: sell, '
+      - contains: 'question withdrawn: the player changed zone'
+      - contains: 'trigger held in an instance: sell'
+      scope: attempt
+      label: The question was withdrawn at the zone change, and the warning waits inside
+    notes: 'A real warning, not a test command: a test question is never withdrawn.'
   - id: cv.s24.2
     title: Leave that dungeon
+    setup: You are inside the dungeon from check 1, with the sell warning still due.
     action:
       kind: manual
-      text: Leave that dungeon.
-    expect: The sell question is asked again. Press Pass.
+      text: Leave the dungeon.
+    expect: The sell question is asked again.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question shown: ..." for the sell.'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - pattern: 'instance: %a+ %-> none'
+      - contains: 'question shown: sell, '
+      scope: attempt
+      label: Outside again, the sell question was asked
   - id: cv.s24.3
     title: With the repair question open, ride into the next zone
+    setup: Wear an item between 21% and 99% durability, so check 9 can end the repair warning. Stand near
+      a zone border.
     action:
       kind: manual
-      text: With the repair question open, ride into the next zone.
-    expect: The question is asked again, naming the closest repairer of the new zone. Press Pass.
+      text: 'Press Run: |cff99ccff/cvn bags 2|r ends the sell warning and |cff99ccff/cvn dur 100|r asks
+        the repair question. Leave it open and ride into the next zone.'
+      commands:
+      - /cvn bags 2
+      - /cvn dur 100
+    expect: The question is asked again from where you are now.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question withdrawn: the player changed zone", then "question shown: ..." for repair.'
+    - assertions
+    auto: true
+    timeout: 300
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'question shown: repair, '
+      - contains: 'question withdrawn: the player changed zone'
+      - contains: 'question shown: repair, '
+      scope: attempt
+      label: The repair question was withdrawn at the border and asked again
+    notes: The new question searches from the new zone. The durability threshold stays at 100 until check
+      9.
   - id: cv.s24.4
     title: With a question open, start combat, then click Yes
+    setup: The repair question from check 3 is open.
     action:
       kind: manual
-      text: With a question open, start combat, then click Yes.
-    expect: The question stays and Yes still sets the waypoint. Press Pass.
+      text: Start a fight, then click |cffffd100Yes|r (|cffffd100This map|r or |cffffd100Closest|r when
+        it names two vendors).
+    expect: The question stays in the fight and Yes still sets the waypoint. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"accepted: <seller> via <provider>".'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'accepted: '
+      scope: attempt
+      label: Yes set a waypoint
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: A waypoint provider took the waypoint
+    notes: 'Player step. Drawing: the question stays on screen in the fight; no line records the start
+      of a fight.'
   - id: cv.s24.5
     title: Set your hearthstone at an innkeeper, then walk into a dungeon
     action:
       kind: manual
-      text: Set your hearthstone at an innkeeper, then walk into a dungeon. Type |cff99ccff/cvn anchor
-        hearth|r and click a row.
+      text: Press Run (|cff99ccff/cvn anchor hearth|r, the default). Bind your hearthstone at an innkeeper,
+        walk into a dungeon and click a status window row.
       commands:
       - /cvn anchor hearth
     expect: The row searches near the inn. Press Pass.
     verify:
     - player
-    - reviewer
     - assertions
-    reviewer: '"hearthstone point learned: <inn>"; /cvn log names the inn as the hearthstone point.'
     assertions:
-    - kind: log
+    - kind: log-sequence
       source: debug
-      contains: /cvn log
-      diagnostic: true
+      sequence:
+      - contains: 'hearthstone point learned: '
+      - contains: 'direct pin: the search started from your hearthstone point'
+      scope: attempt
+      label: The inn was learned, then the row click searched from it
+    notes: Player step. The walk to a dungeon takes longer than an automatic check waits. The chat line
+      also says the search started from your hearthstone point.
   - id: cv.s24.6
     title: Decline an innkeeper bind, bind elsewhere, then click a row
     action:
       kind: manual
-      text: Optional. Talk to an innkeeper and decline the bind, then bind elsewhere without the addon
-        seeing it (or |cff99ccff/reload|r between). Enter a dungeon and click a row.
-      commands:
-      - /reload
+      text: Optional. Talk to an innkeeper and decline the bind. Then bind at another inn while the addon
+        is turned off, or log out between. Enter a dungeon and click a status window row.
     expect: Dungeon searches use your last position outside. Press Pass.
     verify:
     - player
-    - reviewer
     - assertions
-    reload: after_action
-    reviewer: /cvn log shows the new hearthstone point by name only.
     assertions:
     - kind: log
       source: debug
-      contains: /cvn log
-      diagnostic: true
+      contains: 'direct pin: the search started from your last position outside'
+      scope: attempt
+      label: The row click searched from the last position outside
+    notes: Player step. The binds and the walk take longer than an automatic check waits. The new hearthstone
+      point is known by name only, so the search falls back to the last position outside.
   - id: cv.s24.7
     title: After a fresh login, open a known ammo vendor straight away
     action:
       kind: manual
-      text: After a fresh login, open a known ammo vendor straight away.
+      text: Log in, then open a known ammo vendor straight away.
     expect: The vendor still counts as an ammo vendor. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"merchant window opened"; a "not fully loaded" line may show, with what was known kept.'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: merchant window opened
+      scope: attempt
+      label: The merchant window opened
+    - kind: log
+      source: debug
+      contains: not fully loaded
+      scope: attempt
+      diagnostic: true
+      label: The list was read before the game loaded every item
+    notes: Player step. The game decides whether the list is partly loaded, so the "not fully loaded"
+      line is diagnostic. The status window ammo row or the next ammo question shows the vendor still
+      counts.
   - id: cv.s24.8
     title: Unfriendly with Steamwheedle, click a reagent row near Booty Bay
+    setup: Unfriendly or Hostile with the Steamwheedle Cartel, with a class reagent row in the status
+      window, only; press Skip otherwise. Stand in the Booty Bay auction house right next to Auctioneer
+      Kresky, so the auction house is closer than any vendor of that reagent. Turn nameplates off, and
+      do not target or mouse over another auctioneer.
     action:
       kind: manual
-      text: Unfriendly with the Steamwheedle Cartel, target the Booty Bay auctioneer, turn on |cff99ccff/cvn
-        ah on|r, and click a reagent row nearby.
+      text: Press Run (|cff99ccff/cvn ah on|r). Target Auctioneer Kresky, then click the reagent row.
       commands:
       - /cvn ah on
-    expect: It does not route to that auctioneer. Press Pass.
+    expect: It routes to another auctioneer, not to Kresky.
+    verify:
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'standing: npc 9858 will not trade'
+      - contains: 'direct pin: reagent'
+      - pattern: 'direct pin: auctioneer .+ %(npc %d+%) is closer'
+      - contains: 'accepted: '
+      scope: attempt
+      label: Kresky was seen refusing, then the click searched and pinned another auctioneer
+    - kind: log
+      source: debug
+      contains: (npc 9858)
+      absent: true
+      scope: attempt
+      label: Kresky was not chosen
+    notes: Auctioneer Kresky is npc 9858 (Data/Vendors.lua). Booty Bay has two more shipped auctioneers,
+      Graves (15677) and O'reely (15681), that this character did not see refusing. Kresky stands closest, so another auctioneer winning the
+      search proves the standing filter left him out; a vendor winning, or no search, fails the sequence.
+      Check 9 turns the auction house routing back off.
+  - id: cv.s24.9
+    title: Type the defaults back
+    action:
+      kind: manual
+      text: 'Press Run to type the defaults back: |cff99ccff/cvn dur 20|r and |cff99ccff/cvn ah off|r.'
+      commands:
+      - /cvn dur 20
+      - /cvn ah off
+    expect: Chat shows the durability threshold 20 and auction house routing off. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"standing: npc <id> will not trade (Unfriendly or Hostile)".'
+    notes: 'Player step. Cleanup: check 3 set the durability threshold to 100 (check 3 typed the bag default
+      back) and check 8 turned auction house routing on. Nothing to log.'
 - id: s25
   title: Translated labels and the trainer probe
   steps:
@@ -5266,6 +6385,7 @@ sections:
     expect: The question names the diets in that language. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: translated dialog text.'
   - id: cv.s25.2
     title: 'Non-English client: open the Reagents page'
     action:
@@ -5274,101 +6394,228 @@ sections:
     expect: The reagent checkboxes show the game's item names. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: translated checkbox labels.'
   - id: cv.s25.3
-    title: Open a profession trainer, then type /cvn log
+    title: Open a profession trainer and look at its list
     action:
       kind: manual
-      text: Open a profession trainer, then type |cff99ccff/cvn log|r.
-      commands:
-      - /cvn log
+      text: Open a profession trainer's window and look at its list.
     expect: The trainer window shows its usual list, unchanged by the addon. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"trainer services: N listed; filters ..." and one "  service:" line per entry with level
-      and skill requirements.'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'trainer services: '
+      scope: attempt
+      label: The probe read the list
+    - kind: log
+      source: debug
+      contains: '  service: '
+      scope: attempt
+      label: The probe logged the services
+    notes: 'Player step. Drawing: the trainer list. The probe only reads: it logs one line per service
+      with its level and skill needs, once per window when the services first become readable
+      (also when they arrive late), before the "trainer window opened" line.'
 - id: s26
   title: Artisan without NorgannonDB
+  intro: Without NorgannonDB only; press Skip on every check otherwise. Use the question mode Ask with
+    no question open and no warning due.
   steps:
   - id: cv.s26.1
     title: Without NorgannonDB, change a skill with a profession at 215-225
+    setup: A profession at 215 to 225 of 225 whose crafting window you opened, at level 35 or more. No
+      other known profession is 10 points or fewer from its limit.
     action:
       kind: manual
-      text: Without NorgannonDB, with a profession at 215-225 of 225 (level 35 or more), change a skill
-        or craft.
-    expect: No trainer question comes. Press Pass.
+      text: Craft one item with it, or gain a point in it.
+    expect: No trainer question comes.
     verify:
-    - player
-    - reviewer
-    reviewer: 'no "question shown: trainer for <profession>" line.'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'Artisan: trainer tiers unknown'
+      scope: attempt
+      label: 'Artisan was left out: trainer tiers unknown'
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      absent: true
+      scope: attempt
+      label: No trainer question
   - id: cv.s26.2
     title: Then click the profession row
     action:
       kind: manual
-      text: Then click the profession row.
+      text: Press Run (|cff99ccff/cvn hud row professions always|r), then click the profession row.
+      commands:
+      - /cvn hud row professions always
     expect: The row is not red; chat says Artisan is taught by only a few trainers and no waypoint is
       set. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: 'no "question shown: trainer for <profession>" line.'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'direct pin: Artisan '
+      scope: attempt
+      label: The row click was refused for Artisan
+    - kind: log
+      source: debug
+      contains: 'accepted: '
+      absent: true
+      scope: attempt
+      label: No waypoint was set
+    notes: 'Player step. Drawing: the row colour and the chat line. Check 4 sets the row back.'
   - id: cv.s26.3
     title: With a profession at 145 of 150, change a skill or craft
+    setup: A profession at 140 to 150 of 150, at level 20 or more.
     action:
       kind: manual
-      text: With a profession at 145 of 150 (level 20 or more), change a skill or craft.
-    expect: The trainer question still comes. Press Pass.
+      text: Craft one item with it, or gain a point in it.
+    expect: The trainer question still comes.
+    verify:
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      scope: attempt
+      label: The trainer question was asked
+  - id: cv.s26.4
+    title: Set the profession row back to its default
+    action:
+      kind: manual
+      text: 'Press Run to type the default back: |cff99ccff/cvn hud row professions low|r.'
+      commands:
+      - /cvn hud row professions low
+    expect: The profession row shows only when a profession is near its limit. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"question shown: trainer for <profession>".'
+    notes: 'Player step. Cleanup: check 2 set the row to always. Nothing to log.'
 - id: s27
   title: Trainer tiers with NorgannonDB
+  intro: WoW Forever with NorgannonDB installed. Use the question mode Ask with no question open and no
+    warning due.
   steps:
   - id: cv.s27.1
-    title: Type /cvn log
+    title: Turn NorgannonDB back on
+    setup: With NorgannonDB installed only; press Skip otherwise. Earlier sections left it disabled.
     action:
       kind: manual
-      text: Type |cff99ccff/cvn log|r.
+      text: Enable NorgannonDB in the AddOns list, then press Run (|cff99ccff/reload|r).
       commands:
-      - /cvn log
-    expect: Nothing to see in game. Press Pass.
+      - /reload
+    expect: The addon finds NorgannonDB and counts its trainers with a tier.
     verify:
-    - player
-    - reviewer
-    reviewer: the NorgannonDB line counts "trainers with a tier".
+    - assertions
+    auto: true
+    timeout: 120
+    reload: after_action
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'NorgannonDB: found, schema .+ [1-9]%d* trainers with a tier'
+      scope: attempt
+      label: NorgannonDB was found, with trainers that have a tier
+    - kind: log
+      source: errors
+      pattern: '%[ClosestVendor%]'
+      absent: true
+      scope: attempt
+      label: No ClosestVendor Lua error
+    notes: Replaces the external entry read, which could run before the reload. The login line has the
+      same text as the external entry and the report. Checks 2 and 3 need trainers with a tier, so the
+      pattern fails when there are none.
+    clients:
+    - forever-camelot
   - id: cv.s27.2
     title: At 145 of 150, change a skill near a Journeyman trainer
+    setup: Blacksmithing at 140 to 150 of 150, level 20 or more. Stand near a Journeyman or Expert Blacksmith
+      and further from an Artisan or Master Blacksmith. No other known profession is 10 points or fewer from
+      its limit.
     action:
       kind: manual
-      text: At 145 of 150 (level 20+), near a Journeyman Blacksmith and further from an Expert or Artisan
-        Blacksmith, change a skill.
-    expect: The question names the Expert or Artisan Blacksmith, not the Journeyman. Press Pass.
+      text: Craft one item or gain a point in it.
+    expect: The question names the Artisan or Master Blacksmith, not the nearer one.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question shown: trainer for <profession>, <trainer> ...".'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'trainer search: .+ needs tier 3; nearest .+ teaches tier [34]'
+      scope: attempt
+      label: The nearest trainer that teaches Expert was chosen
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      scope: attempt
+      label: The trainer question was asked
+    notes: 'Tiers: 2 Journeyman, 3 Expert, 4 Artisan. A Journeyman or Expert Blacksmith (the NPC title) can
+      teach only up to tier 2, so the setup needs an Artisan or Master Blacksmith, which teaches tier 3 or
+      4.'
+    clients:
+    - forever-camelot
   - id: cv.s27.3
     title: At 220 of 225 (level 35+), change a skill
+    setup: A crafting profession at 215 to 225 of 225, level 35 or more. No other known profession is
+      10 points or fewer from its limit.
     action:
       kind: manual
-      text: At 220 of 225 (level 35+), change a skill.
+      text: Craft one item or gain a point in it.
     expect: The question names a Master trainer (for example Brikk Keencraft in Booty Bay for Blacksmithing).
-      Press Pass.
     verify:
-    - player
-    - reviewer
-    reviewer: '"question shown: trainer for <profession>, <trainer> ...".'
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'trainer search: .+ needs tier 4; nearest .+ teaches tier 4'
+      scope: attempt
+      label: A trainer that teaches Artisan was chosen
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      scope: attempt
+      label: The trainer question was asked
+    clients:
+    - forever-camelot
   - id: cv.s27.4
     title: Then click the profession row
     action:
       kind: manual
-      text: Then click the profession row.
+      text: Click |cffffd100No|r on the open question, then click the profession row.
     expect: The row is red and the click routes to that Master trainer. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"direct pin: ..."'
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'row click: '
+      - contains: 'accepted: '
+      scope: attempt
+      label: The row click set a waypoint
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: A waypoint provider took the waypoint
+    notes: 'Player step. Drawing: the row colour and where the waypoint points.'
+    clients:
+    - forever-camelot
   - id: cv.s27.5
     title: 'Non-English client: trigger the trainer question'
     action:
@@ -5377,20 +6624,37 @@ sections:
     expect: It uses the game's profession name and the trainer's localized name. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: translated dialog text.'
+    clients:
+    - forever-camelot
   - id: cv.s27.6
     title: Disable NorgannonDB and /reload
     action:
       kind: manual
-      text: Disable NorgannonDB and |cff99ccff/reload|r.
+      text: Disable NorgannonDB in the AddOns list, then press Run (|cff99ccff/reload|r).
       commands:
       - /reload
-    expect: The behavior from the Artisan without NorgannonDB section returns. Press Pass.
+    expect: No errors show and the addon finds no NorgannonDB. The section Artisan without NorgannonDB
+      checks the rest.
     verify:
-    - player
-    - reviewer
+    - assertions
+    auto: true
+    timeout: 120
     reload: after_action
-    reviewer: '"NorgannonDB: not found".'
-  intro: WoW Forever with NorgannonDB installed.
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'NorgannonDB: not found'
+      scope: attempt
+      label: The addon loaded without NorgannonDB
+    - kind: log
+      source: errors
+      pattern: '%[ClosestVendor%]'
+      absent: true
+      scope: attempt
+      label: No ClosestVendor Lua error
+    clients:
+    - forever-camelot
 - id: s28
   title: Sound-pack sounds
   steps:
@@ -5513,6 +6777,8 @@ sections:
     - player
 - id: s30
   title: Other sellers
+  intro: Any level; Stormwind or Orgrimmar has several repair vendors. Run on Classic Era and WoW Forever.
+    Check 13 sets the row modes and the auction house routing back.
   steps:
   - id: cv.s30.1
     title: Type /cvn hud row durability always and hover the row arrow
@@ -5525,6 +6791,7 @@ sections:
     expect: The tooltip says "Other repair vendors". Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: the tooltip. Check 13 sets the row back.'
   - id: cv.s30.2
     title: Click that arrow
     action:
@@ -5534,6 +6801,26 @@ sections:
       the waypoint does not change. Press Pass.
     verify:
     - player
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'choice menu shown: '
+      scope: attempt
+      label: The menu opened
+    - kind: log
+      source: debug
+      contains: 'chosen pin: '
+      absent: true
+      scope: attempt
+      label: Opening the menu picked nothing
+    - kind: log
+      source: debug
+      contains: 'accepted: '
+      absent: true
+      scope: attempt
+      label: Opening the menu set no waypoint
+    notes: 'Player step. Drawing: the menu.'
   - id: cv.s30.3
     title: Pick the second entry
     action:
@@ -5542,8 +6829,23 @@ sections:
     expect: The menu closes, the waypoint moves there and chat says "Navigating to ...". Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"chosen pin: <kind>, <seller>".'
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'chosen pin: '
+      - contains: 'accepted: '
+      scope: attempt
+      label: The pick set a waypoint
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: A waypoint provider took the waypoint
+    notes: 'Player step. Drawing: the menu closing and where the waypoint points. The chosen pin line
+      comes before the seller is checked, so the accepted line proves the waypoint.'
   - id: cv.s30.4
     title: Open the menu again and press Escape
     action:
@@ -5552,6 +6854,26 @@ sections:
     expect: The menu closes and the waypoint stays. Press Pass.
     verify:
     - player
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'choice menu shown: '
+      scope: attempt
+      label: The menu opened
+    - kind: log
+      source: debug
+      contains: 'chosen pin: '
+      absent: true
+      scope: attempt
+      label: Escape picked nothing
+    - kind: log
+      source: debug
+      contains: 'accepted: '
+      absent: true
+      scope: attempt
+      label: Escape set no waypoint
+    notes: 'Player step. Drawing: the menu closing.'
   - id: cv.s30.5
     title: Click the row outside the arrow
     action:
@@ -5560,8 +6882,23 @@ sections:
     expect: The waypoint goes to the marked seller. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"direct pin: <kind>".'
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'row click: '
+      - contains: 'direct pin: '
+      - contains: 'accepted: '
+      scope: attempt
+      label: The row click set a waypoint
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: A waypoint provider took the waypoint
+    notes: 'Player step. Drawing: where the waypoint points.'
   - id: cv.s30.6
     title: Shrink the window to its smallest with a low row showing
     action:
@@ -5570,6 +6907,7 @@ sections:
     expect: The arrow does not cover the text and looks right. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: the row layout.'
   - id: cv.s30.7
     title: With the window unlocked, Shift-click and drag from the arrow
     action:
@@ -5578,6 +6916,7 @@ sections:
     expect: Shift-click does nothing and the drag does not move the window. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: the window does not move.'
   - id: cv.s30.8
     title: Lock the window and click the arrow
     action:
@@ -5586,6 +6925,7 @@ sections:
     expect: The arrow still opens the menu. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: the menu.'
   - id: cv.s30.9
     title: Look at a row with only one known seller
     action:
@@ -5594,6 +6934,7 @@ sections:
     expect: It has no arrow. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: the row has no arrow.'
   - id: cv.s30.10
     title: In a contested zone with both camps, open the menu
     action:
@@ -5603,18 +6944,35 @@ sections:
     expect: None of the other faction is listed. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: the menu entries.'
   - id: cv.s30.11
     title: As a Hunter, type /cvn ah on and pick an auctioneer from the menu
     action:
       kind: manual
-      text: Hunter. Type |cff99ccff/cvn ah on|r, open the ammo row menu and pick an auctioneer.
+      text: Hunter only; press Skip on other classes. Press Run (|cff99ccff/cvn ah on|r), open the ammo
+        row menu and pick an auctioneer.
       commands:
       - /cvn ah on
     expect: The list can show one auctioneer; picking it says "at the auction house". Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"chosen pin: ..." for the pick.'
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'chosen pin: ammo'
+      - contains: 'accepted: '
+      scope: attempt
+      label: The pick set a waypoint
+    - kind: log
+      source: debug
+      contains: via nothing available
+      absent: true
+      scope: attempt
+      label: A waypoint provider took the waypoint
+    notes: 'Player step. Drawing: the menu and the chat line. Check 13 turns auction house routing back
+      off.'
   - id: cv.s30.12
     title: Open the menu of a profession row near its cap
     action:
@@ -5623,7 +6981,21 @@ sections:
     expect: The list shows only trainers that teach the next tier. Press Pass.
     verify:
     - player
-  intro: Any level; Stormwind or Orgrimmar has several repair vendors. Run on Classic Era and WoW Forever.
+    notes: 'Player step. Drawing: the menu entries.'
+  - id: cv.s30.13
+    title: Set the row and the auction house routing back
+    action:
+      kind: manual
+      text: 'Press Run to type the defaults back: |cff99ccff/cvn hud row durability low|r and |cff99ccff/cvn
+        ah off|r.'
+      commands:
+      - /cvn hud row durability low
+      - /cvn ah off
+    expect: Chat shows the durability row on low and auction house routing off. Press Pass.
+    verify:
+    - player
+    notes: 'Player step. Cleanup: check 1 set the durability row to always and check 11 turned auction
+      house routing on. Nothing to log.'
 - id: s31
   title: Merchant purchases
   steps:
@@ -5947,44 +7319,64 @@ sections:
   intro: Run these checks on a character with the default thresholds; the checks change thresholds and set them back to the defaults. Use |cff99ccff/cvn choice ask|r. Checks 6 to 8 need a Hunter; press Skip on other classes.
 - id: s33
   title: Places and waypoints
+  intro: 'Check 4 sets the waypoint choice and the profession row back. The reviewer reads |cff99ccffClosestVendorCharDB|r
+    in |cff99ccffWTF/Account/<account>/<realm>/<character>/SavedVariables/ClosestVendor.lua|r. No in-game
+    check, unit tests only: the seller list that changes before you pick, a tracked game waypoint after
+    the demo, a game waypoint the game refuses, and the failed timer.'
   steps:
   - id: cv.s33.1
     title: Bind your hearthstone again at your current inn
+    setup: Your hearthstone is already bound to an inn; stand at that inn's innkeeper.
     action:
       kind: manual
-      text: 'Classic Era and WoW Forever. Setup: your hearthstone is already bound to an inn; stand at
-        that inn''s innkeeper. Bind your hearthstone there again.'
-    expect: Nothing changes on screen. The reviewer confirms this from the log. Press Pass.
+      text: Classic Era and WoW Forever. Bind your hearthstone there again, then press Run (|cff99ccff/reload|r).
+      commands:
+      - /reload
+    expect: The addon learns where the inn is. Nothing changes on screen.
     verify:
-    - player
-    - reviewer
     - assertions
-    reviewer: 'hearth has continent, x and y; log has "hearthstone point learned: <inn>".'
+    auto: true
+    timeout: 120
+    reload: after_action
     assertions:
     - kind: log
       source: debug
-      contains: hearth
+      contains: 'hearthstone point learned: '
+      scope: attempt
+      label: The inn was learned
+    - kind: state
+      probe: global-value
+      name: ClosestVendorCharDB
+      path: hearth.continent
+      op: exists
+      label: The hearthstone point has a position
       diagnostic: true
-    - kind: log
-      source: debug
-      contains: continent
-      diagnostic: true
+    notes: The bind event writes the line at once where the client fires it. The reload makes the addon read
+      the bind at logout either way, while it still holds the place the innkeeper asked about.
   - id: cv.s33.2
     title: Put your own waypoint on the map and run the demo
     action:
       kind: manual
-      text: 'WoW Forever only (Classic Era has no game waypoint). First put your own waypoint on the map.
-        Then type |cff99ccff/cvn nav native|r (needed when TomTom or WaypointUI is installed) and |cff99ccff/cvn
-        demo|r, and wait about a minute for the tour to end.'
+      text: WoW Forever only (Classic Era has no game waypoint). First put your own waypoint on the map.
+        Then press Run (|cff99ccff/cvn nav native|r, needed when TomTom or WaypointUI is installed, then
+        |cff99ccff/cvn demo|r) and wait about a minute for the tour to end.
       commands:
       - /cvn nav native
       - /cvn demo
     expect: Your waypoint is on the map again, where you put it. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"demo: your game waypoint restored, not tracked".'
-    notes: After the check, set the waypoint method back to your usual choice.
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: 'demo: over'
+      - contains: 'demo: your game waypoint restored'
+      scope: attempt
+      label: The demo ended and put your waypoint back
+    notes: 'Player step. Drawing: your waypoint on the map. The demo has 6 or 7 steps of 5 seconds. The
+      line ends with tracked or not tracked, as your waypoint was. Check 4 sets the waypoint choice back.'
     clients:
     - forever-camelot
   - id: cv.s33.3
@@ -6000,11 +7392,28 @@ sections:
     expect: The trainer waypoint goes away. Press Pass.
     verify:
     - player
-    - reviewer
-    reviewer: '"trainer waypoint cleared: <profession> was unlearned".'
-  intro: 'The reviewer reads |cff99ccffClosestVendorCharDB|r in |cff99ccffWTF/Account/<account>/<realm>/<character>/SavedVariables/ClosestVendor.lua|r.
-    No in-game check, unit tests only: the seller list that changes before you pick, a tracked game waypoint
-    after the demo, a game waypoint the game refuses, and the failed timer.'
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'trainer waypoint cleared: .+ was unlearned'
+      scope: attempt
+      label: The trainer waypoint ended with the profession
+    notes: 'Player step. Drawing: the waypoint going away. Check 4 sets the row back.'
+  - id: cv.s33.4
+    title: Set the waypoint choice and the profession row back
+    action:
+      kind: manual
+      text: 'Press Run to type the defaults back: |cff99ccff/cvn nav auto|r and |cff99ccff/cvn hud row
+        professions low|r.'
+      commands:
+      - /cvn nav auto
+      - /cvn hud row professions low
+    expect: 'Chat shows Waypoint: Automatic and the profession row on low. Press Pass.'
+    verify:
+    - player
+    notes: 'Player step. Cleanup: check 2 set the waypoint choice to the game waypoint and check 3 set
+      the profession row to always. Nothing to log.'
 - id: s34
   title: Patches 1.9.4 and 1.9.5
   steps:
