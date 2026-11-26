@@ -236,6 +236,27 @@ do -- the bags are not read for a group set to never
     eq(reads .. "/" .. tostring(snap.supplies ~= nil), "1/true", "otherwise one read")
 end
 
+do -- #60: a group set to always still hides a row the game cannot read; it is never shown as 0
+    local function nothing() end
+    local blind = { freeSlots = nothing, lowestDurability = nothing, ammo = nothing, knows = nothing, itemCount = nothing,
+        itemName = nothing, skills = nothing, level = nothing, supplies = nothing }
+    local always = {}
+    for _, group in ipairs(S.GROUPS) do always[group] = "always" end
+    for _, class in ipairs({ "MAGE", "HUNTER", "WARLOCK", "WARRIOR", "ROGUE", "PRIEST" }) do
+        local c = cfg({ hudRow = always })
+        local shown = S.Visible(S.Rows(S.Snapshot(blind, c, class), c, class), c)
+        eq(#shown, 0, class .. ": everything unreadable and always: no row, not even a 0")
+    end
+    local c = cfg({ hudRow = always })
+    local partial = { freeSlots = nothing, lowestDurability = function() return 50 end, ammo = nothing, knows = nothing,
+        itemCount = nothing, itemName = nothing, skills = nothing, level = nothing, supplies = nothing }
+    local shown = S.Visible(S.Rows(S.Snapshot(partial, c, "MAGE"), c, "MAGE"), c)
+    eq(keys(shown), "durability", "only the readable row shows; bags are unreadable, not 0 free")
+    local zero = S.Visible(S.Rows(S.Snapshot({ freeSlots = function() return 0 end, lowestDurability = nothing, ammo = nothing, knows = nothing,
+        itemCount = nothing, itemName = nothing, skills = nothing, level = nothing, supplies = nothing }, c, "MAGE"), c, "MAGE"), c)
+    eq(keys(zero), "bags!", "a real 0 free slots is shown")
+end
+
 -- Names and lookup by name.
 eq(table.concat({ S.KeyName("ammo"), S.KeyName("reagents"), S.KeyName("bags"), S.KeyName("durability"), S.KeyName("professions") }, ","),
     "Ammo,Reagents,Bag space,Durability,Professions", "group names")

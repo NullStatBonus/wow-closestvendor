@@ -892,12 +892,23 @@ function A.menu(anchor, title, items)
     end))
 end
 
+-- The addon's TOC version ("1.11.0"), or nil.
+function A.addonVersion()
+    local meta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+    return call("GetAddOnMetadata", meta, "ClosestVendor", "Version")
+end
+
+-- The CheckThat test runner's global table, or nil when it is not loaded. Only CheckThat.lua uses it.
+function A.checkThat()
+    local t = CheckThat
+    if type(t) == "table" then return t end
+end
+
 -- Version, client and locale for the diagnostic report.
 function A.clientInfo()
-    local meta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
     local version, build, date, interface = call("GetBuildInfo", GetBuildInfo)
     return {
-        addon = call("GetAddOnMetadata", meta, "ClosestVendor", "Version"),
+        addon = A.addonVersion(),
         gameVersion = version, build = build, interface = interface,
         locale = call("GetLocale", GetLocale),
     }

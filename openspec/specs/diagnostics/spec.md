@@ -32,7 +32,7 @@ While the log is on, the addon SHALL record the game events it reacts to (except
 - **THEN** the failing call and its error text are recorded, once per kind of failure
 
 ### Requirement: Copyable report
-`/cvn log` SHALL show a report that can be selected and copied, containing the addon version, client interface and build, locale, the waypoint method in use and the chosen preference, vendor counts, current settings, and the recorded entries. If a window cannot be created, it SHALL print the most recent entries to chat.
+`/cvn log` SHALL show a report that can be selected and copied, containing the addon version, client interface and build, locale, the waypoint method in use and the chosen preference, vendor counts, current settings, the CheckThat status (`working`, `not detected`, `too old` or `failed: <why>`), and the recorded entries. If a window cannot be created, it SHALL print the most recent entries to chat.
 
 #### Scenario: Report with the log off
 - **WHEN** the player runs `/cvn log` with the log off
@@ -41,6 +41,10 @@ While the log is on, the addon SHALL record the game events it reacts to (except
 #### Scenario: No window available
 - **WHEN** creating the window fails
 - **THEN** the latest entries are printed to chat and no error is raised
+
+#### Scenario: CheckThat status in the report
+- **WHEN** the player runs `/cvn log` without CheckThat installed
+- **THEN** the header has the line `CheckThat: not detected`
 
 ### Requirement: Report lists window settings
 The report header SHALL list the status window settings (lock, scale, background opacity, background color, text opacity and each row mode that is not the default), the dungeon and raid anchor, and the auction house setting, and one line saying whether the color picker and settings button exist and whether the background color swatch was built (and what was missing if not), and the log SHALL record instance state changes and row clicks.

@@ -29,7 +29,7 @@ Thank you for your help. Closest Vendor is a Lua addon for WoW Classic Era and W
 
 5. After a change, type `/reload` in the game.
 6. Type `/console scriptErrors 1` to show errors as popups.
-7. Use `docs/test-plan.md` for the manual checks.
+7. The in-game checks are in `plans/closestvendor.yaml`, a CheckThat plan (see AGENTS.md, CheckThat). Run `make plan` to check it. Its offline check finds the addon as `wow-closest-vendor/` beside the other checkouts, so keep that folder name.
 
 ## How changes are made
 

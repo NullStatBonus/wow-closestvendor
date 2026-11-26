@@ -342,7 +342,7 @@ CVN's implementation sources:
 - [Copyable report window](ClosestVendor/Report.lua)
 - [Change record and coverage](openspec/changes/cohesive-addon-presentation/coverage.md)
 
-Automated validation uses `make test` and `make check`. Before claiming visual acceptance, review on both clients (Vanilla and Camelot/Forever) at matching UI scale, following `docs/test-plan.md`:
+Automated validation uses `make test` and `make check`. Before claiming visual acceptance, review on both clients (Vanilla and Camelot/Forever) at matching UI scale, following `plans/closestvendor.yaml`:
 
 - All six pages and their child pages and tabs opened directly; purpose, scope and next action are apparent.
 - Compact window, resizing, scrolling, long translations and complete control labels.

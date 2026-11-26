@@ -20,5 +20,7 @@ ignore:
   - README.md
   - docs
   - openspec
+  - plans
+  - build
   - tests
   - tools

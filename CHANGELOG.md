@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.11.0
+
+- **New: The addon works with the CheckThat test runner.** CheckThat can read the addon version and your settings. Without CheckThat, nothing changes.
+- Fixed: The debug log records when you turn it off. Before, that line was missing.
+
 ## 1.10.0
 
 - **New: `/cvn find` shows the nearest known sellers of a food, drink, pet food or class reagent item.** Type an item name or paste an item link. Pick a seller to set a waypoint.
