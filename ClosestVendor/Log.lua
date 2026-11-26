@@ -5,7 +5,8 @@ local _, ns = ...
 local L = {}
 ns.Log = L
 
-L.MAX = 300
+-- A full test plan run writes several hundred lines; 1000 keeps the whole run (CheckThat reads it).
+L.MAX = 1000
 
 function L.New(store, clock, max)
     max = max or L.MAX

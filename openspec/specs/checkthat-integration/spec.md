@@ -54,6 +54,17 @@ The addon SHALL register the entries `learned(kind[, npcId])` (a count of learne
 - **WHEN** the player picks the game waypoint on the settings page and CheckThat calls `nav`
 - **THEN** it returns `native`
 
+### Requirement: Window, config and reagent entries
+The addon SHALL register `window([group])` (`hidden`, `demo`, `shown: <rows>`, only that group's rows when a group is given, or nothing when unknown), `config(name)` (an allowlisted saved setting or `hudRow.<group>`, nothing for other names) and `reagents([id])` (the watched reagents and counts from the last check, nothing when the class is unknown). Each SHALL read values the addon keeps and never the game, and follow the same rules as the other entries.
+
+#### Scenario: Window hidden
+- **WHEN** the status window is hidden and CheckThat calls `window`
+- **THEN** it returns `hidden`
+
+#### Scenario: Name not allowed
+- **WHEN** CheckThat calls `config` with a name that is not on the list
+- **THEN** it returns no value
+
 ### Requirement: Failure turns the integration off
 If a CheckThat call raises an error, the addon SHALL stop calling CheckThat for the rest of the session and keep the reason, so the report shows `CheckThat: failed: <why>` even with the debug log off.
 

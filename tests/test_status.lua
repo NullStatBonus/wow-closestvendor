@@ -320,4 +320,12 @@ end
 local a1, a2 = S.Demo(S.Roller(7), cfg()), S.Demo(S.Roller(7), cfg())
 eq(keys(S.Rows(a1, cfg())), keys(S.Rows(a2, cfg())), "the same seed gives the same window")
 
+-- Signature: what the debug log says the window shows, the row keys in order with " low" after a low
+-- row; counts are left out, so a count change alone gives the same text.
+eq(S.Signature({ { key = "bags", low = true, text = "Bag space: 1 free" }, { key = "durability", low = false, text = "Durability: 90%" } }),
+    "bags low, durability", "signature: keys in order, low flagged")
+eq(S.Signature({ { key = "bags", low = true, text = "Bag space: 0 free" }, { key = "durability", low = false, text = "Durability: 80%" } }),
+    "bags low, durability", "signature: a count change gives the same text")
+eq(S.Signature({}), "", "signature: no rows")
+
 H.done()

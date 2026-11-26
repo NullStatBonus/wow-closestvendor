@@ -45,6 +45,7 @@ local function boot(opts)
         function f:SetText(t) self.text = t end
         function f:Show() self.shown = true end
         function f:Hide() self.shown = false end
+        function f:IsShown() return self.shown end
         function f:HighlightText() self.highlighted = true end
         function f:SetFocus() self.focused = true end
         function f:CreateTexture() return g.newFrame("Texture") end
@@ -924,7 +925,7 @@ do
     local stored, fns = {}, {}
     local ct = { Entry = function(addon, name, fn) stored[#stored + 1] = addon .. "." .. name; fns[name] = fn; return true end }
     g = boot({ checkThat = ct }); login(g)
-    eq(table.concat(stored, ","), "ClosestVendor.version,ClosestVendor.setting,ClosestVendor.integration,ClosestVendor.active,ClosestVendor.learned,ClosestVendor.standing,ClosestVendor.nav,ClosestVendor.external", "entries registered at login")
+    eq(table.concat(stored, ","), "ClosestVendor.version,ClosestVendor.setting,ClosestVendor.integration,ClosestVendor.active,ClosestVendor.learned,ClosestVendor.standing,ClosestVendor.nav,ClosestVendor.external,ClosestVendor.window,ClosestVendor.config,ClosestVendor.reagents", "entries registered at login")
     g.free = 20; g.onEvent("BAG_UPDATE_DELAYED")
     eq(select("#", fns.active()), 0, "active: no warning request, nothing")
     g.free = 1; g.onEvent("BAG_UPDATE_DELAYED")
@@ -1962,13 +1963,24 @@ login(g)
 eq(g.frames[1].events.AUCTION_HOUSE_SHOW, true, "the auction house event is registered")
 g.npc = { guid = "Creature-0-4372-0-55-50-0000A1B2C3", name = "Auctioneer Near" }
 g.pos = { map = 100, x = 0.52, y = 0.5 }
+g.env.SlashCmdList.CLOSESTVENDOR("debug on")
+local function lastMsg() local e = g.env.ClosestVendorCharDB.log.entries; return e[#e] and e[#e].msg end
 g.onEvent("AUCTION_HOUSE_SHOW")
 local arec = g.env.ClosestVendorDB.auctioneers[50]
 eq(arec[2] .. ":" .. arec[3] .. ":" .. arec[4] .. ":" .. arec[6], "Auctioneer Near:100:0.52:0", "auctioneer learned at the player's position")
+eq(lastMsg(), "auctioneer learned: Auctioneer Near (npc 50), new", "the first opening is logged as new")
+g.onEvent("AUCTION_HOUSE_SHOW")
+eq(lastMsg(), "auctioneer learned: Auctioneer Near (npc 50), unchanged", "opening it again from the same place: unchanged, once per window")
+g.pos = { map = 100, x = 0.53, y = 0.5 }
+g.onEvent("AUCTION_HOUSE_SHOW")
+eq(lastMsg(), "auctioneer learned: Auctioneer Near (npc 50), updated", "from another place: updated")
+g.pos = { map = 100, x = 0.52, y = 0.5 }
+g.onEvent("AUCTION_HOUSE_SHOW")
 g.npc = { guid = "Player-0-0-0-0-0-0", name = "Someone" }
 g.onEvent("AUCTION_HOUSE_SHOW")
 g.npc = { guid = "Creature-0-4372-0-55-60-0000A1B2C3", name = "No Position" }; g.pos = nil
 g.onEvent("AUCTION_HOUSE_SHOW")
+eq(lastMsg(), "auctioneer not learned: No Position (npc 60): no map position here", "no map position: not learned, and logged")
 local an = 0
 for _ in pairs(g.env.ClosestVendorDB.auctioneers) do an = an + 1 end
 eq(an, 1, "a non-creature or a missing position learns nothing")
@@ -2842,6 +2854,201 @@ do
     eq(fs.nav(), "tomtom", "nav: TomTom first")
     setting(gs, "navProvider"):SetValue("native")
     eq(fs.nav(), "native", "nav: the settings page choice, at once")
+end
+
+-- Phase 4 evidence (#61): the status window, the purchase questions and settings changes in the debug log.
+do
+    local function lines(game, part)
+        local n = 0
+        for _, e in ipairs(game.env.ClosestVendorCharDB.log.entries or {}) do if e.msg:find(part, 1, true) then n = n + 1 end end
+        return n
+    end
+    local function last(game) local t = game.env.ClosestVendorCharDB.log.entries; return t[#t] and t[#t].msg end
+    local fs = {}
+    local gw = boot({ checkThat = { Entry = function(_, name, fn) fs[name] = fn; return true end } })
+    login(gw); gw.autoAccept = false
+    gw.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    flush(gw)
+    eq(fs.window(), "hidden", "window entry: hidden with nothing low")
+    gw.free = 1; gw.onEvent("BAG_UPDATE_DELAYED"); flush(gw)
+    eq(lines(gw, "status window: shown, rows: bags low"), 1, "the window showing is logged with its rows")
+    eq(fs.window(), "shown: bags low", "window entry: shown, with the low row")
+    gw.free = 0; gw.onEvent("BAG_UPDATE_DELAYED"); flush(gw)
+    eq(lines(gw, "status window: shown, rows: bags low"), 1, "a count change alone writes nothing")
+    gw.free = 20; gw.onEvent("BAG_UPDATE_DELAYED"); flush(gw)
+    eq(last(gw), "status window: hidden", "the window hiding is logged")
+    gw.env.SlashCmdList.CLOSESTVENDOR("hud row bags always")
+    eq(lines(gw, "status window: shown, rows: bags"), 2, "a row set change is logged at once: " .. tostring(last(gw)))
+    eq(fs.window(), "shown: bags", "window entry: shown, the row not low")
+    eq(fs.window("bags"), "bags", "window entry: one group's rows")
+    eq(fs.window("supplies"), "none", "window entry: a group with no row shows none")
+    -- The frame does not show: a failure, and the entry knows nothing.
+    gw.env.SlashCmdList.CLOSESTVENDOR("hud row bags low")
+    local w = window(gw)
+    local show = w.frame.Show
+    w.frame.Show = function() end
+    gw.env.SlashCmdList.CLOSESTVENDOR("hud row bags always")
+    eq(last(gw), "status window: FAILED: not shown, rows: bags", "rows the frame does not show: FAILED")
+    eq(select("#", fs.window()), 0, "window entry: nothing after a failed draw")
+    eq(select("#", fs.window("bags")), 0, "window entry: no group rows after a failed draw")
+    w.frame.Show = show
+    gw.onEvent("BAG_UPDATE_DELAYED"); flush(gw)
+    eq(fs.window("bags"), "bags", "window entry: group rows again after a good draw")
+    -- A preview draws made-up rows: nothing is logged and the entry says demo.
+    local before = #gw.env.ClosestVendorCharDB.log.entries
+    gw.env.SlashCmdList.CLOSESTVENDOR("preview hud")
+    eq(fs.window(), "demo", "window entry: demo while made-up rows show")
+    eq(select("#", fs.window("bags")), 0, "window entry: no group rows while made-up rows show")
+    gw.free = 1; gw.onEvent("BAG_UPDATE_DELAYED"); flush(gw)
+    local wrote = false
+    for i = before + 1, #gw.env.ClosestVendorCharDB.log.entries do
+        if gw.env.ClosestVendorCharDB.log.entries[i].msg:find("status window: ", 1, true) then wrote = true end
+    end
+    eq(wrote, false, "no status window line while made-up rows show")
+
+    -- Settings changes: one line per key, at once for a command.
+    gw.env.SlashCmdList.CLOSESTVENDOR("bags 5")
+    eq(lines(gw, "setting changed: bagThreshold 2 -> 5"), 1, "a command's change is logged")
+    eq(lines(gw, "setting changed: hudRow.bags low -> always"), 2, "each row mode change is logged with its group (typed twice above)")
+    gw.env.SlashCmdList.CLOSESTVENDOR("bags 5")
+    eq(lines(gw, "setting changed: bagThreshold"), 1, "the same value again writes nothing")
+    gw.env.SlashCmdList.CLOSESTVENDOR("reagent off arcane powder")
+    eq(lines(gw, "setting changed: reagentOff.17020 none -> true"), 1, "a reagent switched off is logged by its id")
+    gw.env.SlashCmdList.CLOSESTVENDOR("bags 2")
+
+    -- Purchase questions: asked once the dialog shows, declined on No.
+    local gr = reagentShop()
+    gr.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    gr.autoAccept = false
+    gr.env.SlashCmdList.CLOSESTVENDOR("reagentbuy on")
+    gr.onEvent("MERCHANT_SHOW")
+    eq(last(gr), "reagent buy: asked", "the reagent question is logged once it shows")
+    gr.env.StaticPopupDialogs.CLOSESTVENDOR_CONFIRM_REAGENTS.OnCancel(nil, gr.popup.data, "override")
+    eq(lines(gr, "reagent buy: declined"), 0, "a question replaced by another (override) is no answer: no declined line")
+    gr.env.StaticPopupDialogs.CLOSESTVENDOR_CONFIRM_REAGENTS.OnCancel(nil, gr.popup.data, "clicked")
+    eq(last(gr), "reagent buy: declined", "No is logged")
+    eq(#gr.bought, 0, "and buys nothing")
+    gr.onEvent("MERCHANT_CLOSED")
+    gr.env.StaticPopup_Show = function() end
+    gr.onEvent("MERCHANT_SHOW")
+    eq(last(gr), "reagent buy: FAILED: the question did not show", "a question that does not show: FAILED")
+    -- The ammo question the same way, through the ammo purchase's confirm.
+    local ga = reagentShop()
+    ga.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    ga.autoAccept = false
+    ga.ns.Ammo.OnMerchant = function(_, env) env.confirm("Buy 200 Sharp Arrow for 1s 0c?", function() end) return 0 end
+    ga.onEvent("MERCHANT_SHOW")
+    eq(lines(ga, "ammo buy: asked"), 1, "the ammo question is logged once it shows")
+    ga.env.StaticPopupDialogs.CLOSESTVENDOR_CONFIRM_AMMO.OnCancel(nil, ga.popup.data, "clicked")
+    eq(last(ga), "ammo buy: declined", "No on the ammo question is logged")
+
+    -- The settings page: noted once, a second after the last change.
+    local gs = boot({ settings = true })
+    login(gs)
+    gs.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    setting(gs, "bagThreshold"):SetValue(7)
+    setting(gs, "bagThreshold"):SetValue(8)
+    eq(lines(gs, "setting changed: bagThreshold"), 0, "a slider move is not logged at once")
+    local t = gs.timers; gs.timers = {}
+    t[1]()
+    eq(lines(gs, "setting changed: bagThreshold"), 0, "the wait restarts with each change: the first timer writes nothing")
+    for i = 2, #t do t[i]() end
+    eq(lines(gs, "setting changed: bagThreshold 2 -> 8"), 1, "the settings page change is logged once, a second after the last change, from the start value")
+    eq(lines(gs, "setting changed: bagThreshold"), 1, "and only once")
+    -- A page change still waiting for its timer is written before the next command's own change.
+    setting(gs, "bagThreshold"):SetValue(7)
+    gs.env.SlashCmdList.CLOSESTVENDOR("bags 9")
+    eq(lines(gs, "setting changed: bagThreshold 8 -> 7"), 1, "the pending page change is written first, with its own values")
+    eq(lines(gs, "setting changed: bagThreshold 7 -> 9"), 1, "then the command's change")
+    t = gs.timers; gs.timers = {}
+    for i = 1, #t do t[i]() end
+    eq(lines(gs, "setting changed: bagThreshold"), 3, "the page timer then writes nothing")
+    -- The migration at load (notificationStyle for an existing user) is in the starting values: the
+    -- next command does not report it.
+    local gmg = boot({ charDb = { cfg = { bagThreshold = 2 } } })
+    login(gmg)
+    gmg.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    gmg.env.SlashCmdList.CLOSESTVENDOR("bags 5")
+    eq(gmg.env.ClosestVendorCharDB.cfg.notificationStyle, "warning", "an existing user without the setting is migrated to warning")
+    eq(lines(gmg, "setting changed: notificationStyle"), 0, "the migration is not logged as a command's change")
+    eq(lines(gmg, "setting changed: bagThreshold 2 -> 5"), 1, "the command's own change is")
+
+    -- Move draws a placeholder: changes meanwhile are logged once Move ends (Done).
+    local fm = {}
+    local gmv = boot({ checkThat = { Entry = function(_, name, fn) fm[name] = fn; return true end } })
+    login(gmv); gmv.autoAccept = false
+    gmv.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    flush(gmv)
+    eq(fm.window(), "hidden", "move: hidden before")
+    gmv.ns.Options.Move("hud")
+    eq(fm.window(), "demo", "move: the placeholder is made-up rows")
+    gmv.free = 1; gmv.onEvent("BAG_UPDATE_DELAYED"); flush(gmv)
+    eq(lines(gmv, "status window: shown"), 0, "nothing logged while Move shows its placeholder")
+    local done
+    for _, f in ipairs(gmv.frames) do if f.kind == "Button" and f.text == "Done" and f.parent and f.parent.parent and f.parent.parent.name == "ClosestVendorTracker" then done = f end end
+    done.scripts.OnClick()
+    flush(gmv)
+    eq(fm.window(), "shown: bags low", "after Done the entry has the real rows")
+    eq(lines(gmv, "status window: shown, rows: bags low"), 1, "and the real rows are logged")
+
+    -- A fault while noting the window's state loses the note only, never the window.
+    local gn = boot(); login(gn); gn.autoAccept = false
+    gn.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    flush(gn)
+    local sig = gn.ns.Status.Signature
+    gn.ns.Status.Signature = function() error("boom", 0) end
+    gn.free = 1; gn.onEvent("BAG_UPDATE_DELAYED"); flush(gn)
+    eq(lines(gn, "status window: FAILED: not logged: boom"), 1, "the fault is logged")
+    eq(lines(gn, "switched off"), 0, "the window is not switched off")
+    gn.ns.Status.Signature = sig
+    gn.free = 0; gn.onEvent("BAG_UPDATE_DELAYED"); flush(gn)
+    eq(lines(gn, "status window: shown, rows: bags low"), 1, "the next redraw logs the window again")
+
+    -- A window the frame does not hide: a failure line, not "hidden".
+    local gh = boot(); login(gh); gh.autoAccept = false
+    gh.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    gh.env.SlashCmdList.CLOSESTVENDOR("hud row bags always")
+    eq(lines(gh, "status window: shown, rows: bags"), 1, "shown with the bag row")
+    local wh = window(gh)
+    wh.frame.Hide = function() end
+    gh.env.SlashCmdList.CLOSESTVENDOR("hud row bags low")
+    eq(last(gh), "status window: FAILED: still shown with no rows", "no rows but the frame stays: FAILED")
+    -- The frame cannot say whether it is on screen: unknown, never "hidden", and the entry answers nothing.
+    local fu = {}
+    local gu = boot({ checkThat = { Entry = function(_, name, fn) fu[name] = fn; return true end } })
+    login(gu); gu.autoAccept = false
+    gu.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    flush(gu)
+    eq(fu.window(), "hidden", "unknown visibility: hidden before")
+    window(gu).frame.IsShown = function() error("no read", 0) end
+    gu.env.SlashCmdList.CLOSESTVENDOR("hud row bags always")
+    eq(last(gu), "status window: visibility unknown, rows: bags", "an unread frame is logged as unknown")
+    eq(select("#", fu.window()), 0, "window entry: nothing while the frame cannot be read")
+    eq(select("#", fu.window("bags")), 0, "window entry: no group rows while the frame cannot be read")
+    gu.env.SlashCmdList.CLOSESTVENDOR("hud row bags low")
+    eq(last(gu), "status window: visibility unknown, rows: none", "no rows and an unread frame: unknown, not hidden")
+    eq(lines(gu, "status window: hidden"), 1, "only the hidden line from before the fault")
+
+    -- The ammo question that does not show: a failure line.
+    local gf = reagentShop()
+    gf.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    gf.autoAccept = false
+    gf.ns.Ammo.OnMerchant = function(_, env) env.confirm("Buy 200 Sharp Arrow for 1s 0c?", function() end) return 0 end
+    gf.env.StaticPopup_Show = function() end
+    gf.onEvent("MERCHANT_SHOW")
+    eq(lines(gf, "ammo buy: FAILED: the question did not show"), 1, "an ammo question that does not show: FAILED")
+
+    -- Switching a warning off and on clears its handled latch, so the plan can ask again at once.
+    local gm = mage()
+    gm.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    gm.onEvent("BAG_UPDATE_DELAYED")
+    eq(lines(gm, "question shown: reagent Arcane Powder"), 1, "low reagent: asked")
+    gm.env.StaticPopupDialogs.CLOSESTVENDOR_CONFIRM.OnCancel(nil, gm.popup.data, "clicked")
+    gm.onEvent("BAG_UPDATE_DELAYED")
+    eq(lines(gm, "question shown: reagent Arcane Powder"), 1, "after No: not asked again while low")
+    gm.env.SlashCmdList.CLOSESTVENDOR("reagents off")
+    gm.env.SlashCmdList.CLOSESTVENDOR("reagents on")
+    eq(lines(gm, "question shown: reagent Arcane Powder"), 2, "reagents off then on: asked again at once")
 end
 
 H.done()

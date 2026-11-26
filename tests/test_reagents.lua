@@ -270,6 +270,19 @@ carried[2] = 8 -- bought 8 runes by hand
 asked[1][2]()
 eq(table.concat(b, ",") .. "/" .. s[1], "3:5,4:2/Bought 5 Arcane Powder, 2 Rune of Teleportation for 25s 0c.", "Yes after buying by hand: only what is still needed")
 eq(yl[#yl], "reagent buy: bought 17020x5 17031x2", "Yes after buying by hand: the log names the smaller amount")
+eq(yl[#yl - 1], "reagent buy: at Yes: fewer than asked: 17020x5 17031x2 (asked 17020x5 17031x10)", "Yes after buying by hand: the smaller plan is logged")
+eq(yl[#yl - 1]:match("fewer than asked: (.-) %(asked"), yl[#yl]:match("bought (.+)$"), "the fewer line names what went through")
+-- A call that failed at Yes writes no fewer line: the FAILED line says what happened.
+carried = { 5, 0 }
+b, s, asked, yl = run({ reagentBuyPrompt = true }, { watched = watchedNow, buy = function(i) return i == 3 end })
+carried[2] = 8
+asked[1][2]()
+eq(yl[#yl], "reagent buy: bought 17020x5", "a failed call at Yes: only what went through is bought")
+for _, t in ipairs(yl) do eq(t:find("fewer than asked", 1, true), nil, "a failed call at Yes writes no fewer line: " .. t) end
+carried = { 5, 0 }
+b, s, asked, yl = run({ reagentBuyPrompt = true }, { watched = watchedNow })
+asked[1][2]()
+for _, t in ipairs(yl) do eq(t:find("fewer than asked", 1, true), nil, "the asked amount writes no fewer line: " .. t) end
 carried = { 5, 0 }
 local m = 1e6
 b, s, asked = run({ reagentBuyPrompt = true }, { watched = watchedNow, money = function() return m end })

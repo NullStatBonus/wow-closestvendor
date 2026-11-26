@@ -222,6 +222,7 @@ function R.OnMerchant(cfg, env)
                 if env.sells(l.offer.index) ~= l.offer.id then log("purchase dropped: the merchant window changed") return end
             end
         end
+        local asked, fewer = {}, false -- what the question named, and whether Yes plans less
         if later then
             -- The player may have bought some by hand meanwhile: plan again from what is carried now,
             -- and never buy more of a reagent than the question named.
@@ -234,6 +235,8 @@ function R.OnMerchant(cfg, env)
             for _, l in ipairs(lines) do
                 local f = fresh[l.offer.id]
                 local p = f and math.min(f.purchases, l.purchases) or 0
+                asked[#asked + 1] = l.offer.id .. "x" .. l.items
+                if p < l.purchases then fewer = true end
                 if p > 0 then
                     local items = p * l.offer.batch
                     kept[#kept + 1] = { offer = l.offer, purchases = p, items = items, cost = p * l.offer.price }
@@ -274,6 +277,11 @@ function R.OnMerchant(cfg, env)
             list, coins, short = table.concat(doneParts, ", "), ns.Ammo.Coins(doneCost), nil
         end
         if #bought == 0 then return end
+        -- Written from the purchases that went through, after them: buying the asked amount writes
+        -- no such line, so an in-game check can tell an overbuy from the smaller amount.
+        if fewer and #missed == 0 then
+            log(("at Yes: fewer than asked: %s (asked %s)"):format(table.concat(bought, " "), table.concat(asked, " ")))
+        end
         log("bought " .. table.concat(bought, " "))
         local text = L["Bought %s for %s."]
         if short == "money" then text = L["Bought %s for %s (all you could afford)."]
