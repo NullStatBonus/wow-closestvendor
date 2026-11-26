@@ -178,7 +178,7 @@ sections:
     auto: true
     action:
       kind: manual
-      text: "Nothing appears. CheckThat checks by itself. Walk to the vendor from the sell question, open its window and close it."
+      text: "Nothing appears. CheckThat checks by itself. Walk to the vendor the sell question named, open its window and close it."
     expect: "The waypoint goes away when the vendor window opens."
     verify:
     - assertions
@@ -219,7 +219,7 @@ sections:
       label: "The status window holds the Bag space row, and it is low"
     notes: "Player step. Drawing: the red row and the Low label. The window line is written when the row appears, in check 1.1 or 1.2, so the check reads the whole session. The window shows by default under test settings."
   - id: cv.s1.5
-    title: "Put bag space back to normal: the warning ends"
+    title: "Put bag space back to normal: the Bag space row goes away"
     auto: true
     action:
       kind: manual
@@ -233,11 +233,11 @@ sections:
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: "trigger clear sell"
+      - contains: "setting changed: bagThreshold 200 -> 2"
       - pattern: "status window: [hs]%a+"
       scope: attempt
-      label: "The sell warning ended, and the status window redrew without the Bag space row"
-    notes: "The window line is written only when its text changes, so a line after the clear proves the low row left. The step ends the real warning, so the questions in section 2 start from normal bags."
+      label: "The bag threshold went back to 2, and the status window redrew without the Bag space row"
+    notes: "The window line is written only when its text changes, so a line after the threshold change proves the low row left. No trigger clear line is written here: opening the vendor in check 1.3 already ended the sell warning, and a clear is logged only for a warning that is still open. Other rows, such as water, may stay in the window."
 - id: s2
   title: Questions from real vendor and trainer data
   intro: Each question comes from the real vendor and trainer data around you. Any class can ask for each one.
@@ -297,8 +297,8 @@ sections:
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: "trainer window opened"
       - contains: "trainer learned: "
+      - contains: "trainer window opened"
       scope: attempt
       label: "The trainer was learned when its window opened"
     - kind: log
@@ -312,7 +312,7 @@ sections:
       diagnostic: true
       scope: attempt
       label: "The trainer was new to this account"
-    notes: "Any profession trainer works, and the character needs no profession. The line names the trainer, its npc id, new, updated or unchanged, and what it teaches. The services line is the trainer probe (spec diagnostics); it is written once per window with the debug log on."
+    notes: "Any profession trainer works, and the character needs no profession. The addon learns the trainer once the window lists its services (often at TRAINER_UPDATE, after a first nothing-learned line), and only then writes trainer window opened. The line names the trainer, its npc id, new, updated or unchanged, and what it teaches. The services line is the trainer probe (spec diagnostics); it is written once per window with the debug log on."
   - id: cv.s2.7
     title: "Ask for a trainer and click No"
     auto: true
@@ -357,34 +357,24 @@ sections:
       label: "The game reloaded"
     notes: "Check 6.2 needs a reload between learning the vendor and asking for it."
   - id: cv.s6.2
-    title: "After the reload, ask for a sell vendor without opening the vendor from check 1.3"
-    setup: "Do not open the vendor. Needs: the vendor you opened in check 1.3 stands next to you; otherwise press Skip."
+    title: "After the reload, open the vendor from check 1.3 again"
+    setup: "Needs: the vendor you opened in check 1.3."
     auto: true
     action:
       kind: manual
-      text: "A question appears. Click No. Press Run to ask for a sell vendor, then click No."
-      commands:
-      - "/cvn test sell"
-    expect: "The question names the vendor from check 1.3, which stands next to you."
+      text: "Nothing appears. CheckThat checks by itself. Open the window of the vendor you opened in check 1.3 and close it."
+    expect: "The step finishes by itself after the vendor window opens."
     verify:
     - assertions
-    timeout: 90
     assertions:
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: "test command: sell"
-      - pattern: "question shown: sell, .+ %(npc %d+%), learned, %d+ yd"
-      - contains: "question declined: sell"
+      - pattern: "vendor learned: .+ %(npc %d+%), u%a+"
+      - contains: "merchant window opened"
       scope: attempt
-      label: "The sell question named a vendor this account learned, after the reload, and was answered"
-    - kind: log
-      source: debug
-      contains: "merchant window opened"
-      absent: true
-      scope: attempt
-      label: "No merchant window opened, so the search used the vendors loaded at login"
-    notes: "The step waits its whole timeout, because the check that no vendor window opened can only hold at the end. The vendor stands next to you, so it is the closest one, and the question calls it learned. Opening a merchant window adds that vendor to the search again, so the step asks without opening it. The question proves the vendor saved before the reload only when check 1.3 learned it as new; for a vendor the addon already knew, it proves the reload path (the vendors load again at login)."
+      label: "After the reload the addon still knew the vendor: updated or unchanged, not new"
+    notes: "The learned line says new for a vendor the account never saw, and updated or unchanged for one it knows. After the reload it can only know the vendor from the saved variables. When check 1.3 learned the vendor as new, this proves that save; when the vendor was known before the run, it proves the reload path. Search over learned data is proven by check 2.7, which names a learned trainer."
   - id: cv.s6.3
     title: Turn test settings off, then check for Lua errors
     action:

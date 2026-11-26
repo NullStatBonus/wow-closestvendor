@@ -38,13 +38,13 @@ The setup names one character. It runs once per client, and test settings stay o
 | cv.s1.2 | Era: make bag space low and click Yes | auto | reads, wiring, search, waypoint (chat) |
 | cv.s1.3 | Open that vendor | auto | waypoint cleared, learning |
 | cv.s1.4 | Look at the status window | player + log | status window shows the low Bag space row |
-| cv.s1.5 | Put bag space back to normal | auto | wiring (`trigger clear sell`, the row leaves) |
+| cv.s1.5 | Put bag space back to normal | auto | wiring (the threshold change, the row leaves) |
 | cv.s2.1 | Ask for a repair vendor, click No | auto | search with the capability filter |
 | cv.s2.4 | Ask for a food vendor, click No | auto | real read of food items, search |
 | cv.s2.5 | Open a profession trainer | auto | trainer learning |
 | cv.s2.7 | Ask for a trainer, click No | auto | trainer search names the learned trainer (`learned`, a few yards) |
 | cv.s6.1 | Reload the game | auto | learning and persistence (the reload between learning and asking) |
-| cv.s6.2 | After the reload, ask for a sell vendor, click No | auto | the learned vendor persists (`learned`, a few yards) |
+| cv.s6.2 | After the reload, open the vendor from check 1.3 again | auto | the learned vendor persists (its line says updated or unchanged, not new) |
 | cv.s6.3 | Turn test settings off | auto | no Lua errors |
 
 - **Retired:** cv.s2.2, cv.s2.3, cv.s2.6, cv.s3.1, cv.s3.3, cv.s4.1, cv.s4.2, cv.s5.1 and cv.s5.2. They join the `RETIRED` list in `tests/test_plan.lua`. Sections s3, s4 and s5 leave the core plan, and their numbers stay reserved.

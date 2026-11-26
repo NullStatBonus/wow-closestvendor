@@ -110,15 +110,15 @@ The core plan SHALL be runnable by one character of any class and any level with
 - **THEN** each step is either shown for that client or limited to the other client, and no step is blocked for this character
 
 ### Requirement: Core plan proves the foundation
-The core plan SHALL prove, in the real game, that: a real bag threshold crossing asks the sell question, and the waypoint shows on Forever and as a chat line on Era; the status window shows the low Bag space row; opening the vendor clears the waypoint and learns it; restoring the threshold clears the warning; the repair, food and trainer questions name a target that fits (the food question with the real count); and a learned vendor survives `/reload`.
+The core plan SHALL prove, in the real game, that: a real bag threshold crossing asks the sell question, and the waypoint shows on Forever and as a chat line on Era; the status window shows the low Bag space row; opening the vendor clears the waypoint and learns it; restoring the threshold removes the Bag space row; the repair, food and trainer questions name a target that fits (the food question with the real count); and a learned vendor survives `/reload`.
 
 #### Scenario: Real reads
 - **WHEN** the sell warning starts in the core plan
 - **THEN** its `trigger go sell` line carries the real `bags=` count and a `durability=` value
 
 #### Scenario: Learned vendor survives reload
-- **WHEN** the tester reloads after the vendor was learned and asks for a sell vendor
-- **THEN** the question names a learned vendor within a few yards
+- **WHEN** the tester reloads after the vendor was learned and opens that vendor again
+- **THEN** its learned line says updated or unchanged, not new
 
 ### Requirement: Core plan reads like player steps
 Each core plan step's action text SHALL be one player-language sentence after its fixed opener, without slash commands or color codes; the commands SHALL appear only behind Run. Each Expect SHALL describe what the player sees, not what is logged. No step SHALL exist only to restore a setting.

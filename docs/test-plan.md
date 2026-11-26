@@ -13,10 +13,10 @@ The unit tests (`make test`) prove the logic. The plans keep only what a fake ga
 The core plan proves six systems. If one fails, everything fails.
 
 - **Reads:** the real bag and durability counts on the `trigger go sell` line, and the food count on the food question.
-- **Wiring:** a real bag threshold crossing starts the warning, and putting it back ends it.
+- **Wiring:** a real bag threshold crossing starts the warning, and putting it back removes the Bag space row.
 - **Search:** the question names the closest vendor or trainer, with where it came from (`learned`, `NorgannonDB` or `shipped`) and its distance in yards.
 - **Waypoint:** the game waypoint on WoW Forever, the chat line on Classic Era, and the waypoint going away at the vendor.
-- **Learning and persistence:** a vendor and a trainer learned from their windows, and the vendor still known after `/reload`.
+- **Learning and persistence:** a vendor and a trainer learned from their windows, and the vendor still known after `/reload` (opening it again says updated or unchanged, not new).
 - **Clean load:** no Lua error on either client.
 
 It also checks that the status window shows the low Bag space row, because the window is the part of the addon people see.
