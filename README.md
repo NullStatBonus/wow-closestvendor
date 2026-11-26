@@ -663,7 +663,7 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 - A saved window position can end up off screen after a UI scale change. Type `/cvn hud reset` to recover it.
 - A sound-pack sound needs the addon that shares it. While that addon is off, the whisper ping plays instead, and your choice stays saved.
 - The text of the addon is English only. You can add other languages. See [docs/localization.md](docs/localization.md).
-- The addon was written and tested against fake game APIs. The in-game checks are three CheckThat test plans, run before each release: `plans/closestvendor.yaml` (core), `plans/closestvendor.ui.yaml` (status window, visuals and settings) and `plans/closestvendor.addons.yaml` (other addons). See `docs/test-plan.md`.
+- The addon was written and tested against fake game APIs. The in-game checks are CheckThat test plans. The core plan, `plans/closestvendor.yaml`, runs before each release on both clients. A feature gets its own plan when it is built or changed. See `docs/test-plan.md`.
 - With the CheckThat test runner installed, the addon gives it read-only values for automatic checks: its version, a setting, the open warning, what the account learned, an NPC's standing, the waypoint method, what NorgannonDB gave, what the status window shows, a saved setting by its saved name and the reagents the warning watches. Without CheckThat, nothing changes.
 
 ## Problems?

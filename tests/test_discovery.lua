@@ -44,10 +44,18 @@ do
     eq(T2[40][4], 0.5, "trainer keeps its saved position")
     eq(D.RecordTrainer(T2, { 40, "Smith", 1455, 0.503, 0.5, 1 }, { "Mining", "Smelting" }), true, "trainer: a new profession updates")
     eq(T2[40][4], 0.5, "and keeps the saved position")
+    eq(D.RecordTrainer(T2, { 40, "Smith", 1455, 0.52, 0.5, 1 }, { "Mining", "Smelting" }), true, "trainer: moved 0.02 updates")
+    eq(T2[40][4], 0.52, "trainer saves the moved position")
+    eq(D.RecordTrainer(T2, { 40, "Smith", 1456, 0.521, 0.5, 1 }, { "Mining", "Smelting" }), true, "trainer: another map, a step away, updates")
+    eq(T2[40][3] .. "/" .. T2[40][4], "1456/0.521", "trainer saves the new map and position")
     local A2 = {}
     D.RecordAuctioneer(A2, { 50, "Banker", 1455, 0.5, 0.5, 1 })
     eq(D.RecordAuctioneer(A2, { 50, "Banker", 1455, 0.5, 0.504, 1 }), false, "auctioneer: a step to the side is unchanged")
     eq(A2[50][5], 0.5, "auctioneer keeps its saved position")
+    eq(D.RecordAuctioneer(A2, { 50, "Banker", 1455, 0.5, 0.52, 1 }), true, "auctioneer: moved 0.02 updates")
+    eq(A2[50][5], 0.52, "auctioneer saves the moved position")
+    eq(D.RecordAuctioneer(A2, { 50, "Banker", 1456, 0.5, 0.521, 1 }), true, "auctioneer: another map, a step away, updates")
+    eq(A2[50][3] .. "/" .. A2[50][5], "1456/0.521", "auctioneer saves the new map and position")
 end
 
 -- Unidentifiable merchants are ignored.
