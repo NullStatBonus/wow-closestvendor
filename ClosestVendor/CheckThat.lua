@@ -9,7 +9,9 @@
 --     active() (the warning request that is open or active and a reagent's item id, or nil), learned(kind)
 --     (the account's learned table for "vendors", "trainers" or "auctioneers"), standing(npcId) (true,
 --     false or nil, as this character saw it), nav() (the waypoint method Core keeps, never read from the
---     game here) and external() (what NorgannonDB gave, as the report says it).
+--     game here), external() (what NorgannonDB gave, as the report says it), window(group) (what the status
+--     window shows, or one row group's rows, as Core kept it after its last redraw) and reagents(id) (the reagents the warning
+--     watched at its last check, kept by the controller).
 --   CT.Report(key, value) reports the fact [ClosestVendor] key=value. A false return is normal.
 --   A raised error from CheckThat turns the integration off for the session and keeps the reason, so
 --     /cvn log shows "CheckThat: failed: <why>" with the debug log off. An error inside an entry returns
@@ -139,6 +141,64 @@ end)
 add("external", function()
     local v = type(ctx.external) == "function" and ctx.external()
     if v then return cut(v) end
+end)
+
+-- What the status window shows now: "hidden", "shown: <row keys>" (each key, " low" after a low row:
+-- "shown: bags low, durability"), "demo" while made-up rows (a demo, a preview or Move) are drawn, or
+-- nothing when there is no window. Core keeps the text after each redraw, so the call reads nothing
+-- from the game. With a row group ("supplies", any case), only that group's row keys ("supply:food
+-- low") or "none" when the window shows none of them; nothing for another name, while made-up rows
+-- are drawn, or while the window state is unknown.
+add("window", function(group)
+    if type(ctx.window) ~= "function" then return end
+    if group ~= nil then
+        local S = ns.Status
+        group = type(group) == "string" and group:lower() or nil
+        if not (group and S and S.Group(group) == group) then return end
+    end
+    local v = ctx.window(group)
+    if v then return cut(v) end
+end)
+
+-- The saved settings a step may check that /cvn get does not cover, by their saved name.
+CT.CONFIG = {}
+for _, k in ipairs({ "bagEnabled", "durEnabled", "ammoEnabled", "tradeEnabled", "suppliesEnabled", "reagentsEnabled",
+        "bagThreshold", "durThreshold", "ammoThreshold", "tradeThreshold", "reagentThreshold",
+        "ammoBuyEnabled", "ammoBuyPrompt", "arrowGrade", "bulletGrade", "vendorMode", "vendorPrefer", "autoNotice",
+        "reagentBuyEnabled", "reagentBuyPrompt", "reagentBuyTarget",
+        "hudLocked", "hudScale", "hudAlpha", "hudTextAlpha", "hudColor", "instanceAnchor", "ahEnabled",
+        "foodEnabled", "waterEnabled", "petFoodEnabled", "healthstoneRemind", "foodThreshold", "waterThreshold",
+        "petFoodThreshold", "remindSound", "navProvider", "notificationStyle" }) do
+    CT.CONFIG[k:lower()] = k
+end
+
+-- A saved setting as text ("true", "20", "hearth", ...) by its saved name in any case (CT.CONFIG), or
+-- a row group's mode as "hudRow.<group>" ("low", "always" or "never"); nothing for any other name or
+-- a value that is not set. Only reads this character's settings.
+add("config", function(name)
+    if type(name) ~= "string" then return end
+    local cfg = ctx.cfg and ctx.cfg()
+    if type(cfg) ~= "table" then return end
+    local group = name:lower():match("^hudrow%.(%a+)$")
+    if group then
+        local S = ns.Status
+        if not (S and S.Group(group) == group) then return end
+        return S.Mode(cfg, group)
+    end
+    local key = CT.CONFIG[name:lower()]
+    if key == nil or cfg[key] == nil then return end
+    return cut(tostring(cfg[key]))
+end)
+
+-- The class reagents the warning watched at its last check: "<item id>:<count>" sorted by id and
+-- joined by "," ("17020:5,17031:3"), "none" when none is watched, or nothing before the first check
+-- or when the last check could not read them (class unknown).
+-- With an item id, that reagent's count, or nothing when it is not watched. A reagent switched off,
+-- or one whose spell is not known, is not watched; the count is the bags only, never the bank.
+add("reagents", function(id)
+    if type(ctx.reagents) ~= "function" then return end
+    local v = ctx.reagents(id)
+    if v ~= nil then return type(v) == "string" and cut(v) or v end
 end)
 
 local function pack(...) return { n = select("#", ...), ... } end

@@ -99,7 +99,7 @@ function M.OnMerchant(cfg, env)
         return 0
     end
     local space, money = env.space(o.id, kind), env.money()
-    log(("%s item %s, price %s per %s, space %s, money %s"):format(mode, tostring(o.id), tostring(o.price),
+    log(("%s %s item %s, price %s per %s, space %s, money %s"):format(mode, kind, tostring(o.id), tostring(o.price),
         tostring(o.batch), tostring(space), tostring(money)))
     local n, items, cost, partial = M.Plan(space, o, money)
     if not n then log("space, price or money unknown") return 0 end
@@ -115,10 +115,12 @@ function M.OnMerchant(cfg, env)
             n, items, cost = 0, 0, 0 -- nothing bought: the money stays for the reagents
             return
         end
+        local asked, space2 = n, nil -- the purchases the question named, and the room left at Yes
         if later then
             -- The player may have bought some by hand meanwhile: buy only what still fits and can be
             -- afforded, never more than the question named.
-            local n2, _, _, partial2 = M.Plan(env.space(o.id, kind), o, env.money())
+            space2 = env.space(o.id, kind)
+            local n2, _, _, partial2 = M.Plan(space2, o, env.money())
             if not n2 then log("space, price or money unknown at Yes") return end
             if n2 < n then n, items, cost, partial = n2, n2 * o.batch, n2 * o.price, partial2 end
             if n == 0 then log("nothing left to buy") return end
@@ -130,9 +132,14 @@ function M.OnMerchant(cfg, env)
             log(("FAILED: %d of %d purchases of item %s did not go through"):format(n - done, n, tostring(o.id)))
             partial = false
         end
+        -- Written from the purchases that went through, after them: buying the asked amount writes
+        -- no such line, so an in-game check can tell an overbuy from the smaller amount.
+        if later and done == n and done < asked then
+            log(("at Yes: fewer than asked: %d of %d purchases, space %s"):format(done, asked, tostring(space2)))
+        end
         n, items, cost = done, done * o.batch, done * o.price
         if done == 0 then return end
-        log(("bought %d of item %s"):format(items, tostring(o.id)))
+        log(("bought %d of item %s%s"):format(items, tostring(o.id), partial and " (all you could afford)" or ""))
         env.say((partial and L["Bought %d %s for %s (all you could afford)."] or L["Bought %d %s for %s."])
             :format(items, o.name, M.Coins(cost)))
     end

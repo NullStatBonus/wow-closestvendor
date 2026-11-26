@@ -6,15 +6,15 @@ Let a player capture what the addon saw and decided, so problems can be reported
 ## Requirements
 
 ### Requirement: Debug log switch
-The addon SHALL keep a debug log that is off by default, toggled with `/cvn debug on` and `/cvn debug off`, persisted between sessions, and holds at most 300 entries, dropping the oldest.
+The addon SHALL keep a debug log that is off by default, toggled with `/cvn debug on` and `/cvn debug off`, persisted between sessions, and holds at most 1000 entries, dropping the oldest.
 
 #### Scenario: Off by default
 - **WHEN** the addon runs for the first time
 - **THEN** nothing is recorded
 
 #### Scenario: Bounded
-- **WHEN** more than 300 entries are recorded
-- **THEN** only the newest 300 are kept
+- **WHEN** more than 1000 entries are recorded
+- **THEN** only the newest 1000 are kept
 
 ### Requirement: What is recorded
 While the log is on, the addon SHALL record the game events it reacts to (except worn-gear events, which are folded into one line per check), failures of guarded game calls, trigger decisions, the vendor found or why none was, and whether the question was shown, accepted or dismissed.
@@ -64,6 +64,21 @@ While the log is on, the addon SHALL record each vendor, trainer and waypoint de
 #### Scenario: Skill-ups do not flood the log
 - **WHEN** a weapon skill rises point by point near its cap
 - **THEN** its left-out line is recorded once, not once per point
+
+### Requirement: Status window, settings and purchase questions are recorded
+While the log is on, the addon SHALL record when the status window is shown or hidden and which rows it shows, only when that changes (never for a count alone, never during a demo, preview or Move); each setting change with its old and new value, once per change; a purchase question asked (after the game shows it) or declined, and a purchase that bought fewer than asked; a reminder held back (combat, instance, dead); and an auctioneer learned. A logging failure SHALL NOT switch the window off.
+
+#### Scenario: Count change
+- **WHEN** the free bag slots change but the rows and low flags stay the same
+- **THEN** no status window line is recorded
+
+#### Scenario: Setting changed
+- **WHEN** the player types `/cvn bags 3` with the threshold at 2
+- **THEN** `setting changed: bagThreshold 2 -> 3` is recorded once
+
+#### Scenario: Replaced question
+- **WHEN** a purchase question is replaced by a new one
+- **THEN** no `declined` line is recorded
 
 ### Requirement: Copyable report
 `/cvn log` SHALL show a report that can be selected and copied, containing the addon version, client interface and build, locale, the waypoint method in use and the chosen preference, vendor counts, current settings, the CheckThat status (`working`, `not detected`, `too old` or `failed: <why>`), and the recorded entries. If a window cannot be created, it SHALL print the most recent entries to chat.

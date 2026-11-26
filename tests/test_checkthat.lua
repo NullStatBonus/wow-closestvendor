@@ -46,15 +46,15 @@ eq(CT.Start(ctx({}, "1.11.0")), 0, "old: no entries")
 CT.Report("k", 1)
 eq(CT.Status(), "too old", "old: loaded, but too old to register entries")
 
--- Working: eight entries, registered once.
+-- Working: eleven entries, registered once.
 local f = fakeCT()
 local cfg = { bagThreshold = 2 }
 CT = load(f)
-eq(CT.Start(ctx(cfg, "1.11.0")), 8, "eight entries stored")
-eq(CT.Start(ctx(cfg, "1.11.0")), 8, "a second start registers nothing more")
-eq(f.calls, 8, "Entry called once per entry")
+eq(CT.Start(ctx(cfg, "1.11.0")), 11, "eleven entries stored")
+eq(CT.Start(ctx(cfg, "1.11.0")), 11, "a second start registers nothing more")
+eq(f.calls, 11, "Entry called once per entry")
 eq(f.addon, "ClosestVendor", "entries belong to ClosestVendor")
-eq(logged[#logged], "checkthat: entries registered: 8", "registration logged")
+eq(logged[#logged], "checkthat: entries registered: 11", "registration logged")
 eq(f.entries.version(), 11100, "1.11.0 is 11100")
 eq(f.entries.version(), 11100, "the version answers again")
 eq(f.entries.setting("bags.threshold"), "2", "setting: the value /cvn get prints")
@@ -81,7 +81,7 @@ CT.Start({ cfg = function() return cfg end, version = function() reads = reads +
 f.entries.version(); f.entries.version()
 eq(reads, 1, "version read once at Start")
 f = fakeCT(); CT = load(f)
-eq(CT.Start({ cfg = function() return cfg end, version = function() error("no metadata", 0) end }), 8, "a version read that raises does not stop registration")
+eq(CT.Start({ cfg = function() return cfg end, version = function() error("no metadata", 0) end }), 11, "a version read that raises does not stop registration")
 eq(count(f.entries.version()), 0, "and the version is unknown")
 
 -- active: the request Triggers.Active names, with a reagent's item id; nothing when none.
@@ -170,5 +170,56 @@ CT.Report("k", 1)
 eq(CT.Status(), "failed: Report: report broke", "Report raising fails the integration")
 eq(CT.Start(ctx(cfg, "1.11.0")), 0, "no registration after a failure")
 eq(f.calls, 0, "Entry not called after a failure")
+
+-- window, config and reagents: read through the getters Core passes; nothing without them.
+do
+    local fw = fakeCT(); local CW, nsw = load(fw)
+    assert(loadfile("ClosestVendor/Status.lua"))("ClosestVendor", nsw)
+    CW.Start({})
+    eq(count(fw.entries.window()), 0, "window: no getter, nothing")
+    eq(count(fw.entries.config("hudScale")), 0, "config: no settings, nothing")
+    eq(count(fw.entries.reagents()), 0, "reagents: no getter, nothing")
+    local state, reads = "shown: bags low", 0
+    local c = { hudScale = 150, ammoBuyEnabled = false, instanceAnchor = "last", hudRow = { bags = "always", ammo = "bogus" }, secret = "x" }
+    local watched = { [17020] = 5 }
+    fw = fakeCT(); CW, nsw = load(fw)
+    assert(loadfile("ClosestVendor/Status.lua"))("ClosestVendor", nsw)
+    CW.Start({ cfg = function() return c end, window = function() reads = reads + 1; return state end,
+               reagents = function(id) if id ~= nil then return watched[tonumber(id)] end return "17020:5" end })
+    eq(fw.entries.window(), "shown: bags low", "window: what Core kept")
+    state = nil
+    eq(count(fw.entries.window()), 0, "window: unknown returns nothing")
+    eq(reads, 2, "window: one getter read per call")
+    eq(fw.entries.config("hudScale"), "150", "config: a number as text")
+    eq(fw.entries.config("AMMOBUYENABLED"), "false", "config: a boolean as text, any case")
+    eq(fw.entries.config("instanceAnchor"), "last", "config: a word")
+    eq(fw.entries.config("hudRow.bags"), "always", "config: a row group's mode")
+    eq(fw.entries.config("hudRow.ammo"), "low", "config: a bad saved mode is the default")
+    eq(fw.entries.config("hudRow.durability"), "low", "config: a group not changed is the default")
+    eq(count(fw.entries.config("hudRow.nothing")), 0, "config: an unknown group returns nothing")
+    eq(count(fw.entries.config("secret")), 0, "config: a name not on the list returns nothing")
+    eq(count(fw.entries.config("hudAlpha")), 0, "config: a value not set returns nothing")
+    eq(count(fw.entries.config()), 0, "config: no name returns nothing")
+    eq(fw.entries.reagents(), "17020:5", "reagents: what the controller kept")
+    eq(fw.entries.reagents(17020), 5, "reagents: one count")
+    eq(count(fw.entries.reagents(1)), 0, "reagents: not watched returns nothing")
+    eq(c.hudRow.ammo, "bogus", "config does not change saved settings")
+end
+
+-- window with a row group: only a known group is passed on, in lower case.
+do
+    local asked
+    local fw = fakeCT(); local CW, nsw = load(fw)
+    assert(loadfile("ClosestVendor/Status.lua"))("ClosestVendor", nsw)
+    CW.Start({ window = function(g) asked = g; return g and "supply:food low" or "shown: x" end })
+    eq(fw.entries.window("Supplies"), "supply:food low", "window: a row group, any case, is passed on")
+    eq(asked, "supplies", "window: the group in lower case")
+    asked = "untouched"
+    eq(count(fw.entries.window("bogus")), 0, "window: a name that is not a row group returns nothing")
+    eq(asked, "untouched", "window: an unknown group is not passed on")
+    eq(count(fw.entries.window(5)), 0, "window: a group that is not text returns nothing")
+    eq(fw.entries.window(), "shown: x", "window: no group, the whole window")
+    eq(asked, nil, "window: no group passes nothing")
+end
 
 H.done()

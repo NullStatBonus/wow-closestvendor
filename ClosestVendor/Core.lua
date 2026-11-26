@@ -96,6 +96,14 @@ end
 local merchantActed, retryParts, retryItems, retries = false, {}, {}, 0
 local MAX_RETRIES = 3
 
+-- A purchase question (ammo or reagents) in its own dialog. "asked" is written once the dialog is
+-- confirmed on screen, "declined" when the player answers No or presses Escape; Yes buys (the
+-- purchase writes its own lines).
+local function askPurchase(which, area, text, accept)
+    A.showPopup(which, text, { accept = accept, decline = function() if log then log.Add(area .. "declined") end end })
+    if log then log.Add(area .. (A.popupShown(which) and "asked" or "FAILED: the question did not show")) end
+end
+
 -- What ns.Ammo needs when a merchant opens: all game reads and the purchase go through the Adapter.
 local AMMO_ENV = {
     kind = function() return (A.ammoStatus()) end,
@@ -107,7 +115,7 @@ local AMMO_ENV = {
     buy = function(...) merchantActed = true; return A.buyMerchantItem(...) end,
     say = say,
     log = function(text) if log then log.Add(text) end end,
-    confirm = function(text, accept) merchantActed = true; A.showPopup(POPUP_AMMO, text, accept) end,
+    confirm = function(text, accept) merchantActed = true; askPurchase(POPUP_AMMO, "ammo buy: ", text, accept) end,
     sells = A.merchantItemId,
 }
 
@@ -397,9 +405,15 @@ local function learnAuctioneer()
     local changed = CHAR.standing[a.id] ~= true
     CHAR.standing[a.id] = true -- its window opened: it trades with this character
     local map, x, y = A.mapPosition()
-    if (map and ns.Discovery.RecordAuctioneer(DB.auctioneers, { a.id, a.name, map, x, y, a.faction })) or changed then
-        rebuildAuctioneers()
+    local known = DB.auctioneers[a.id] ~= nil
+    local stored = map and ns.Discovery.RecordAuctioneer(DB.auctioneers, { a.id, a.name, map, x, y, a.faction })
+    if map then
+        learnedLine(("auctioneer learned: %s (npc %d), %s"):format(tostring(a.name), a.id,
+            not known and "new" or (stored and "updated" or "unchanged")), true, stored)
+    else
+        learnedLine(("auctioneer not learned: %s (npc %d): no map position here"):format(tostring(a.name), a.id), true, false)
     end
+    if stored or changed then rebuildAuctioneers() end
 end
 
 local function init()
@@ -504,7 +518,7 @@ local REAGENT_ENV = {
     buy = function(...) merchantActed = true; return A.buyMerchantItem(...) end,
     say = say,
     log = function(text) if log then log.Add(text) end end,
-    confirm = function(text, accept) merchantActed = true; A.showPopup(POPUP_REAGENTS, text, accept) end,
+    confirm = function(text, accept) merchantActed = true; askPurchase(POPUP_REAGENTS, "reagent buy: ", text, accept) end,
     sells = A.merchantItemId,
 }
 
@@ -523,6 +537,47 @@ local STATUS_SRC = {
     end,
 }
 
+-- What the status window shows, for the debug log and the CheckThat window entry: "hidden" or
+-- "shown: <row keys>" (Status.Signature), set after each redraw of the real rows. A line is written
+-- only when that text changes (shown or hidden, the row set, a low flag), never for a count.
+local windowState, windowLogged
+local windowGroups -- group -> its row keys ("none" when it shows none), kept with windowState; nil while unknown
+
+-- Called after tracker.Show drew the real rows: the window is checked, not assumed. Made-up rows (a
+-- demo, a preview or Move) are drawn instead of the real ones, so nothing is logged then.
+local function noteWindow(rows)
+    if tracker.Demoing() then return end
+    local shown, sig = tracker.Shown(), ns.Status.Signature(rows)
+    local line
+    if shown == nil then
+        -- The game did not say whether the frame is on screen: unknown, never "hidden".
+        windowState, line = nil, "status window: visibility unknown, rows: " .. (#rows > 0 and sig or "none")
+    elseif #rows > 0 and shown then
+        windowState, line = "shown: " .. sig, "status window: shown, rows: " .. sig
+    elseif #rows == 0 and not shown then
+        windowState, line = "hidden", "status window: hidden"
+    elseif shown then
+        windowState, line = nil, "status window: FAILED: still shown with no rows"
+    else
+        windowState, line = nil, "status window: FAILED: not shown, rows: " .. sig
+    end
+    windowGroups = nil
+    if windowState then
+        local by = {}
+        for _, g in ipairs(ns.Status.GROUPS) do by[g] = {} end
+        for _, row in ipairs(rows) do
+            local g = ns.Status.Group(row.key)
+            if by[g] then by[g][#by[g] + 1] = row end
+        end
+        windowGroups = {}
+        for g, list in pairs(by) do windowGroups[g] = #list > 0 and ns.Status.Signature(list) or "none" end
+    end
+    if line ~= windowLogged then
+        windowLogged = line
+        log.Add(line)
+    end
+end
+
 -- Redraw the status window now. Nothing is read from the game for a row set to "never".
 local function refreshWindow()
     if not tracker then return end
@@ -533,7 +588,15 @@ local function refreshWindow()
     local ok, err = pcall(tracker.Show, rows)
     if not ok then
         log.Add("status window failed and is switched off: " .. tostring(err))
-        tracker = nil
+        tracker, windowState, windowGroups = nil, nil, nil
+        return
+    end
+    -- The window works: a fault while noting its state only loses that note, never the window.
+    ok, err = pcall(noteWindow, rows)
+    if not ok then
+        windowState, windowGroups = nil, nil
+        local line = "status window: FAILED: not logged: " .. tostring(err)
+        if line ~= windowLogged then windowLogged = line; pcall(log.Add, line) end
     end
 end
 
@@ -608,6 +671,7 @@ local function buildWindow()
         pos = CHAR.hud,
         shiftDown = A.shiftDown,
         escape = A.escape,
+        moveEnded = function() touchWindow() end, -- Move drew made-up rows: log the real ones again
         go = function(row)
             log.Add("row click: " .. row.key .. " (" .. row.text .. ")")
             endShows() -- a click replaces any demo, preview or notification on screen
@@ -666,6 +730,44 @@ local function reagentLine()
     table.sort(off)
     return ("reagents: %s, class %s, threshold %d, watching: %s, switched off: %s"):format(CHAR.cfg.reagentsEnabled and "on" or "off",
         tostring(A.classToken()), CHAR.cfg.reagentThreshold, #watching > 0 and table.concat(watching, ", ") or "none", #off > 0 and table.concat(off, ", ") or "none")
+end
+
+-- Settings changes in the debug log: "setting changed: <key> <old> -> <new>", one line per key, after
+-- the change is stored. Keys are the saved names (cfg); a row group is hudRow.<group> with its mode,
+-- a reagent switched off is reagentOff.<item id>. A slash command is noted at once; the settings page
+-- and the colour picker change values while a slider or the wheel moves, so they are noted once,
+-- a second after the last change (each change restarts the wait). The first call only takes the
+-- starting values.
+local cfgSeen, settingsWait, settingsPending = nil, 0, false
+local function flatSettings()
+    local t, c = {}, CHAR.cfg
+    for k, v in pairs(c) do
+        if type(v) ~= "table" then t[k] = tostring(v) end
+    end
+    for _, group in ipairs(ns.Status.GROUPS) do t["hudRow." .. group] = ns.Status.Mode(c, group) end
+    for id, v in pairs(type(c.reagentOff) == "table" and c.reagentOff or {}) do
+        if v then t["reagentOff." .. tostring(id)] = "true" end
+    end
+    return t
+end
+local function noteSettings()
+    settingsPending = false
+    local now = flatSettings()
+    if cfgSeen and log then
+        local keys = {}
+        for k, v in pairs(now) do if cfgSeen[k] ~= v then keys[#keys + 1] = k end end
+        for k in pairs(cfgSeen) do if now[k] == nil then keys[#keys + 1] = k end end
+        table.sort(keys)
+        for _, k in ipairs(keys) do
+            log.Add(("setting changed: %s %s -> %s"):format(k, cfgSeen[k] or "none", now[k] or "none"))
+        end
+    end
+    cfgSeen = now
+end
+local function noteSettingsSoon()
+    settingsWait, settingsPending = settingsWait + 1, true
+    local mine = settingsWait
+    if not A.after(1, function() if mine == settingsWait then noteSettings() end end) then noteSettings() end
 end
 
 -- The waypoint method Nav.Select picks now, kept for the CheckThat nav entry (an entry call never
@@ -798,7 +900,7 @@ local function start()
         evaluate = evaluate, -- the controller's own re-checks also arm the position retry
     })
     -- The settings page is optional: if the client's settings API differs, only the page is lost.
-    local ok, category = pcall(ns.Options.Register, CHAR.cfg, DEFAULTS, function() refreshNav(); evaluate(); applyWindow() end, A.classToken(),
+    local ok, category = pcall(ns.Options.Register, CHAR.cfg, DEFAULTS, function() refreshNav(); evaluate(); applyWindow(); noteSettingsSoon() end, A.classToken(),
         A.hasColorPicker() and A.pickColor or nil,
         function(text) colorNote = text; log.Add(text) end, A.hasSwatchPicker())
     if not ok then colorNote = "settings page failed: " .. tostring(category) end
@@ -832,6 +934,7 @@ local function start()
     touchWindow()
     -- Last, and guarded: a fault in the test-runner integration never stops the addon from starting.
     refreshNav()
+    noteSettings() -- the starting values: later changes are logged against them
     local CT = ns.CheckThat
     if CT then
         local ok, err = pcall(CT.Start, { cfg = function() return CHAR.cfg end, version = A.addonVersion,
@@ -843,7 +946,17 @@ local function start()
             end,
             standing = function(id) return CHAR.standing[id] end,
             nav = function() return navNow end,
-            external = externalText })
+            external = externalText,
+            window = function(group)
+                if not tracker then return end
+                if group ~= nil then
+                    if tracker.Demoing() or not windowGroups then return end
+                    return windowGroups[group]
+                end
+                if tracker.Demoing() then return "demo" end
+                return windowState
+            end,
+            reagents = function(id) if controller then return controller.Reagents(id) end end })
         if not ok then pcall(CT.Fail, "Start: " .. tostring(err)) end
     end
 end
@@ -852,7 +965,11 @@ SLASH_CLOSESTVENDOR1 = "/cvn"
 SLASH_CLOSESTVENDOR2 = "/closestvendor"
 SlashCmdList["CLOSESTVENDOR"] = function(msg)
     if not DB then return end
+    -- A settings page change still waiting for its timer is written first, so it is not attributed
+    -- to this command; its timer then does nothing.
+    if settingsPending then settingsWait = settingsWait + 1; noteSettings() end
     local lines, action = ns.Commands.Run(CHAR.cfg, msg, A.classToken(), A.itemName)
+    noteSettings()
     for _, line in ipairs(lines) do say(line) end
     if action and action[1] == "read" then return end
     if action and action[1] == "open" then
@@ -892,6 +1009,7 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
         local opened = A.hasColorPicker() and A.pickColor(r or 0, g or 0, b or 0, function(nr, ng, nb)
             CHAR.cfg.hudColor = ns.Status.Hex(nr, ng, nb)
             applyWindow()
+            noteSettingsSoon()
         end)
         if not opened then
             say(L["This game has no color picker; use /cvn hud color #rrggbb, or black or reset."])

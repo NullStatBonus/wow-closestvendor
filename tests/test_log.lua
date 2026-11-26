@@ -42,11 +42,11 @@ for i = 1, 12 do small.Add("m" .. i) end
 eq(#small.Entries(), 5, "bounded at the maximum")
 eq(small.Entries()[1].msg, "m8", "oldest dropped")
 eq(small.Entries()[5].msg, "m12", "newest kept")
-eq(Log.MAX, 300, "default limit is 300")
+eq(Log.MAX, 1000, "default limit is 1000")
 local big = Log.New({ enabled = true }, clock)
-for i = 1, 400 do big.Add("x" .. i) end
-eq(#big.Entries(), 300, "default limit applied")
-eq(big.Entries()[1].msg, "x101", "keeps the newest 300")
+for i = 1, 1100 do big.Add("x" .. i) end
+eq(#big.Entries(), 1000, "default limit applied")
+eq(big.Entries()[1].msg, "x101", "keeps the newest 1000")
 
 -- Clear.
 small.Clear()

@@ -225,6 +225,14 @@ function S.Rows(snap, cfg, class)
     return rows
 end
 
+-- The debug log's name for a set of rows: each row key in window order, " low" after a low one
+-- ("bags low, durability"). Counts are left out, so a count change alone gives the same text.
+function S.Signature(rows)
+    local out = {}
+    for _, row in ipairs(rows or {}) do out[#out + 1] = tostring(row.key) .. (row.low and " low" or "") end
+    return table.concat(out, ", ")
+end
+
 -- The rows to show: rows of an "always" group, and low rows of a "low" group. Empty means no window.
 function S.Visible(rows, cfg)
     local out = {}

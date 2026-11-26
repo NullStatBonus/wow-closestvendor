@@ -121,6 +121,9 @@ function C.New(env)
     local noticed = {} -- professions already told about having no known trainer
     local noticedReagent = {} -- reagents already told about having no known seller
     local lowReagents = {} -- item id -> { item, count, name } for the reagents low at the last Evaluate
+    -- The reagents watched at the last Evaluate, "<item id>:<count>" sorted by id and joined by ",",
+    -- "none" when none is watched, nil before the first Evaluate; and the counts by item id.
+    local watchedText, watchedCount
     local lowSupply = {} -- "food"/"water"/"pet" -> { count, name, bits } for the supplies low at the last Evaluate
     local noticedSupply = {} -- supplies already told about having no known seller
     local SUPPLY = { food = true, water = true, pet = true }
@@ -296,6 +299,8 @@ function C.New(env)
     -- a fight inside a dungeon does not change the reason.
     local HOLD = { instance = "trigger held in an instance: ", dead = "trigger held while dead: ",
         combat = "trigger held in combat: " }
+    local REMIND_HOLD = { instance = "reminder held in an instance: ", dead = "reminder held while dead: ",
+        combat = "reminder held in combat: " }
     local holdWhy, held = nil, {}
     local ammoSeen -- the ammo kind at the last check, "none" without one, "off" with the warning off: each change is logged once
 
@@ -519,10 +524,19 @@ function C.New(env)
         local free, dur, combat, inside = env.freeSlots(), env.lowestDurability(), fighting or isDead, instance()
         -- Reagents.Low is the one "is it low" test for reagents; the status window uses it too.
         local items, watched = {}, {}
-        for _, r in ipairs(env.reagents and env.reagents() or {}) do
+        local list = env.reagents and env.reagents() -- nil: the class or the spells are unknown
+        for _, r in ipairs(list or {}) do
             items[#items + 1] = r.item
             watched[r.item.id] = r
         end
+        local ids = {}
+        watchedCount = {}
+        for id, r in pairs(watched) do ids[#ids + 1] = id; watchedCount[id] = r.count end
+        table.sort(ids)
+        for i, id in ipairs(ids) do ids[i] = id .. ":" .. tostring(watched[id].count) end
+        watchedText = #ids > 0 and table.concat(ids, ",") or "none"
+        -- Unknown is not "none": the entry answers nothing until a check can read the reagents.
+        if list == nil then watchedText, watchedCount = nil, nil end
         lowReagents = {}
         local lowIds = {}
         for _, low in ipairs(ns.Reagents.Low(items, function(id) return watched[id].count end, env.cfg.reagentThreshold)) do
@@ -585,7 +599,11 @@ function C.New(env)
             log("retrying the " .. self.pending .. " request")
             place(self.pending, self.pendingId)
         end
-        local due = triggers.Reminders(remindKeys, combat, inside ~= nil)
+        local due, heldBack = triggers.Reminders(remindKeys, combat, inside ~= nil)
+        for _, key in ipairs(why and heldBack or {}) do
+            local line = REMIND_HOLD[why] .. key
+            if not held[line] then held[line] = true; log(line) end
+        end
         for i, key in ipairs(due) do remind(key, remindCount[key], i > 1) end -- one sound for the batch
     end
 
@@ -654,18 +672,18 @@ function C.New(env)
     -- when there is nothing to ask about.
     local function testSupply(kind)
         local s = env.supplies and env.supplies()
-        if not s then return L["Your bags cannot be read right now."] end
+        if not s then return L["Your bags cannot be read right now."], "the bags cannot be read" end
         local key = kind == "petfood" and "pet" or kind
-        if key == "water" and not ns.Supplies.UsesMana(s.class) then return L["Your class does not use water."] end
+        if key == "water" and not ns.Supplies.UsesMana(s.class) then return L["Your class does not use water."], "the class does not use water" end
         if key == "pet" and not (s.class == "HUNTER" and ns.Supplies.Want("pet", s.diets)) then
-            return L["There is no pet to feed."]
+            return L["There is no pet to feed."], "no pet to feed"
         end
         local name = supplyName(key, s.diets)
         local v, why, onMap, x, y = findVendor("supply", nil, nil, ns.Supplies.Want(key, s.diets))
         if why == "nopos" then
-            return L["No map position here (dungeons and some areas have none). Try again outside."]
+            return L["No map position here (dungeons and some areas have none). Try again outside."], "no map position here"
         elseif why == "novendor" then
-            return noVendorText("supply", name)
+            return noVendorText("supply", name), "no known vendor"
         end
         offer("supply", v, onMap, x, y, s.totals and s.totals[key] or 0, nil, name, key)
     end
@@ -685,26 +703,32 @@ function C.New(env)
         end
     end
 
-    -- For /cvn test: ask the usual question for kind, ignoring triggers and combat.
-    -- Returns a message when there is nothing to ask about, otherwise nil.
-    function self.Test(kind)
-        log("test command: " .. kind)
+    -- The test itself: nil when it asked, else the chat message and why, for the debug log.
+    local function test(kind)
         if kind == "food" or kind == "water" or kind == "petfood" then return testSupply(kind) end
         if kind == "remind" then return testRemind() end
         local r
         if kind == "reagent" then
             r = (env.reagents and env.reagents() or {})[1]
             if not r then
-                return L["No class reagent to ask about. Your class has none, or you do not know the spells that use them."]
+                return L["No class reagent to ask about. Your class has none, or you do not know the spells that use them."], "no class reagent watched"
             end
         end
         local v, why, onMap, x, y = findVendor(kind, r and r.item)
         if why == "nopos" then
-            return L["No map position here (dungeons and some areas have none). Try again outside."]
+            return L["No map position here (dungeons and some areas have none). Try again outside."], "no map position here"
         elseif why == "novendor" then
-            return noVendorText(kind, r and r.name)
+            return noVendorText(kind, r and r.name), "no known vendor"
         end
         offer(kind, v, onMap, x, y, r and r.count, nil, r and r.name, r and r.item.id)
+    end
+    -- For /cvn test: ask the usual question for kind, ignoring triggers and combat. Returns a message
+    -- when there is nothing to ask about (logged as "test command: nothing asked: <why>"), otherwise nil.
+    function self.Test(kind)
+        log("test command: " .. kind)
+        local problem, why = test(kind)
+        if problem then log("test command: nothing asked: " .. tostring(why)) end
+        return problem
     end
 
     -- Where a direct pin searches from: nil in the open world (the player's position). In an instance,
@@ -1248,6 +1272,12 @@ function C.New(env)
 
     -- The vendor request that is open or active and the item id for a reagent, or nil (Triggers.Active).
     function self.Active() return triggers.Active() end
+    -- What the last Evaluate watched (see watchedText), read by the CheckThat reagents entry: no game
+    -- read. With an item id, that reagent's count, or nil when it is not watched.
+    function self.Reagents(id)
+        if id ~= nil then return watchedCount and watchedCount[tonumber(id)] end
+        return watchedText
+    end
 
     return self
 end

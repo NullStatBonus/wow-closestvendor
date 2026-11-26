@@ -507,6 +507,9 @@ The legacy `test` commands are live integration tests: accepting a question can 
   - Each change of the ammo the addon watches is logged once: "ammo watched: arrow", or "ammo not watched: ..." for a thrown weapon, a wand, no ranged weapon or the ammo warning turned off.
   - Each vendor or trainer window logs what the addon learned from it, for example "vendor learned: Name (npc 1234), new" (or "updated", "unchanged"); a class trainer logs "trainer window: nothing learned: not a profession trainer". Targeting an NPC that will not trade with you logs its standing. At login the addon logs what it found of NorgannonDB.
   - A merchant window logs whether it cleared your waypoint or kept a trainer waypoint. Each profession check names the skills near their limit that it does not ask about, and why ("level 20 needed", "the last tier", ...), and why it asked nothing ("a question is open"). A question with two targets logs both, with the preference that put one first.
+  - The status window logs what it shows when that changes, for example "status window: shown, rows: bags low, durability" or "status window: hidden". A count change alone logs nothing, and a demo, preview or Move logs nothing.
+  - Each setting you change, by command or on the settings page, logs one line, for example "setting changed: bagThreshold 2 -> 5". The settings page logs a moved slider once, a second after you stop.
+  - A purchase question logs "ammo buy: asked" (or "reagent buy: asked") once it shows, and "ammo buy: declined" when you click No or press Escape. An ammo purchase cut short by your gold ends with "(all you could afford)". A test command that asks nothing logs why, for example "test command: nothing asked: the class does not use water".
   - Closing a merchant with a purchase question open logs "purchase question closed with the merchant: ammo" (or "reagents"). Each purchase logs what it bought: only the purchases the game took, with a "FAILED:" line for any that did not go through. A merchant window that closes an open vendor question logs "question closed: merchant opened (sell)" (or the question's kind).
 - `/cvn debug off` turns it off.
 - `/cvn log` shows a report that you can copy.
@@ -648,7 +651,7 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 - A sound-pack sound needs the addon that shares it. While that addon is off, the whisper ping plays instead, and your choice stays saved.
 - The text of the addon is English only. You can add other languages. See [docs/localization.md](docs/localization.md).
 - The addon was written and tested against fake game APIs. The in-game checks are a CheckThat test plan, `plans/closestvendor.yaml`.
-- With the CheckThat test runner installed, the addon gives it read-only values for automatic checks: its version, a setting, the open warning, what the account learned, an NPC's standing, the waypoint method and what NorgannonDB gave. Without CheckThat, nothing changes.
+- With the CheckThat test runner installed, the addon gives it read-only values for automatic checks: its version, a setting, the open warning, what the account learned, an NPC's standing, the waypoint method, what NorgannonDB gave, what the status window shows, a saved setting by its saved name and the reagents the warning watches. Without CheckThat, nothing changes.
 
 ## Problems?
 

@@ -1541,6 +1541,24 @@ eq(#w.sounds, 0, "combat: no sound until the reminder shows")
 w.combat = false
 w.c.Evaluate()
 eq(#w.sounds, 1, "after combat")
+-- The reminder combat held back is logged once, then the reminder after combat ends, in that order.
+local function at(w2, text) for i, m in ipairs(w2.logs) do if m:find(text, 1, true) == 1 then return i end end end
+w = supply("MAGE", { food = 2, water = 30, healthstone = 0 }, nil, { [587] = true }, { combat = true })
+w.c.Evaluate()
+w.c.Evaluate()
+eq(count(w, "reminder held in combat: food"), 1, "a reminder combat holds back is logged once: " .. table.concat(w.logs, " / "))
+eq(at(w, "reminder: "), nil, "no reminder in combat")
+w.combat = false
+w.c.Evaluate()
+eq((at(w, "reminder: food") or 0) > (at(w, "reminder held in combat: food") or math.huge), true, "the reminder comes after the hold")
+w.c.Evaluate()
+eq(count(w, "reminder held in combat: food"), 1, "already shown: nothing more is held")
+w = supply("WARLOCK", { food = 30, water = 30, healthstone = 0 }, nil, { [6201] = true }, { instance = "party" })
+w.c.Evaluate()
+eq(count(w, "reminder held in an instance: healthstone"), 1, "an instance holds the reminder back too")
+w = supply("MAGE", { food = 2, water = 30, healthstone = 0 }, nil, { [587] = true })
+w.c.Evaluate()
+eq(at(w, "reminder held "), nil, "out of combat: nothing is held")
 w = supply("MAGE", { food = 2, water = 30, healthstone = 0 }, nil, { [587] = true }, { cfg = { remindSound = "none" } })
 w.c.Evaluate()
 eq(table.concat(w.sounds, ","), "none", "none is passed on; the game side plays nothing for it")
@@ -2300,6 +2318,47 @@ do
     w = world({ instance = "party", pos = false, anchors = { last = LAST } })
     w.c.Go("sell")
     eq(logged(w, "direct pin: the search started from your last position outside"), true, "last position anchor logged")
+end
+
+-- /cvn test that asks nothing writes why, after the test command line.
+do
+    local wt = supply("WARRIOR", { food = 30, water = 0, healthstone = 0 })
+    eq(wt.c.Test("water"), "Your class does not use water.", "test water as a warrior: the message")
+    eq(wt.logs[#wt.logs], "test command: nothing asked: the class does not use water", "test water: why nothing was asked")
+    eq(wt.logs[#wt.logs - 1], "test command: water", "after the test command line")
+    wt = supply("HUNTER", { food = 30, water = 0, pet = 0, healthstone = 0 })
+    wt.c.Test("petfood")
+    eq(wt.logs[#wt.logs], "test command: nothing asked: no pet to feed", "test petfood without a pet")
+    wt = reagent({ reagents = {} })
+    wt.c.Test("reagent")
+    eq(wt.logs[#wt.logs], "test command: nothing asked: no class reagent watched", "test reagent with nothing watched")
+    wt = reagent({ buckets = {} })
+    wt.c.Test("reagent")
+    eq(wt.logs[#wt.logs], "test command: nothing asked: no known vendor", "test reagent with no seller known")
+    wt = reagent({ reagents = { { item = POWDER, count = 80, name = "Arcane Powder" } } })
+    wt.c.Test("reagent")
+    eq(has(wt, "test command: nothing asked"), false, "a test that asks writes no nothing-asked line")
+end
+
+-- Reagents(): what the last Evaluate watched, for the CheckThat reagents entry; no game read.
+do
+    local wr = reagent({ reagents = { { item = PORTALS, count = 2, name = "Rune of Portals" }, { item = POWDER, count = 7, name = "Arcane Powder" } } })
+    eq(wr.c.Reagents(), nil, "reagents: nothing before the first check")
+    wr.c.Evaluate()
+    eq(wr.c.Reagents(), "17020:7,17032:2", "reagents: id:count sorted by id")
+    eq(wr.c.Reagents(17032), 2, "reagents: one reagent's count")
+    eq(wr.c.Reagents("17020"), 7, "reagents: an id typed as text")
+    eq(wr.c.Reagents(1), nil, "reagents: not watched")
+    wr.reagents = {}
+    wr.c.Evaluate()
+    eq(wr.c.Reagents(), "none", "reagents: none watched")
+    -- The reagents cannot be read (class unknown): nothing, never "none".
+    wr.reagents = { { item = POWDER, count = 7, name = "Arcane Powder" } }
+    wr.c.Evaluate()
+    wr.reagents = nil
+    wr.c.Evaluate()
+    eq(wr.c.Reagents(), nil, "reagents: nothing when the list is unknown")
+    eq(wr.c.Reagents(17020), nil, "reagents: no count when the list is unknown")
 end
 
 H.done()

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.11.3
+
+- **Changed: The debug log shows more of what the addon decides about buying, supplies and the status window.** CheckThat can check more of them without you.
+- Changed: The debug log keeps the last 1000 lines. Before, it kept 300.
+
 ## 1.11.2
 
 - **Changed: The debug log shows more of what the addon decides about vendors, trainers and waypoints.** CheckThat can check more of them without you.

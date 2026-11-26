@@ -14,7 +14,8 @@
 --   env.shiftDown()     true while Shift is held
 --   env.choiceTitle(row)  tooltip title when a routable row has other sellers to pick from, else nil;
 --                       env.choose(row, anchor) opens the menu. Without them there are no chevrons.
--- Tracker.New(env) returns { Show(rows), Demo(rows), Apply(), Reset(), frame }.
+-- Tracker.New(env) returns { Show(rows), Demo(rows), Apply(), Reset(), frame }. env.moveEnded, when
+-- given, is called after Move ends (Done or Cancel) and the real rows are drawn again.
 local _, ns = ...
 
 local L = ns.L
@@ -225,6 +226,15 @@ function T.New(env)
     -- The row buttons in use, for tests.
     function self.Buttons() return buttons end
 
+    -- Whether the frame is on screen now, as the game says (nil when it cannot tell), and whether
+    -- made-up rows (a demo, a preview or Move) are drawn in place of the real ones.
+    function self.Shown()
+        local ok, v = pcall(f.IsShown, f)
+        if not ok then return nil end
+        return v and true or false
+    end
+    function self.Demoing() return demo ~= nil end
+
     if ns.Move then
         transaction = ns.Move.New({
             locked = function() return cfg.hudLocked end,
@@ -240,7 +250,9 @@ function T.New(env)
                 if escapeMode then escapeMode(true) end
                 if moveControls then moveControls:Show() end
             end,
-            finish = function() f:SetFrameStrata("MEDIUM"); if escapeMode then escapeMode(false) end; if moveControls then moveControls:Hide() end; self.Demo(nil) end,
+            finish = function() f:SetFrameStrata("MEDIUM"); if escapeMode then escapeMode(false) end; if moveControls then moveControls:Hide() end; self.Demo(nil)
+                if env.moveEnded then env.moveEnded() end -- the real rows are back: the owner logs them again
+            end,
         })
         self.Move = transaction
         moveControls = CreateFrame("Frame", nil, f)

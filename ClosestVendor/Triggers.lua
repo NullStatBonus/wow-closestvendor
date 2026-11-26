@@ -171,20 +171,24 @@ function T.New(cfg)
 
     -- Notice-only reminders (mage conjure, warlock healthstone): list is the keys whose condition holds.
     -- Returns the keys to announce now, each once until its condition clears. Nothing is announced
-    -- (and nothing used up) in combat or in an instance, so it comes later if it still holds. A reminder
-    -- never touches a request that is open or active.
+    -- (and nothing used up) in combat or in an instance, so it comes later if it still holds; the keys
+    -- held back that way are the second result. A reminder never touches a request that is open or active.
     function self.Reminders(list, inCombat, inInstance)
         local present, due = {}, {}
         if cfg.suppliesEnabled then for _, k in ipairs(list or {}) do present[k] = true end end
         for k in pairs(reminded) do if not present[k] then reminded[k] = nil end end
-        if inCombat or inInstance then return due end
+        if inCombat or inInstance then
+            local held = {}
+            for _, k in ipairs(list or {}) do if present[k] and not reminded[k] then held[#held + 1] = k end end
+            return due, held
+        end
         for _, k in ipairs(list or {}) do
             if present[k] and not reminded[k] then
                 reminded[k] = true
                 due[#due + 1] = k
             end
         end
-        return due
+        return due, {}
     end
 
     -- The vendor request that is open or active ("sell"/"ammo"/"reagent"/"repair"/a supply), or nil,

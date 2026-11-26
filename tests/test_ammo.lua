@@ -128,6 +128,36 @@ b, s, asked = run({ ammoBuyPrompt = true }, { space = function() return room end
 room = 100
 asked[1][2]()
 eq(#b .. "/" .. s[1], "1/Bought 100 Sharp for 4s 0c.", "Yes after buying by hand: only the room left")
+-- The smaller amount at Yes is logged with the room left, so an in-game check can tell it from the asked one.
+local yl = {}
+room = 400
+b, s, asked = run({ ammoBuyPrompt = true }, { space = function() return room end, log = function(t) yl[#yl + 1] = t end })
+room = 100
+asked[1][2]()
+eq(yl[#yl - 1], "ammo buy: at Yes: fewer than asked: 1 of 4 purchases, space 100", "Yes after buying by hand: the smaller amount is logged")
+eq(yl[#yl], "ammo buy: bought 100 of item 11", "then the purchase")
+eq(yl[#yl - 1]:match("fewer than asked: (%d+) of"), tostring(#b), "the fewer line names the purchases that went through")
+-- A call that failed at Yes writes no fewer line: the FAILED line says what happened.
+yl = {}
+room = 400
+local calls = 0
+b, s, asked = run({ ammoBuyPrompt = true }, { space = function() return room end, log = function(t) yl[#yl + 1] = t end,
+    buy = function() calls = calls + 1; return calls == 1 end })
+room = 200
+asked[1][2]()
+eq(calls, 2, "Yes after buying by hand: one call per purchase of the room left")
+for _, t in ipairs(yl) do eq(t:find("fewer than asked", 1, true), nil, "a failed call at Yes writes no fewer line: " .. t) end
+yl = {}
+room = 400
+b, s, asked = run({ ammoBuyPrompt = true }, { space = function() return room end, log = function(t) yl[#yl + 1] = t end })
+asked[1][2]()
+for _, t in ipairs(yl) do eq(t:find("fewer than asked", 1, true), nil, "the asked amount writes no fewer line: " .. t) end
+yl = {}
+b, s, asked = run({ ammoBuyPrompt = true }, { space = function() return room end, log = function(t) yl[#yl + 1] = t end })
+room = 0
+asked[1][2]()
+eq(yl[#yl], "ammo buy: nothing left to buy", "full at Yes: nothing left, no fewer line")
+eq(yl[#yl - 1]:find("fewer", 1, true), nil, "full at Yes: no fewer line before it")
 room = 400
 b, s, asked = run({ ammoBuyPrompt = true }, { space = function() return room end })
 room = 0
@@ -175,4 +205,14 @@ lines = {}
 b, s = run(nil, { log = function(t) lines[#lines + 1] = t end, buy = function() end })
 eq(boughtLine(lines), nil, "every call failed: no bought line")
 eq(#s, 0, "every call failed: no Bought chat line")
+-- The plan line names the mode and the ammo kind; a purchase cut short by gold says so in its bought line.
+lines = {}
+run({ arrowGrade = "best" }, { log = function(t) lines[#lines + 1] = t end })
+eq(lines[1], "ammo buy: best arrow item 12, price 900 per 100, space 400, money 100000", "plan line: mode and kind")
+lines = {}
+run(nil, { money = function() return 900 end, log = function(t) lines[#lines + 1] = t end })
+eq(lines[#lines], "ammo buy: bought 200 of item 11 (all you could afford)", "partial: the bought line says so")
+lines = {}
+run(nil, { log = function(t) lines[#lines + 1] = t end })
+eq(lines[#lines], "ammo buy: bought 400 of item 11", "a full purchase: no suffix")
 print("ok")

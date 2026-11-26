@@ -15,6 +15,7 @@ local function boot(opts)
         function f:SetTextColor(r, gr, b) self.color = r .. "," .. gr .. "," .. b end
         function f:Show() self.shown = true end
         function f:Hide() self.shown = false end
+        function f:IsShown() return self.shown end
         function f:SetSize(w, h) self.w, self.h = w, h end
         function f:SetScale(s) self.scale = s end
         function f:SetColorTexture(r, gr, b, a) self.rgb, self.alpha = r .. "," .. gr .. "," .. b, a end
@@ -69,7 +70,8 @@ local function boot(opts)
             choose = function(row, anchor) g.chosen = { row = row, anchor = anchor } end,
             go = function(row) g.went[#g.went + 1] = row.key end,
             openSettings = function() g.opened = g.opened + 1 end,
-            shiftDown = function() return g.shift end })
+            shiftDown = function() return g.shift end,
+            moveEnded = function() g.moveEnded = (g.moveEnded or 0) + 1 end })
     end
     return g
 end
@@ -329,7 +331,32 @@ eq(g.pos.x,321,"Done saves dropped x");eq(g.pos.y,-123,"Done saves dropped y")
 g.cfg.hudLocked=true;eq(t.Move.Begin(),false,"lock blocks Move")
 g.cfg.hudLocked=false;t.Move.Begin();g.cfg.hudLocked=true;t.Apply()
 eq(t.Move.active,false,"locking while moving cancels")
+-- Move ending (Done or Cancel) tells the owner, so it can log the real rows again.
+g.cfg.hudLocked=false;g.moveEnded=0;t.Move.Begin();t.Move.Done();eq(g.moveEnded,1,"Done calls moveEnded")
+t.Move.Begin();t.Move.Cancel();eq(g.moveEnded,2,"Cancel calls moveEnded")
+t.Move.Cancel();eq(g.moveEnded,2,"Cancel with no Move running does not call it")
 local alpha=g.cfg.hudAlpha;local scale=g.cfg.hudScale;t.Reset()
 eq(g.cfg.hudAlpha,alpha,"Reset preserves opacity");eq(g.cfg.hudScale,scale,"Reset preserves scale")
+
+-- Shown and Demoing: whether the frame is on screen, as the frame says, and whether made-up rows are drawn.
+do
+    local gs = boot()
+    local ts = gs.new()
+    eq(ts.Shown(), false, "Shown: hidden before any row")
+    ts.Show(ROWS)
+    eq(ts.Shown(), true, "Shown: the rows are drawn")
+    eq(ts.Demoing(), false, "Demoing: the real rows")
+    ts.Demo({ ROWS[1] })
+    eq(ts.Demoing(), true, "Demoing: made-up rows drawn")
+    ts.Demo(nil)
+    eq(ts.Demoing(), false, "Demoing: ended")
+    ts.Show({})
+    eq(ts.Shown(), false, "Shown: no rows, hidden")
+    -- A failed read is unknown (nil), never "hidden".
+    for _, f in ipairs(gs.frames) do
+        if f.name == "ClosestVendorTracker" then f.IsShown = function() error("no read", 0) end end
+    end
+    eq(ts.Shown(), nil, "Shown: nil when the game cannot tell")
+end
 
 H.done()
