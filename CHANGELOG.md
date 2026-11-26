@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.1
+
+- **Fixed: A known vendor or trainer keeps its saved place when you stand a few steps away.** Before, each visit saved a new place.
+
 ## 1.13.0
 
 - **New: `/cvn test trainer` asks about the nearest profession trainer the addon knows.** You do not need a profession.

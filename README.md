@@ -536,11 +536,13 @@ It learns more as you play.
 - If the game has not loaded every item in the vendor's list yet, the addon keeps what it already knew about that vendor and reads the list again when the items arrive.
 - A learned vendor replaces a shipped vendor with the same NPC id.
 - The addon saves learned vendors between sessions.
+- When you open a known vendor again a few steps from where you stood before, the saved position stays (on the same map, within 0.5% of the map on each axis). The debug log then says "unchanged". A vendor that walks further, or sells something new, is saved again ("updated").
 
 Trainers work the same way, but the addon ships no trainers.
 
 - When you open a profession trainer window, the addon records where the trainer is.
 - It also records which professions the trainer teaches.
+- A few steps of difference on a later visit keep the saved position, as for vendors. Auctioneers work the same way.
 - All your characters share the trainers.
 - Each character keeps its own list of the professions it saw at a trainer or in a crafting window.
 

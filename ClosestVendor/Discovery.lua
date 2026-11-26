@@ -6,12 +6,24 @@ local _, ns = ...
 local D = {}
 ns.Discovery = D
 
+-- A repeat visit this close (a fraction of the map, on both axes) to the saved position keeps it: the
+-- player stands a step to the side, not a moved npc. A few yards in a city.
+D.NEAR = 0.005
+
+-- On the same map and within D.NEAR of old's position, new takes old's position (index 3 map, 4 x, 5 y).
+local function keepNear(old, new)
+    if not old or old[3] ~= new[3] then return end
+    if type(old[4]) ~= "number" or type(old[5]) ~= "number" or type(new[4]) ~= "number" or type(new[5]) ~= "number" then return end
+    if math.abs(old[4] - new[4]) <= D.NEAR and math.abs(old[5] - new[5]) <= D.NEAR then new[4], new[5] = old[4], old[5] end
+end
+
 -- learned: table keyed by npc id (the SavedVariables table). Returns true if stored/changed.
 function D.Record(learned, rec)
     local id = rec and rec[1]
     if type(id) ~= "number" or id <= 0 then return false end
     local new = { rec[1], rec[2], rec[3], rec[4], rec[5], rec[6], rec[7], rec[8] or 0, rec[9] or 0, rec[10] or 0 }
     local old = learned[id]
+    keepNear(old, new)
     if old then
         local same = true
         for i = 1, 10 do if (old[i] or (i >= 8 and 0)) ~= new[i] then same = false break end end
@@ -34,6 +46,7 @@ function D.RecordTrainer(learned, rec, trades)
         if not set[name] then set[name] = true; changed = true end
     end
     local new = { rec[1], rec[2], rec[3], rec[4], rec[5], rec[6], set }
+    keepNear(old, new)
     if old then
         for i = 1, 6 do if old[i] ~= new[i] then changed = true end end
         if not changed then return false end
@@ -49,6 +62,7 @@ function D.RecordAuctioneer(learned, rec)
     if type(id) ~= "number" or id <= 0 then return false end
     local new = { rec[1], rec[2], rec[3], rec[4], rec[5], rec[6] }
     local old = learned[id]
+    keepNear(old, new)
     if old then
         local same = true
         for i = 1, 6 do if old[i] ~= new[i] then same = false break end end
