@@ -3090,4 +3090,219 @@ do
     eq(lines(gm, "question shown: reagent Arcane Powder"), 2, "reagents off then on: asked again at once")
 end
 
+-- Test settings mode (spec saved-settings, diagnostics): the player's own settings, status window and toast
+-- positions are put aside and the defaults are used; off brings them back exactly. The three tables are
+-- refilled in place, a switch is not a setting change, and what was begun under one set ends.
+do
+    local real = { bagThreshold = 4, vendorMode = "auto", reagentOff = { [17020] = true }, hudRow = { bags = "always" }, hudColor = "ff0000" }
+    local g = boot({ charDb = { cfg = real, hud = { point = "TOP", relPoint = "TOP", x = 5, y = 6 }, toast = { point = "CENTER", x = 9 } } })
+    g.env.ColorPickerFrame = { SetupColorPickerAndShow = function(_, t) g.pick = t end, GetColorRGB = function() return 0, 1, 0 end }
+    login(g)
+    local S = g.env.SlashCmdList.CLOSESTVENDOR
+    local char = g.env.ClosestVendorCharDB
+    local cfgRef, hudRef, toastRef = char.cfg, char.hud, char.toast
+    local function header()
+        S("log")
+        for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then return f.box.text end end
+        return ""
+    end
+    S("debug on")
+    eq(has(header(), "test settings: off"), true, "report: test settings off")
+    S("testsettings off")
+    eq(has(logText(g), "test settings: not on"), true, "off while off: refused and logged")
+    eq(char.cfg.bagThreshold, 4, "off while off changes nothing")
+
+    -- A colour pick and a route question begun under the player's own settings.
+    S("hud color")
+    eq(g.pick ~= nil, true, "the colour picker is open")
+    g.autoAccept = false
+    S("testsettings on")
+    eq(has(logText(g), "test settings: on (own settings put aside)"), true, "on is logged")
+    eq(rawequal(char.cfg, cfgRef) and rawequal(char.hud, hudRef) and rawequal(char.toast, toastRef), true, "the three tables are the same ones, refilled in place")
+    eq(char.cfg.bagThreshold, 2, "test settings: default bag threshold")
+    eq(char.cfg.vendorMode, "ask", "test settings: default vendor mode")
+    eq(char.cfg.hudColor, "000000", "test settings: default colour")
+    eq(next(char.hud), nil, "test settings: status window at its default place")
+    eq(next(char.toast), nil, "test settings: toast at its default place")
+    eq(char.cfg.notificationStyle, "toast", "test settings: the style a new character gets")
+    eq(char.realSettings.cfg.bagThreshold, 4, "the player's own settings are put aside")
+    eq(has(header(), "test settings: on"), true, "report: test settings on")
+    g.pick.swatchFunc()
+    eq(char.cfg.hudColor, "000000", "a colour pick begun before the switch changes nothing")
+    S("dur 100")
+    local log = logText(g)
+    eq(has(log, "setting changed: durThreshold 20 -> 100"), true, "a change under test settings is logged")
+    eq(has(log, "setting changed: bagThreshold"), false, "the switch itself is not a setting change")
+
+    -- on while on: a clean test set, the stash untouched.
+    S("bags 99")
+    S("testsettings on")
+    eq(has(logText(g), "test settings: reset to defaults"), true, "on while on: logged as a reset")
+    eq(char.cfg.bagThreshold, 2, "on while on: defaults again")
+    eq(char.realSettings.cfg.bagThreshold, 4, "on while on: the stash is kept")
+
+    -- A route question open at the switch is withdrawn and nothing is bought.
+    g.free = 1; g.onEvent("BAG_UPDATE_DELAYED")
+    eq(g.popup ~= nil, true, "a question is open under the test set")
+    local before = logText(g)
+    char.realSettings.cfg.durThreshold = nil -- a default added since the stash
+    S("testsettings off")
+    eq(char.cfg.durThreshold, 20, "a default added since the stash is filled at the restore")
+    eq(g.popup, nil, "the open question closes at the switch")
+    eq(has(logText(g), "question withdrawn: test settings switched"), true, "the withdrawal is logged")
+    eq(has(logText(g), "test settings: off (own settings restored)"), true, "off is logged")
+    eq(rawequal(char.cfg, cfgRef) and rawequal(char.hud, hudRef) and rawequal(char.toast, toastRef), true, "off refills the same tables")
+    eq(char.cfg.bagThreshold, 4, "own bag threshold is back")
+    eq(char.cfg.vendorMode, "auto", "own vendor mode is back")
+    eq(char.cfg.reagentOff[17020], true, "own nested values are back")
+    eq(char.cfg.hudRow.bags, "always", "own row mode is back")
+    eq(char.cfg.hudColor, "ff0000", "own colour is back")
+    eq(char.hud.x, 5, "own status window position is back")
+    eq(char.toast.x, 9, "own toast position is back")
+    eq(char.realSettings, nil, "nothing is put aside any more")
+    eq(has(header(), "test settings: off"), true, "report: test settings off again")
+    eq(has(logText(g):sub(#before + 1), "setting changed"), false, "the restore is not a setting change either")
+end
+
+-- The mode lasts across a reload: login says so in the log and in chat.
+do
+    local g = boot({ charDb = { cfg = { bagThreshold = 4 } } })
+    login(g)
+    local S = g.env.SlashCmdList.CLOSESTVENDOR
+    S("debug on"); S("testsettings on")
+    local g2 = boot({ charDb = g.env.ClosestVendorCharDB }); login(g2)
+    local e = g2.env.ClosestVendorCharDB.log.entries
+    local n = #e
+    eq(e[n - 1] and e[n - 1].msg ~= nil, true, "the log is kept")
+    local text = logText(g2)
+    eq(text:find("---- login ----\ntest settings: on at login", 1, true) ~= nil, true, "login marker, then the test settings line: " .. text)
+    local said = false
+    for _, p in ipairs(g2.printed) do if p:find("/cvn testsettings off", 1, true) then said = true end end
+    eq(said, true, "chat at login names /cvn testsettings off")
+    eq(g2.env.ClosestVendorCharDB.cfg.bagThreshold, 2, "the test set is still in use after the reload")
+    g2.env.SlashCmdList.CLOSESTVENDOR("testsettings off")
+    eq(g2.env.ClosestVendorCharDB.cfg.bagThreshold, 4, "off after a reload restores the own settings")
+end
+
+-- Test settings: what holds the old settings ends at the switch (review findings): a pending purchase retry,
+-- purchase questions and their stale answers, an ordinary drag, Move, colour picks from the page, a demo, a
+-- preview and the confirmations of /cvn log clear.
+do
+    local function named3(g, n) for _, f in ipairs(g.frames) do if f.name == n then return f end end end
+    local function count(g, text) local n = 0 for _, e in ipairs(g.env.ClosestVendorCharDB.log.entries) do if e.msg == text then n = n + 1 end end return n end
+    local function arrowShop()
+        local gg = boot({ tomtom = true }); login(gg)
+        local e = gg.env
+        gg.npc = { guid = "Creature-0-4372-0-55-5557-0000A1B2C3", name = "Arrow Shop" }
+        gg.pos = { map = 100, x = 0.6, y = 0.5 }
+        gg.equipped = { [18] = 100 }; gg.counts = {}
+        gg.stock, gg.bought = { 200 }, {}
+        e.ClosestVendorCharDB.cfg.arrowGrade = "best"
+        e.UnitLevel = function() return 30 end
+        e.GetMoney = function() return 100000 end
+        e.GetMerchantItemInfo = function() return "Rough Arrow", "tex", 100, 200, -1, true, false end
+        e.BuyMerchantItem = function(i) gg.bought[#gg.bought + 1] = i end
+        e.C_Container = { GetContainerNumFreeSlots = function(b) if b == 1 then return 1, 1 end return 0, 0 end }
+        e.GetContainerNumSlots = function(b) return b == 1 and 1 or 0 end
+        e.GetContainerItemInfo = function() return nil end
+        gg.loaded = function() e.GetItemInfo = function() return "Rough Arrow", "l", 1, 1, 5, "", "", 200 end end
+        e.GetItemInfo = function() return nil end
+        gg.env.SlashCmdList.CLOSESTVENDOR("debug on")
+        return gg
+    end
+
+    -- A merchant purchase waiting for item data does not run under the other set.
+    local g = arrowShop()
+    g.onEvent("MERCHANT_SHOW")
+    g.env.SlashCmdList.CLOSESTVENDOR("testsettings on")
+    g.loaded()
+    g.onEvent("GET_ITEM_INFO_RECEIVED", 200)
+    eq(count(g, "item data arrived: trying the merchant purchase again"), 0, "a pending purchase retry is dropped at the switch")
+    eq(#g.bought, 0, "and nothing is bought")
+
+    -- The ammo question closes at the switch, and answering it later buys nothing.
+    g = arrowShop(); g.loaded(); g.autoAccept = false
+    g.env.ClosestVendorCharDB.cfg.ammoBuyPrompt = true
+    g.onEvent("MERCHANT_SHOW")
+    eq(g.popup and g.popup.which, "CLOSESTVENDOR_CONFIRM_AMMO", "an ammo question is open")
+    local stale = g.popup.accept
+    g.env.SlashCmdList.CLOSESTVENDOR("testsettings on")
+    eq(g.popup == nil or g.popup.which ~= "CLOSESTVENDOR_CONFIRM_AMMO", true, "the ammo question closes at the switch")
+    stale()
+    eq(#g.bought, 0, "answering the ammo question later buys nothing")
+
+    -- Same for the reagent question.
+    g = reagentShop(); g.env.SlashCmdList.CLOSESTVENDOR("reagentbuy on")
+    g.onEvent("MERCHANT_SHOW")
+    eq(g.popup and g.popup.which, "CLOSESTVENDOR_CONFIRM_REAGENTS", "a reagent question is open")
+    stale = g.popup.accept
+    g.env.SlashCmdList.CLOSESTVENDOR("testsettings on")
+    eq(g.popup == nil or g.popup.which ~= "CLOSESTVENDOR_CONFIRM_REAGENTS", true, "the reagent question closes at the switch")
+    stale()
+    eq(#g.bought, 0, "answering the reagent question later buys nothing")
+
+    -- An ordinary Shift-drag in progress does not write into the other set.
+    g = boot(); login(g)
+    g.env.SlashCmdList.CLOSESTVENDOR("hud row bags always")
+    local w = window(g)
+    w.frame.StartMoving = function() end
+    w.frame.GetPoint = function() return "TOPLEFT", nil, "TOPLEFT", 40, -50 end
+    g.env.IsShiftKeyDown = function() return true end
+    w.rows[1].scripts.OnDragStart()
+    g.env.SlashCmdList.CLOSESTVENDOR("testsettings on")
+    w.rows[1].scripts.OnDragStop()
+    eq(next(g.env.ClosestVendorCharDB.hud), nil, "a drag begun before the switch saves no position into the test set")
+    g.env.SlashCmdList.CLOSESTVENDOR("testsettings off")
+    eq(next(g.env.ClosestVendorCharDB.hud), nil, "and none into the restored one")
+
+    -- Move ends at the switch; its Done does nothing after.
+    g = boot(); login(g)
+    g.ns.Options.Move("hud")
+    local done
+    for _, f in ipairs(g.frames) do if f.kind == "Button" and f.text == "Done" and f.parent and f.parent.parent and f.parent.parent.name == "ClosestVendorTracker" then done = f end end
+    eq(g.ns.Options.Move ~= nil and done ~= nil, true, "Move is on")
+    g.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    g.env.SlashCmdList.CLOSESTVENDOR("testsettings on")
+    eq(g.ns.Options.Move ~= nil and window(g).frame.shown, false, "Move's placeholder is gone")
+    done.scripts.OnClick()
+    eq(next(g.env.ClosestVendorCharDB.hud), nil, "Done after the switch saves no position")
+
+    -- A colour picked on the settings page after the switch changes nothing.
+    local gc = boot({ settings = true })
+    gc.env.ColorPickerFrame = { SetupColorPickerAndShow = function(_, t) gc.pick = t end, GetColorRGB = function() return 0, 1, 0 end }
+    login(gc)
+    local function find(node, name)
+        if type(node) ~= "table" then return end
+        if node.name == name and node.func then return node end
+        for _, v in pairs(node) do local r = type(v) == "table" and find(v, name); if r then return r end end
+    end
+    local button = find(gc.settings.tree, "Background color")
+    eq(button ~= nil, true, "the page has the Background color button")
+    button.func()
+    eq(gc.pick ~= nil, true, "the page opened the picker")
+    gc.env.SlashCmdList.CLOSESTVENDOR("testsettings on")
+    gc.pick.swatchFunc()
+    eq(gc.env.ClosestVendorCharDB.cfg.hudColor, "000000", "a page colour pick begun before the switch changes nothing")
+
+    -- A demo and a preview end at the switch.
+    g = boot({ tomtom = true }); login(g); flush(g)
+    g.env.SlashCmdList.CLOSESTVENDOR("set appearance.notification-style toast")
+    g.env.SlashCmdList.CLOSESTVENDOR("preview notice")
+    eq(named3(g, "ClosestVendorSampleToast").shown, true, "a preview is showing")
+    g.autoAccept = false; g.timers = {}
+    g.env.SlashCmdList.CLOSESTVENDOR("demo")
+    local pins = #g.tomtom
+    g.env.SlashCmdList.CLOSESTVENDOR("testsettings on")
+    eq(named3(g, "ClosestVendorSampleToast").shown, false, "the preview ends at the switch")
+    for _ = 1, 10 do if #g.timers == 0 then break end table.remove(g.timers, 1)() end
+    eq(#g.tomtom, pins, "the demo sets no more waypoints after the switch")
+
+    -- The clear-log confirmation closes at the switch.
+    g = boot(); login(g); g.autoAccept = false
+    g.env.SlashCmdList.CLOSESTVENDOR("log clear")
+    eq(g.popup and g.popup.which, "CLOSESTVENDOR_CLEAR_LOG", "the clear confirmation is open")
+    g.env.SlashCmdList.CLOSESTVENDOR("testsettings on")
+    eq(g.popup, nil, "the clear confirmation closes at the switch")
+end
+
 H.done()

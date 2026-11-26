@@ -596,4 +596,55 @@ do -- #60: /cvn set with a missing, fractional, unknown or out-of-range value is
     eq(cs.bagThreshold, 200, "the top of the range is accepted")
 end
 
+-- Test settings mode: parsing, and the pure swap.
+do
+    local out, action = M.Run(fresh(), "testsettings on")
+    eq(action and action[1], "testsettings", "testsettings on is an action")
+    eq(action and action[2], true, "testsettings on: on")
+    out, action = M.Run(fresh(), "  TestSettings   OFF ")
+    eq(action and action[2], false, "testsettings off: case and spacing tolerated")
+    out, action = M.Run(fresh(), "testsettings")
+    eq(has(out, "Use /cvn testsettings on or /cvn testsettings off."), true, "no argument: usage")
+    eq(action[1], "read", "no argument: nothing to swap")
+    out, action = M.Run(fresh(), "testsettings maybe")
+    eq(action[1], "read", "a bad argument: nothing to swap")
+
+    local function char()
+        local c = fresh()
+        c.bagThreshold = 4
+        c.reagentOff = { [17020] = true }
+        c.hudRow = { bags = "always" }
+        return { cfg = c, hud = { point = "TOP", x = 5 }, toast = { x = 9 }, professions = { Mining = true } }
+    end
+    local ch = char()
+    local cfgRef, hudRef, toastRef = ch.cfg, ch.hud, ch.toast
+    local defaults = { bagThreshold = 2, hudRow = {}, reagentOff = {} }
+    eq(M.SwapSettings(ch, true, defaults), "on", "first on")
+    eq(rawequal(ch.cfg, cfgRef) and rawequal(ch.hud, hudRef) and rawequal(ch.toast, toastRef), true, "the tables are kept")
+    eq(ch.cfg.bagThreshold, 2, "defaults in use")
+    eq(ch.cfg.durThreshold, nil, "only the defaults given, nothing of the own set")
+    eq(next(ch.hud), nil, "status window position emptied")
+    eq(next(ch.toast), nil, "toast position emptied")
+    eq(ch.realSettings.cfg.bagThreshold, 4, "the own settings are stashed")
+    eq(ch.realSettings.cfg ~= cfgRef, true, "the stash is a copy")
+    ch.cfg.hudRow.bags = "never"; ch.cfg.reagentOff[1] = true
+    eq(ch.realSettings.cfg.hudRow.bags, "always", "changing the test set does not touch the stash (nested)")
+    eq(ch.cfg.hudRow ~= defaults.hudRow, true, "the test set does not share tables with the defaults given")
+    eq(M.SwapSettings(ch, true, defaults), "reset", "on while on resets")
+    eq(ch.cfg.hudRow.bags, nil, "reset: test set back to defaults")
+    eq(ch.realSettings.hud.x, 5, "reset: the stash is kept")
+    eq(M.SwapSettings(ch, false), "off", "off")
+    eq(rawequal(ch.cfg, cfgRef) and rawequal(ch.hud, hudRef) and rawequal(ch.toast, toastRef), true, "off keeps the tables")
+    eq(ch.cfg.bagThreshold, 4, "own bag threshold back")
+    eq(ch.cfg.reagentOff[17020], true, "own nested value back")
+    eq(ch.cfg.reagentOff[1], nil, "no test value left")
+    eq(ch.cfg.hudRow.bags, "always", "own row mode back")
+    eq(ch.hud.x .. ch.hud.point, "5TOP", "own window position back")
+    eq(ch.toast.x, 9, "own toast position back")
+    eq(ch.realSettings, nil, "stash gone")
+    eq(ch.professions.Mining, true, "other character data untouched")
+    eq(M.SwapSettings(ch, false), "not on", "off while off")
+    eq(ch.cfg.bagThreshold, 4, "off while off changes nothing")
+end
+
 H.done()

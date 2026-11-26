@@ -7,7 +7,7 @@ preamble: |-
   |cff99ccffplans/closestvendor.yaml|r (this one: warnings, routes, holds, learning, buying, the report and find), |cff99ccffplans/closestvendor.ui.yaml|r (status window, visuals and settings) and |cff99ccffplans/closestvendor.addons.yaml|r (TomTom, WaypointUI, NorgannonDB and sound packs).
   Import one plan, finish it and export it (|cff99ccff/ct export|r, optionally |cff99ccff/cvn debug off|r, then |cff99ccff/reload|r) before you import the next: a run uses the last plan imported.
 
-  Start with the default thresholds and at least 3 free bag slots. The steps that change a threshold type the default back later.
+  Have at least 3 free bag slots. The setup step turns on test settings, so the plan runs on the default settings whatever yours are. The last step turns them off and your own settings come back. The steps that change a setting type the default back later.
   A step for one class, a profession or another addon says so at the start: press Skip when your character does not have it.
   Each step has one player action. An automatic step records its own result from the debug log or a CheckThat entry. A player step shows what to look at; the log lines are for the reviewer.
 logs:
@@ -165,7 +165,7 @@ sections:
     action:
       kind: manual
       text: CheckThat reads the ClosestVendor version.
-    expect: The ClosestVendor version is 1.11.3 or newer. If the step fails, copy ClosestVendor 1.11.3 into the game again.
+    expect: The ClosestVendor version is 1.12.0 or newer. If the step fails, copy ClosestVendor 1.12.0 into the game again.
     verify:
     - assertions
     call:
@@ -178,19 +178,20 @@ sections:
       addon: ClosestVendor
       key: entry.version
       op: ge
-      value: 11103
-      label: ClosestVendor is 1.11.3 or newer
-    notes: The entry returns major*10000 + minor*100 + patch, so 1.11.3 is 11103. It reads a fact, not the debug log, so it runs before debug logging is on. CheckThat too old to offer entries leaves this step unverified.
+      value: 11200
+      label: ClosestVendor is 1.12.0 or newer
+    notes: The entry returns major*10000 + minor*100 + patch, so 1.12.0 is 11200. It reads a fact, not the debug log, so it runs before debug logging is on. CheckThat too old to offer entries leaves this step unverified.
   - id: cv.s0.2
-    title: Turn on Lua errors and debug logging, then reload
+    title: Turn on Lua errors, debug logging and test settings, then reload
     action:
       kind: manual
-      text: Press Run. It turns on Lua error popups (|cff99ccff/console scriptErrors 1|r) and the debug log (|cff99ccff/cvn debug on|r), then reloads (|cff99ccff/reload|r).
+      text: Press Run. It turns on Lua error popups (|cff99ccff/console scriptErrors 1|r), the debug log (|cff99ccff/cvn debug on|r) and test settings (|cff99ccff/cvn testsettings on|r, which puts your own settings aside and uses the defaults), then reloads (|cff99ccff/reload|r).
       commands:
       - "/console scriptErrors 1"
       - "/cvn debug on"
+      - "/cvn testsettings on"
       - "/reload"
-    expect: The game reloads with no Lua error popup, and the debug log keeps recording after the reload.
+    expect: The game reloads with no Lua error popup, the debug log keeps recording and chat says test settings are on.
     verify:
     - assertions
     auto: true
@@ -202,9 +203,10 @@ sections:
       sequence:
       - contains: debug log turned on
       - contains: "---- login ----"
+      - contains: "test settings: on at login"
       scope: attempt
-      label: The debug log turned on and still records after the reload
-    notes: The login marker comes after the reload, so the Run command alone cannot pass the step. A Lua error popup is also caught by the last step of the plan, which reads CheckThat's error list.
+      label: The debug log turned on, and test settings were still on after the reload
+    notes: The login marker and the test settings line come after the reload, so the Run commands alone cannot pass the step. Test settings put the tester's own settings aside for the whole plan, so every step sees the defaults it assumes; the last step turns them off. A Lua error popup is also caught by the last step of the plan, which reads CheckThat's error list.
 - id: s1
   title: 'Selling: warning, waypoint and vendor'
   intro: One real sell warning from the question to the vendor. Have at least 3 free bag slots, and stand where a vendor the addon does not know is in reach.
@@ -776,20 +778,27 @@ sections:
       label: No merchant window opened, so the search used the vendors loaded at login
     notes: 'Player step. Drawing: the vendor name in the dialog. The vendor stands next to you, so it is the closest one. Opening a merchant window adds that vendor to the search again, so the step asks without opening it: only the vendor saved before the reload of check 6.1 can name it.'
   - id: cv.s6.3
-    title: No Lua error from ClosestVendor during the run
+    title: Turn test settings off, then check for Lua errors
     action:
       kind: manual
-      text: Nothing to do. CheckThat reads its list of Lua errors for this run.
-    expect: ClosestVendor raised no Lua error during this plan.
+      text: Press Run. It turns test settings off (|cff99ccff/cvn testsettings off|r) and your own settings come back. CheckThat then reads its list of Lua errors for this run.
+      commands:
+      - "/cvn testsettings off"
+    expect: Chat says your own settings are back, and ClosestVendor raised no Lua error during this plan.
     verify:
     - assertions
     auto: true
-    timeout: 15
+    timeout: 120
     assertions:
+    - kind: log
+      source: debug
+      contains: 'test settings: off (own settings restored)'
+      scope: attempt
+      label: Test settings are off and your own settings are back
     - kind: log
       source: errors
       pattern: "%[ClosestVendor%]"
       absent: true
       scope: session
       label: ClosestVendor raised no Lua error in this run
-    notes: 'Scope session reads CheckThat''s whole error list. CheckThat keeps an error only while a run is open, across /reload, up to the last 100, so the check covers every step of this run. CheckThat 0.21.0 has no scope for one run, and starting a run keeps the list: a ClosestVendor error from an earlier run (also of another ClosestVendor plan) fails this step too. When it fails, compare the error time with the start of this run. It passes when the 15 seconds end with no ClosestVendor error in the list. After this step, export the run (/ct export), optionally turn the debug log off (/cvn debug off), and type /reload so the game saves the log.'
+    notes: 'Scope session reads CheckThat''s whole error list. CheckThat keeps an error only while a run is open, across /reload, up to the last 100, so the check covers every step of this run. CheckThat 0.21.0 has no scope for one run, and starting a run keeps the list: a ClosestVendor error from an earlier run (also of another ClosestVendor plan) fails this step too. When it fails, compare the error time with the start of this run. It passes when the list has no ClosestVendor error after Run has finished. Press Run first: it turns test settings off and writes the line the first assertion reads. After this step, export the run (/ct export), optionally turn the debug log off (/cvn debug off), and type /reload so the game saves the log.'

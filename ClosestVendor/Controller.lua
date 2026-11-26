@@ -1113,14 +1113,17 @@ function C.New(env)
     -- The player changed zone or entered an instance: a warning's open question names a vendor
     -- chosen from where they were, so it is withdrawn and the warning is asked again at the next
     -- check outside an instance. Combat withdraws nothing: the player may still answer and route.
-    function self.OnPlaceChange()
+    local function withdraw(line)
         local a = asking
         asking = nil
         if not (a and a.prompt == promptId and env.questionOpen and env.questionOpen()) then return end
-        log("question withdrawn: the player changed zone")
+        log(line)
         cancelPrompt()
         triggers.Release(triggerOf(a.kind, a.id), a.id, true)
     end
+    function self.OnPlaceChange() withdraw("question withdrawn: the player changed zone") end
+    -- Test settings were switched: the open question was chosen under the other set of settings.
+    function self.OnSettingsSwap() withdraw("question withdrawn: test settings switched") end
 
     -- /cvn demo: a tour of real outcomes through the usual code. Each step searches the real vendor
     -- data, sets a real waypoint or asks a real question, and shows the real notification in the

@@ -3,7 +3,7 @@
 -- {"test", kind} with kind "sell", "repair", "arrow", "bullet", "reagent", "food", "water", "petfood" or "remind"; {"open"} for the settings page;
 -- {"find", text} for /cvn find; {"debug", on}; {"log"} to show the report; {"log", "clear"}; {"hud", "pick"} for /cvn hud color with no colour (open the colour picker); {"hud", "reset"} to put the status
 -- window back at its default position (lock, scale, opacity, text opacity, colour and row modes are
--- plain settings); {"demo"} for the tour of real routes, questions and notifications.
+-- plain settings); {"testsettings", on} for /cvn testsettings on|off (Core swaps the settings with SwapSettings); {"demo"} for the tour of real routes, questions and notifications.
 -- Run(cfg, msg, class): class is the player's class token ("MAGE"), needed by the reagent commands.
 local _, ns = ...
 
@@ -48,6 +48,7 @@ local HELP = {
     L["/cvn test food, water, petfood  ask about food, water or pet food now; /cvn test remind  show the conjure or healthstone reminder now"],
     L["/cvn debug on/off  record what the addon sees; /cvn log  show the report; /cvn log clear  empty it"],
     L["/cvn find <item link or name>  show the nearest known sellers of a supply or class reagent"],
+    L["/cvn testsettings on/off  use fresh default settings for testing, then bring your own back"],
 }
 
 local function gradeName(g)
@@ -298,6 +299,42 @@ local function setting(cfg, key, arg, lo, hi, what)
     return status(cfg)
 end
 
+-- Test settings mode, the pure part. char is the saved per-character table: char.cfg, char.hud and char.toast
+-- are emptied and refilled, never replaced (the rest of the addon holds them), and char.realSettings is the
+-- stash of the player's own { cfg, hud, toast } while the mode is on. fresh is a ready set of defaults
+-- (used by "on"). Returns "on", "reset" (on while on: the test set starts over, the stash is kept), "off"
+-- or "not on" (off while off: nothing changes). After "off" the caller normalizes the restored cfg.
+local function copy(v)
+    if type(v) ~= "table" then return v end
+    local t = {}
+    for k, x in pairs(v) do t[k] = copy(x) end
+    return t
+end
+local function refill(t, from)
+    for k in pairs(t) do t[k] = nil end
+    for k, v in pairs(from or {}) do t[k] = copy(v) end
+end
+function M.SwapSettings(char, on, fresh)
+    if on then
+        local result = "reset"
+        if not char.realSettings then
+            char.realSettings = { cfg = copy(char.cfg), hud = copy(char.hud), toast = copy(char.toast) }
+            result = "on"
+        end
+        refill(char.cfg, fresh)
+        refill(char.hud, nil)
+        refill(char.toast, nil)
+        return result
+    end
+    local real = char.realSettings
+    if not real then return "not on" end
+    refill(char.cfg, real.cfg)
+    refill(char.hud, real.hud)
+    refill(char.toast, real.toast)
+    char.realSettings = nil
+    return "off"
+end
+
 function M.Run(cfg, msg, class, itemName)
     nameOf = itemName
     local cmd, rest = (msg or ""):match("^%s*(%S*)%s*(.-)%s*$")
@@ -362,6 +399,10 @@ function M.Run(cfg, msg, class, itemName)
         return out, { "read" }
     end
     local arg = rest:match("^%S*"):lower()
+    if cmd == "testsettings" then
+        if arg == "on" or arg == "off" then return {}, { "testsettings", arg == "on" } end
+        return { L["Use /cvn testsettings on or /cvn testsettings off."] }, { "read" }
+    end
     if cmd == "sound" then return soundCommand(cfg, rest) end
     if cmd == "nav" then return navCommand(cfg, rest) end
     if cmd == "reagents" and (arg == "on" or arg == "off") then

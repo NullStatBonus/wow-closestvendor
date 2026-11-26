@@ -234,6 +234,8 @@ function T.New(env)
         return v and true or false
     end
     function self.Demoing() return demo ~= nil end
+    -- End an ordinary drag in progress (title or Shift-drag), so its stop does not write a position later.
+    function self.StopDrag() if moving then moving = false; f:StopMovingOrSizing() end end
 
     if ns.Move then
         transaction = ns.Move.New({

@@ -9,6 +9,8 @@ What other tools read from ClosestVendor. A change to anything here is a plan ch
 | `ClosestVendorDB` | account | learned vendors, trainers and auctioneers |
 | `ClosestVendorCharDB` | character | settings (`cfg`), standing, professions, the hearthstone point, window positions, the debug log (`log`) |
 
+- `ClosestVendorCharDB.realSettings` is present only while test settings are on: `{ cfg, hud, toast }`, deep copies of the player's own settings and positions put aside. `ClosestVendorCharDB.cfg`, `hud` and `toast` then hold the test set. Plans never read it.
+
 ## Debug log
 
 - Source `debug` in the plan: `ClosestVendorCharDB.log.entries`, format `entries` (`{ t = seconds, msg = text }`), newest last, at most 1000 (300 before 1.11.3).
@@ -16,6 +18,7 @@ What other tools read from ClosestVendor. A change to anything here is a plan ch
 - Lines are `area: text` with no `[tag]`. Many are built by concatenation, so the plan asserts the literal part (`contains`) or a `pattern`.
 - Lines from the CheckThat integration, written only at login and on a failure: `checkthat: entries registered: <n>`, `checkthat: FAILED: <why>`. An entry call writes nothing.
 - `debug log turned on` and `debug log turned off` mark each toggle; the off line is the last line before the log stops.
+- Test settings (`/cvn testsettings on|off`; `Core.lua`, `swapTestSettings` and `start`): `test settings: on (own settings put aside)`, `test settings: reset to defaults` (`on` while on), `test settings: off (own settings restored)` after each switch; `test settings: not on` for an `off` while off; `test settings: on at login` right after `---- login ----` while the mode is on. A switch is never logged as `setting changed:` lines. The setup step of each plan asserts the login line; the last step asserts the off line. `test settings: reset to defaults`, `test settings: not on` and `question withdrawn: test settings switched` (an open route question closed by a switch) are diagnostic, no plan step.
 - `---- login ----` starts the lines of each session, at login and after each `/reload`; the setup step of each plan asserts it after its reload.
 - `event <name>[ <arg>]` records a game event the addon reacts to (`Core.lua`, OnEvent), for example `event PLAYER_REGEN_ENABLED`.
 
@@ -126,5 +129,7 @@ After a CheckThat call raises, only `integration` answers; the others return not
 None reported yet. The plan reads CheckThat's own `CheckThatDB.global.facts` (source `facts`; entry results appear as `entry.<name>`) and `CheckThatDB.global.errors` (source `errors`, quiet).
 
 ## Report header
+
+`/cvn log` has the line `test settings: on` or `test settings: off`. Diagnostic, no plan step.
 
 `/cvn log` has the line `CheckThat: working`, `CheckThat: not detected`, `CheckThat: too old` (loaded, but it has no `Entry` to register with) or `CheckThat: failed: <why>`.
