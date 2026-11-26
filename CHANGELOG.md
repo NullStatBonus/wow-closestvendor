@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.12.0
+
+- **New: `/cvn testsettings on` puts your settings aside while you run a test plan.** `/cvn testsettings off` brings them back.
+- New: The CheckThat test plans turn test settings on at the start and off at the end. Your own settings stay as they are.
+
 ## 1.11.3
 
 - **Changed: The debug log shows more of what the addon decides about buying, supplies and the status window.** CheckThat can check more of them without you.

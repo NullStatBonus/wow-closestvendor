@@ -95,12 +95,15 @@ end
 -- window drops them.
 local merchantActed, retryParts, retryItems, retries = false, {}, {}, 0
 local MAX_RETRIES = 3
+local pickGen = 0 -- bumped when test settings switch: a colour pick or a purchase answer begun before then does nothing
 
 -- A purchase question (ammo or reagents) in its own dialog. "asked" is written once the dialog is
 -- confirmed on screen, "declined" when the player answers No or presses Escape; Yes buys (the
 -- purchase writes its own lines).
 local function askPurchase(which, area, text, accept)
-    A.showPopup(which, text, { accept = accept, decline = function() if log then log.Add(area .. "declined") end end })
+    local gen = pickGen
+    local function answer() if gen == pickGen then accept() end end
+    A.showPopup(which, text, { accept = answer, decline = function() if log then log.Add(area .. "declined") end end })
     if log then log.Add(area .. (A.popupShown(which) and "asked" or "FAILED: the question did not show")) end
 end
 
@@ -416,6 +419,30 @@ local function learnAuctioneer()
     if stored or changed then rebuildAuctioneers() end
 end
 
+-- Fill a settings table: defaults for what is missing, window numbers and colours put right, row modes
+-- cleaned up, the notification style chosen. existingUser is false for a set that starts from nothing
+-- (a new character, test settings), so it gets the style a new character gets.
+local function normalize(cfg, existingUser)
+    -- Reagents once shared the ammo switch; a character saved before they had their own keeps that choice.
+    if cfg.reagentsEnabled == nil and cfg.ammoEnabled ~= nil then cfg.reagentsEnabled = cfg.ammoEnabled end
+    for k, v in pairs(DEFAULTS) do if cfg[k] == nil then cfg[k] = v end end
+    cfg.reagentOff = cfg.reagentOff or {} -- item ids the player switched off; all others are on
+    -- A saved window number outside its range, or a colour that is not one, is put right.
+    for _, key in ipairs({ "hudScale", "hudAlpha", "hudTextAlpha", "reagentBuyTarget" }) do
+        local v, limits = tonumber(cfg[key]), ns.Commands.LIMITS[key]
+        cfg[key] = v and math.max(limits[1], math.min(limits[2], v)) or DEFAULTS[key]
+    end
+    if not ns.Status.Color(cfg.hudColor) then cfg.hudColor = DEFAULTS.hudColor end
+    -- Status window group key -> mode, only for groups the player changed. Anything else in it (a key
+    -- that is not a group, a mode that is not one) is dropped: it would mean the default anyway.
+    if type(cfg.hudRow) ~= "table" then cfg.hudRow = {} end
+    for key, mode in pairs(cfg.hudRow) do
+        if ns.Status.Group(key) ~= key or not ns.Status.MODES[mode] then cfg.hudRow[key] = nil end
+    end
+    if ns.Presentation then ns.Presentation.Migrate(cfg, existingUser) end
+    cfg.toastLocked = nil -- retired from the settings
+end
+
 local function init()
     local existingUser = type(ClosestVendorDB) == "table" or type(ClosestVendorCharDB) == "table"
     ClosestVendorDB = ClosestVendorDB or {}
@@ -437,23 +464,7 @@ local function init()
         if type(DB.hud) == "table" then CHAR.hud = copy(DB.hud) end
     end
     CHAR.cfg = CHAR.cfg or {}
-    -- Reagents once shared the ammo switch; a character saved before they had their own keeps that choice.
-    if CHAR.cfg.reagentsEnabled == nil and CHAR.cfg.ammoEnabled ~= nil then CHAR.cfg.reagentsEnabled = CHAR.cfg.ammoEnabled end
-    for k, v in pairs(DEFAULTS) do if CHAR.cfg[k] == nil then CHAR.cfg[k] = v end end
-    CHAR.cfg.reagentOff = CHAR.cfg.reagentOff or {} -- item ids the player switched off; all others are on
-    -- A saved window number outside its range, or a colour that is not one, is put right.
-    for _, key in ipairs({ "hudScale", "hudAlpha", "hudTextAlpha", "reagentBuyTarget" }) do
-        local v, limits = tonumber(CHAR.cfg[key]), ns.Commands.LIMITS[key]
-        CHAR.cfg[key] = v and math.max(limits[1], math.min(limits[2], v)) or DEFAULTS[key]
-    end
-    if not ns.Status.Color(CHAR.cfg.hudColor) then CHAR.cfg.hudColor = DEFAULTS.hudColor end
-    -- Status window group key -> mode, only for groups the player changed. Anything else in it (a key
-    -- that is not a group, a mode that is not one) is dropped: it would mean the default anyway.
-    if type(CHAR.cfg.hudRow) ~= "table" then CHAR.cfg.hudRow = {} end
-    for key, mode in pairs(CHAR.cfg.hudRow) do
-        if ns.Status.Group(key) ~= key or not ns.Status.MODES[mode] then CHAR.cfg.hudRow[key] = nil end
-    end
-    if ns.Presentation then ns.Presentation.Migrate(CHAR.cfg, existingUser) end
+    normalize(CHAR.cfg, existingUser)
     CHAR.toast = type(CHAR.toast) == "table" and CHAR.toast or {}
     CHAR.hud = CHAR.hud or {} -- where the status window was dragged to; empty means its default place
     DB.learned = DB.learned or {}
@@ -465,7 +476,6 @@ local function init()
     -- Account-level copies from before settings and places moved per character; nothing reads them
     -- (cfg and hud stay as the seed for a new character). toastLocked was retired from the settings.
     DB.hearth, DB.lastOutside, DB.professions, DB.log = nil, nil, nil, nil
-    CHAR.cfg.toastLocked = nil
     log = ns.Log.New(CHAR.log, A.now)
 end
 
@@ -796,6 +806,7 @@ local function reportText()
         "addon version: " .. tostring(info.addon),
         "game: " .. tostring(info.gameVersion) .. " build " .. tostring(info.build) .. ", interface " .. tostring(info.interface),
         "locale: " .. tostring(info.locale),
+        "test settings: " .. (CHAR.realSettings and "on" or "off"),
         "navigation: " .. tostring(refreshNav()) .. " (preference " .. tostring(c.navProvider) .. ")",
         ("vendors: %d shipped, %d learned, per continent: %s"):format(#(ns.ShippedVendors or {}), learned, table.concat(continents, " ")),
         (function()
@@ -838,6 +849,10 @@ end
 
 local function start()
     log.Add("---- login ----")
+    if CHAR.realSettings then
+        log.Add("test settings: on at login")
+        say(L["Test settings are on: your own settings are put aside. Type /cvn testsettings off to bring them back."])
+    end
     readExternal()
     log.Add("NorgannonDB: " .. externalText())
     started = true
@@ -901,7 +916,10 @@ local function start()
     })
     -- The settings page is optional: if the client's settings API differs, only the page is lost.
     local ok, category = pcall(ns.Options.Register, CHAR.cfg, DEFAULTS, function() refreshNav(); evaluate(); applyWindow(); noteSettingsSoon() end, A.classToken(),
-        A.hasColorPicker() and A.pickColor or nil,
+        A.hasColorPicker() and function(r, g, b, onPick)
+            local gen = pickGen
+            return A.pickColor(r, g, b, function(...) if gen == pickGen then onPick(...) end end)
+        end or nil,
         function(text) colorNote = text; log.Add(text) end, A.hasSwatchPicker())
     if not ok then colorNote = "settings page failed: " .. tostring(category) end
     panel = ok and category or nil
@@ -961,6 +979,46 @@ local function start()
     end
 end
 
+-- /cvn testsettings on|off. Everything that holds the old settings ends first: demo, preview, Move, a
+-- colour pick, the route question and the purchase questions. The tables CHAR.cfg, CHAR.hud and CHAR.toast
+-- are refilled in place (Commands.SwapSettings), so nothing that holds them needs rebuilding. The
+-- switch is not a setting change: the baseline for the setting log is taken again without logging.
+local function swapTestSettings(on)
+    if not on and not CHAR.realSettings then
+        log.Add("test settings: not on")
+        say(L["Test settings are not on."])
+        return
+    end
+    endShows()
+    if tracker and tracker.StopDrag then tracker.StopDrag() end -- an ordinary drag would write into the other set
+    retryParts, retryItems, relearnMerchant = {}, {}, false -- a purchase retry would buy under the other set
+    pickGen = pickGen + 1
+    settingsWait, settingsPending = settingsWait + 1, false
+    if controller then controller.OnSettingsSwap() end
+    closeQuestions()
+    A.hidePopup(POPUP_AMMO); A.hidePopup(POPUP_REAGENTS)
+    A.hidePopup("CLOSESTVENDOR_CLEAR_LOG"); A.hidePopup("CLOSESTVENDOR_SAMPLE")
+    local fresh = {}
+    normalize(fresh, false)
+    local result = ns.Commands.SwapSettings(CHAR, on, fresh)
+    if result == "off" then normalize(CHAR.cfg, true) end -- a default added since the stash is filled
+    if result == "off" then
+        log.Add("test settings: off (own settings restored)")
+        say(L["Test settings off: your own settings are back."])
+    elseif result == "reset" then
+        log.Add("test settings: reset to defaults")
+        say(L["Test settings reset to defaults. Your own settings are still put aside."])
+    else
+        log.Add("test settings: on (own settings put aside)")
+        say(L["Test settings on: your own settings are put aside and the defaults are used. Type /cvn testsettings off to bring them back."])
+    end
+    if ns.Options.Refresh then ns.Options.Refresh() end
+    refreshNav()
+    evaluate()
+    applyWindow()
+    cfgSeen = flatSettings()
+end
+
 SLASH_CLOSESTVENDOR1 = "/cvn"
 SLASH_CLOSESTVENDOR2 = "/closestvendor"
 SlashCmdList["CLOSESTVENDOR"] = function(msg)
@@ -972,6 +1030,7 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
     noteSettings()
     for _, line in ipairs(lines) do say(line) end
     if action and action[1] == "read" then return end
+    if action and action[1] == "testsettings" then swapTestSettings(action[2]) return end
     if action and action[1] == "open" then
         if openSettings(action[2]) then return end
         say(L["The settings page is not available here: %s. Use /cvn help."]:format(ns.Options.failure or colorNote))
@@ -1006,7 +1065,9 @@ SlashCmdList["CLOSESTVENDOR"] = function(msg)
     if action and action[1] == "hud" and action[2] == "pick" then
         -- The picker works wherever the game has one, settings page or not.
         local r, g, b = ns.Status.Color(CHAR.cfg.hudColor)
+        local gen = pickGen
         local opened = A.hasColorPicker() and A.pickColor(r or 0, g or 0, b or 0, function(nr, ng, nb)
+            if gen ~= pickGen then return end -- test settings switched since: the pick is for the other set
             CHAR.cfg.hudColor = ns.Status.Hex(nr, ng, nb)
             applyWindow()
             noteSettingsSoon()

@@ -361,6 +361,8 @@ Advanced explains character settings and account-wide learned places (at load, t
 /cvn debug off
 /cvn log
 /cvn log clear
+/cvn testsettings on
+/cvn testsettings off
 /cvn choice auto
 /cvn choice ask
 /cvn prefer distance
@@ -419,6 +421,7 @@ These values are per character. Prior saved values override defaults. Commands a
 - `/cvn config` opens the settings page.
 - `/cvn find <item link or name>` shows the nearest known sellers of a food, drink, pet food or class reagent item. Pick one to set the waypoint. With no text it prints how to use it.
 - `/closestvendor` works the same as `/cvn`.
+- For testers: the in-game test plans turn test settings on in their setup step and off in their last step, so they run on the defaults whatever your own settings are. If you stop a run early, type `/cvn testsettings off` to get your own settings back. Chat at login reminds you while it is on.
 - Settings are saved per character. The vendors, trainers and auctioneers the addon learns are shared by the account. A character you have not used with the addon before starts from the settings you had before this was per character.
 
 ### Thresholds
@@ -514,6 +517,11 @@ The legacy `test` commands are live integration tests: accepting a question can 
 - `/cvn debug off` turns it off.
 - `/cvn log` shows a report that you can copy.
 - `/cvn log clear` asks for confirmation before clearing diagnostic entries only. Cancel keeps everything.
+- `/cvn testsettings on` is for testers. It puts your settings, the status window position and the toast position aside, and uses the defaults a new character gets. Every change, Move and the settings page then change only the test set. `/cvn testsettings off` brings your own back exactly. Learned places, the hearthstone point, professions, standings and the debug log are not affected.
+  - Typing `on` again while it is on resets the test set to the defaults and keeps your own settings put aside. Typing `off` while it is off says that test settings are not on.
+  - The mode lasts across `/reload` and logout. At login chat says it is on and names `/cvn testsettings off`.
+  - A switch ends what is open: a question, the demo, a preview, Move and a color pick. A purchase question closes and nothing is bought.
+  - With the debug log on, each switch logs one line: "test settings: on (own settings put aside)", "test settings: reset to defaults", "test settings: off (own settings restored)", or "test settings: not on" for a refused `off`. A login while it is on logs "test settings: on at login". A switch is not logged as setting changes.
 
 ## How it finds vendors
 
@@ -665,6 +673,7 @@ If the NorgannonDB addon is installed, the addon also reads its vendors in the n
 The report holds:
 
 - The game build.
+- Whether test settings are on or off.
 - Your settings. This includes picker and AceConfig availability, effective notice style and HUD/toast appearance, toast position, character scope and sample/Move state.
 - Whether the CheckThat test runner is `working`, `not detected`, `too old` or `failed` (with the reason).
 - What the addon saw and decided.

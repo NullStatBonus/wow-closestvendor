@@ -84,10 +84,21 @@ for _, plan in ipairs(PLANS) do
     eq((first or ""):find("\n      entry: version\n", 1, true) ~= nil, true, vid .. " calls the version entry")
     eq((first or ""):find("key: entry.version", 1, true) ~= nil, true, vid .. " asserts the entry.version fact")
     eq((first or ""):find("op: ge", 1, true) ~= nil, true, vid .. " passes at the version under test or newer")
-    eq((first or ""):find("\n      value: 11103\n", 1, true) ~= nil, true, vid .. " asks for 1.11.3 (11103) or newer")
+    eq((first or ""):find("\n      value: 11200\n", 1, true) ~= nil, true, vid .. " asks for 1.12.0 (11200) or newer")
+    -- Setup turns the debug log on, then test settings on, then reloads; the plan asserts both lines at login.
+    local setupId = ("cv.s%d.2"):format(plan.first)
+    local setup = text:match("\n  %- id: " .. setupId:gsub("%.", "%%.") .. "\n(.-)\n  %- id: ") or text:match("\n  %- id: " .. setupId:gsub("%.", "%%.") .. "\n(.-)\n%- id: ") or ""
+    local cDebug, cTest, cReload = setup:find('"/cvn debug on"', 1, true), setup:find('"/cvn testsettings on"', 1, true), setup:find('"/reload"', 1, true)
+    eq(cDebug ~= nil and cTest ~= nil and cReload ~= nil and cDebug < cTest and cTest < cReload, true, setupId .. ": debug on, then testsettings on, then /reload")
+    local sDebug, sLogin, sTest = setup:find("contains: debug log turned on", 1, true), setup:find('contains: "---- login ----"', 1, true), setup:find('contains: "test settings: on at login"', 1, true)
+    eq(sDebug ~= nil and sLogin ~= nil and sTest ~= nil and sDebug < sLogin and sLogin < sTest, true, setupId .. " asserts the debug log, the login marker, then test settings on at login")
     -- The last step is the automatic no-Lua-error check on CheckThat's error list, for the whole run.
     local tail = text:match(".*\n  %- id: [^\n]+\n(.*)$") or ""
     eq(tail:find("source: errors", 1, true) ~= nil and tail:find("absent: true", 1, true) ~= nil, true, plan.path .. " ends with the no-Lua-error step")
+    eq(tail:find('"/cvn testsettings off"', 1, true) ~= nil, true, plan.path .. ": the last step runs /cvn testsettings off")
+    eq(tail:find("contains: 'test settings: off (own settings restored)'\n      scope: attempt\n", 1, true) ~= nil, true, plan.path .. ": the last step asserts the off line, scoped to the attempt")
+    eq(tail:find("timeout: 120", 1, true) ~= nil, true, plan.path .. ": the last step waits for the player to press Run (timeout 120)")
+    eq(setup:find("title: Turn on Lua errors, debug logging and test settings, then reload", 1, true) ~= nil, true, setupId .. " is titled for test settings too")
     eq(tail:find("scope: session", 1, true) ~= nil and tail:find("auto: true", 1, true) ~= nil, true, plan.path .. ": the no-Lua-error step is automatic and covers the run")
 end
 
