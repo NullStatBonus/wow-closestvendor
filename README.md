@@ -356,6 +356,7 @@ Advanced explains character settings and account-wide learned places (at load, t
 /cvn test food
 /cvn test water
 /cvn test petfood
+/cvn test trainer
 /cvn test remind
 /cvn debug on
 /cvn debug off
@@ -500,6 +501,7 @@ The legacy `test` commands are live integration tests: accepting a question can 
 - `/cvn test food`, `/cvn test water` and `/cvn test petfood` do the same for food, water and pet food.
   - A rogue or warrior who tests water gets "Your class does not use water."
   - Without a pet, the pet food test says "There is no pet to feed."
+- `/cvn test trainer` asks about the nearest trainer the addon knows. It prefers a trainer of a profession you know, and otherwise takes the nearest trainer of any profession. You need no profession, and no skill has to be near its limit. Without a known trainer it says "No known profession trainer on this continent for your faction. Open a trainer window once and the addon will remember where it is."
 - `/cvn test remind` shows the conjure reminder for a mage, or the healthstone reminder for a warlock, as a notification with the notification sound. It always works: any other class gets a plain test notification.
 - They ignore the state of your bags, gear and ammo.
 - Yes sets the pin.
@@ -509,6 +511,7 @@ The legacy `test` commands are live integration tests: accepting a question can 
   - A warning that waits names its reason once, for example "trigger held in combat: repair", "trigger held while dead: repair" or "trigger held in an instance: sell". Inside an instance the reason stays "in an instance", also during a fight there. Dead during a fight is "while dead".
   - Each change of the ammo the addon watches is logged once: "ammo watched: arrow", or "ammo not watched: ..." for a thrown weapon, a wand, no ranged weapon or the ammo warning turned off.
   - Each vendor or trainer window logs what the addon learned from it, for example "vendor learned: Name (npc 1234), new" (or "updated", "unchanged"); a class trainer logs "trainer window: nothing learned: not a profession trainer". Targeting an NPC that will not trade with you logs its standing. At login the addon logs what it found of NorgannonDB.
+  - Each question logs its target, where it came from and how far it is, for example "question shown: sell, Name (npc 1234), learned, 8 yd". The source is "learned" (you or another character on the account opened it), "NorgannonDB" (only that addon knows it) or "shipped". The distance is in whole yards from where the search started: you, or in a dungeon or raid your hearthstone point or last position outside. A food, water or reagent question adds how many you have left at the end, and a trainer question from a skill check adds the points left.
   - A merchant window logs whether it cleared your waypoint or kept a trainer waypoint. Each profession check names the skills near their limit that it does not ask about, and why ("level 20 needed", "the last tier", ...), and why it asked nothing ("a question is open"). A question with two targets logs both, with the preference that put one first.
   - The status window logs what it shows when that changes, for example "status window: shown, rows: bags low, durability" or "status window: hidden". A count change alone logs nothing, and a demo, preview or Move logs nothing.
   - Each setting you change, by command or on the settings page, logs one line, for example "setting changed: bagThreshold 2 -> 5". The settings page logs a moved slider once, a second after you stop.
@@ -533,11 +536,13 @@ It learns more as you play.
 - If the game has not loaded every item in the vendor's list yet, the addon keeps what it already knew about that vendor and reads the list again when the items arrive.
 - A learned vendor replaces a shipped vendor with the same NPC id.
 - The addon saves learned vendors between sessions.
+- When you open a known vendor again a few steps from where you stood before, the saved position stays (on the same map, within 0.5% of the map on each axis). The debug log then says "unchanged". A vendor that walks further, or sells something new, is saved again ("updated").
 
 Trainers work the same way, but the addon ships no trainers.
 
 - When you open a profession trainer window, the addon records where the trainer is.
 - It also records which professions the trainer teaches.
+- A few steps of difference on a later visit keep the saved position, as for vendors. Auctioneers work the same way.
 - All your characters share the trainers.
 - Each character keeps its own list of the professions it saw at a trainer or in a crafting window.
 

@@ -3,13 +3,12 @@ kind: plan
 addon: ClosestVendor
 title: 'ClosestVendor in-game test plan: core'
 preamble: |-
-  These checks cover what the automated tests cannot: the real game. ClosestVendor has three plans, and all three run before each release, on WoW Forever and on Classic Era:
-  |cff99ccffplans/closestvendor.yaml|r (this one: warnings, routes, holds, learning, buying, the report and find), |cff99ccffplans/closestvendor.ui.yaml|r (status window, visuals and settings) and |cff99ccffplans/closestvendor.addons.yaml|r (TomTom, WaypointUI, NorgannonDB and sound packs).
-  Import one plan, finish it and export it (|cff99ccff/ct export|r, optionally |cff99ccff/cvn debug off|r, then |cff99ccff/reload|r) before you import the next: a run uses the last plan imported.
-
-  Have at least 3 free bag slots. The setup step turns on test settings, so the plan runs on the default settings whatever yours are. The last step turns them off and your own settings come back. The steps that change a setting type the default back later.
+  This is the release check: the few things that make ClosestVendor work in the real game. One ordinary character runs it, once on WoW Forever and once on Classic Era. Any class and any level works, and you need no profession.
+  Stand in a capital city, such as Stormwind or Orgrimmar, where a vendor and a profession trainer are both within about 30 yards. Have at least 3 free bag slots, and play with no addon except ClosestVendor and CheckThat.
+  The setup step turns on test settings, so the plan runs on the default settings whatever yours are. The last step turns them off and your own settings come back.
   Each step starts with one sentence that says what to expect: a question to answer, nothing (CheckThat checks by itself), or something to look at. CheckThat records the result of most steps from the debug log or a CheckThat entry. Only the steps that ask you to look wait for Pass or Fail.
-  A step that needs a class, a profession, a damaged item or fewer than 2000 ammo says Needs: first and waits for you. Press Skip when you cannot do it.
+  This plan is the release gate. A feature that needs deeper checks gets its own feature plan when it is built or changed.
+  Import the plan, finish it and export it (|cff99ccff/ct export|r, optionally |cff99ccff/cvn debug off|r, then |cff99ccff/reload|r).
 logs:
   debug:
     global: ClosestVendorCharDB
@@ -77,7 +76,7 @@ sections:
     action:
       kind: manual
       text: Nothing appears. CheckThat checks by itself. CheckThat reads the ClosestVendor version.
-    expect: The ClosestVendor version is 1.12.0 or newer. If the step fails, copy ClosestVendor 1.12.0 into the game again.
+    expect: The ClosestVendor version is 1.13.0 or newer. If the step fails, copy ClosestVendor 1.13.0 into the game again.
     verify:
     - assertions
     call:
@@ -90,20 +89,20 @@ sections:
       addon: ClosestVendor
       key: entry.version
       op: ge
-      value: 11200
-      label: ClosestVendor is 1.12.0 or newer
-    notes: The entry returns major*10000 + minor*100 + patch, so 1.12.0 is 11200. It reads a fact, not the debug log, so it runs before debug logging is on. CheckThat too old to offer entries leaves this step unverified.
+      value: 11300
+      label: ClosestVendor is 1.13.0 or newer
+    notes: The entry returns major*10000 + minor*100 + patch, so 1.13.0 is 11300. It reads a fact, not the debug log, so it runs before debug logging is on. CheckThat too old to offer entries leaves this step unverified.
   - id: cv.s0.2
     title: Turn on Lua errors, debug logging and test settings, then reload
     action:
       kind: manual
-      text: Nothing appears. CheckThat checks by itself. Press Run. It turns on Lua error popups (|cff99ccff/console scriptErrors 1|r), the debug log (|cff99ccff/cvn debug on|r) and test settings (|cff99ccff/cvn testsettings on|r, which puts your own settings aside and uses the defaults), then reloads (|cff99ccff/reload|r).
+      text: Nothing appears. CheckThat checks by itself. Press Run to turn on Lua error popups, the debug log and test settings, which puts your own settings aside and uses the defaults, and to reload the game.
       commands:
       - "/console scriptErrors 1"
       - "/cvn debug on"
       - "/cvn testsettings on"
       - "/reload"
-    expect: The game reloads with no Lua error popup, the debug log keeps recording and chat says test settings are on.
+    expect: The game reloads with no Lua error popup, and chat says test settings are on.
     verify:
     - assertions
     auto: true
@@ -120,21 +119,21 @@ sections:
       label: The debug log turned on, and test settings were still on after the reload
     notes: The login marker and the test settings line come after the reload, so the Run commands alone cannot pass the step. Test settings put the tester's own settings aside for the whole plan, so every step sees the defaults it assumes; the last step turns them off. A Lua error popup is also caught by the last step of the plan, which reads CheckThat's error list.
 - id: s1
-  title: 'Selling: warning, waypoint and vendor'
-  intro: One real sell warning from the question to the vendor. Have at least 3 free bag slots, and stand where a vendor is in reach.
+  title: 'Selling: a real warning, the waypoint, the vendor and the status window'
+  intro: One real sell warning, from the bag threshold to the question, the waypoint, the vendor and the status window.
   steps:
   - id: cv.s1.1
-    title: "WoW Forever: make the sell warning due and click Yes"
+    title: "WoW Forever: make bag space low and click Yes"
     clients:
     - forever-camelot
     setup: "Needs: at least 3 free bag slots, so the default bag threshold 2 leaves the sell warning off before the step. No question is open."
     action:
       kind: manual
-      text: "A question appears. Click Yes. Look, then press Pass or Fail. Press Run. It picks the game waypoint (|cff99ccff/cvn nav native|r) and makes the sell warning due (|cff99ccff/cvn bags 200|r). On the sell question click |cffffd100Yes|r (|cffffd100This map|r or |cffffd100Closest|r when it names two vendors)."
+      text: "A question appears. Click Yes. Look, then press Pass or Fail. Press Run to make your bags count as almost full, click Yes on the sell question (or This map when it names two vendors), then look at your map."
       commands:
       - "/cvn nav native"
       - "/cvn bags 200"
-    expect: "The game waypoint to the vendor shows on the map and is tracked. Press Pass."
+    expect: "A waypoint to the vendor shows on your map. Press Pass."
     verify:
     - player
     - assertions
@@ -142,21 +141,21 @@ sections:
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: "trigger go sell"
-      - contains: "question shown: sell, "
+      - pattern: "trigger go sell %(bags=%d+ durability="
+      - pattern: "question shown: sell, .+ %(npc %d+%), %a+, %d+ yd"
       - pattern: "accepted: .+ via native"
       scope: attempt
-      label: "The sell warning asked, and Yes set the game waypoint"
-    notes: "Player step. Drawing: the map waypoint. A real warning, not a test command. The game waypoint is picked even with TomTom or WaypointUI installed; the addons plan checks those. Check 1.3 types the bag default back, and check 6.1 sets the waypoint choice back to Automatic."
+      label: "The real bag count crossed the threshold, the question named a vendor, and Yes set the game waypoint"
+    notes: "Player step. Drawing: the map waypoint. A real warning, not a test command: the trigger line carries the real bag and durability reads. Run also picks the game waypoint, even with TomTom or WaypointUI installed. Check 1.5 puts the bag threshold back, and the last step turns test settings off."
   - id: cv.s1.2
-    title: "Classic Era: make the sell warning due and click Yes"
+    title: "Classic Era: make bag space low and click Yes"
     clients:
     - classic-era
     setup: "Needs: at least 3 free bag slots, so the default bag threshold 2 leaves the sell warning off before the step. No question is open."
     auto: true
     action:
       kind: manual
-      text: "A question appears. Click Yes. Press Run. It picks the chat line (|cff99ccff/cvn nav chat|r) and makes the sell warning due (|cff99ccff/cvn bags 200|r). On the sell question click |cffffd100Yes|r (|cffffd100This map|r or |cffffd100Closest|r when it names two vendors)."
+      text: "A question appears. Click Yes. Press Run to make your bags count as almost full, then click Yes on the sell question (or This map when it names two vendors)."
       commands:
       - "/cvn nav chat"
       - "/cvn bags 200"
@@ -167,35 +166,30 @@ sections:
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: "trigger go sell"
-      - contains: "question shown: sell, "
+      - pattern: "trigger go sell %(bags=%d+ durability="
+      - pattern: "question shown: sell, .+ %(npc %d+%), %a+, %d+ yd"
       - pattern: "accepted: .+ via chat"
       scope: attempt
-      label: "The sell warning asked, and Yes gave the chat line"
-    notes: "Classic Era has no game waypoint, so the chat line is the waypoint. The choice makes the chat line win even with TomTom installed (the addons plan checks TomTom). Check 1.3 types the bag default back, and check 6.1 sets the waypoint choice back to Automatic."
+      label: "The real bag count crossed the threshold, the question named a vendor, and Yes gave the chat line"
+    notes: "Classic Era has no game waypoint, so the chat line is the waypoint. Run picks the chat line, so it wins even with TomTom installed. Check 1.5 puts the bag threshold back."
   - id: cv.s1.3
-    title: "Open a vendor: the waypoint goes away and the vendor is learned"
-    setup: "Needs: a vendor you can open. The step sets its own waypoint, so it does not depend on check 1.1 or 1.2."
+    title: "Open that vendor: the waypoint goes away and the vendor is learned"
+    setup: "Needs: the sell question from check 1.1 or 1.2, answered Yes."
     auto: true
     action:
       kind: manual
-      text: "A question appears. Click Yes. Press Run. It types the bag default back (|cff99ccff/cvn bags 2|r) and asks for a sell vendor (|cff99ccff/cvn test sell|r). Click |cffffd100Yes|r (|cffffd100This map|r or |cffffd100Closest|r when it names two vendors). Then open any vendor's window and close it."
-      commands:
-      - "/cvn bags 2"
-      - "/cvn test sell"
-    expect: "The waypoint goes away when the window opens, and the addon logs the vendor it learned."
+      text: "Nothing appears. CheckThat checks by itself. Walk to the vendor the sell question named, open its window and close it."
+    expect: "The waypoint goes away when the vendor window opens."
     verify:
     - assertions
     assertions:
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: "test command: sell"
-      - pattern: "accepted: .+ via %a+"
       - contains: "merchant window opened"
       - contains: "waypoint cleared: a merchant window opened"
       scope: attempt
-      label: "The test pin set a waypoint, and opening the vendor window cleared it"
+      label: "Opening the vendor window cleared the waypoint"
     - kind: log
       source: debug
       pattern: "vendor learned: .+ %(npc %d+%), %a+"
@@ -207,127 +201,104 @@ sections:
       diagnostic: true
       scope: attempt
       label: "The vendor was new to the search (not shipped, not from NorgannonDB, not learned before)"
-    notes: "Any vendor works: the learned line ends with new, updated or unchanged, and the plan accepts all three. A new vendor is unit tested. Check 6.2 asks for this vendor after a reload without opening it."
-- id: s2
-  title: Other warnings
-  intro: Each warning once, from a real threshold. A step that needs a class or a profession says so in Needs and waits for you, so press Skip when you do not have it. Each step types back the thresholds the steps before it changed.
-  steps:
-  - id: cv.s2.1
-    title: "Make the repair warning due and click No"
-    setup: "Needs: one worn item between 21% and 99% durability and none at 20% or below; otherwise press Skip. No question is open."
-    auto: true
+    notes: "Any vendor works: the learned line ends with new, updated or unchanged, and the plan accepts all three. A new vendor is unit tested. Bag space stays low until check 1.5. Check 6.2 asks for this vendor after a reload without opening it."
+  - id: cv.s1.4
+    title: "Look at the status window"
     action:
       kind: manual
-      text: "A question appears. Click No. Press Run. It types the bag default back (|cff99ccff/cvn bags 2|r) and makes the repair warning due (|cff99ccff/cvn dur 100|r). On the repair question click |cffffd100No|r."
-      commands:
-      - "/cvn bags 2"
-      - "/cvn dur 100"
-    expect: "The repair question appears."
+      text: "Look, then press Pass or Fail. Look at the status window on your screen."
+    expect: "The status window shows the Bag space row in red with a Low label. Press Pass."
     verify:
+    - player
     - assertions
     assertions:
-    - kind: log-sequence
-      source: debug
-      sequence:
-      - contains: "trigger go repair"
-      - contains: "question shown: repair, "
-      - contains: "question declined: repair"
-      scope: attempt
-      label: "The repair warning went out, asked and was answered"
-    notes: "Any item below 100% durability is below the threshold 100 (the highest). Check 2.2 types the default 20 back, and with nothing at 20% or below that ends the warning."
-  - id: cv.s2.2
-    title: "Hunter: make the ammo warning due and click No"
-    setup: "Needs: a Hunter with a bow, crossbow or gun equipped and fewer than 2000 arrows or bullets (the highest threshold) and more than 200 (the default); otherwise press Skip."
-    auto: true
-    action:
-      kind: manual
-      text: "A question appears. Click No. Press Run. It types the default durability threshold back (|cff99ccff/cvn dur 20|r) and raises the ammo threshold (|cff99ccff/cvn ammo 2000|r). On the arrow or bullet question click |cffffd100No|r."
-      commands:
-      - "/cvn dur 20"
-      - "/cvn ammo 2000"
-    expect: "The arrow or bullet question appears."
-    verify:
-    - assertions
-    assertions:
-    - kind: log-sequence
-      source: debug
-      sequence:
-      - contains: "trigger go ammo ("
-      - pattern: "question shown: [ab]%a+, "
-      - pattern: "question declined: [ab]%a+"
-      scope: attempt
-      label: "The ammo warning went out, asked and was answered"
-    notes: "Class step. The question kind is arrow or bullet, after the ammo equipped; no other question kind starts with a or b. Check 2.3 types the ammo default 200 back, and with more than 200 ammo that ends the warning."
-  - id: cv.s2.3
-    title: "Reagent class: make a reagent warning due and click No"
-    setup: "Needs: a class with reagents (for example a Mage) that knows a spell using one and carries 6 to 39 of that reagent (40 is the highest threshold); otherwise press Skip."
-    auto: true
-    action:
-      kind: manual
-      text: "A question appears. Click No. Press Run. It types the durability and ammo defaults back (|cff99ccff/cvn dur 20|r, |cff99ccff/cvn ammo 200|r) and raises the reagent threshold (|cff99ccff/cvn reagent 40|r). On the reagent question click |cffffd100No|r."
-      commands:
-      - "/cvn dur 20"
-      - "/cvn ammo 200"
-      - "/cvn reagent 40"
-    expect: "The reagent question appears and names the reagent and the count left."
-    verify:
-    - assertions
-    assertions:
-    - kind: log-sequence
-      source: debug
-      sequence:
-      - contains: "trigger go reagent "
-      - contains: "question shown: reagent "
-      - contains: "question declined: reagent"
-      scope: attempt
-      label: "The reagent warning went out, asked and was answered"
-    notes: "Class step. With 6 or more, the default 5 typed back in the next step ends the warning."
-  - id: cv.s2.4
-    title: "Make the food warning due and click No"
-    setup: "Needs: 6 to 40 food items (cooked, looted or conjured all count; 40 is the highest threshold), and not a Mage who knows Conjure Food (that class gets a reminder, not a question); otherwise press Skip."
-    auto: true
-    action:
-      kind: manual
-      text: "A question appears. Click No. Press Run. It types the durability, ammo and reagent defaults back (|cff99ccff/cvn dur 20|r, |cff99ccff/cvn ammo 200|r, |cff99ccff/cvn reagent 5|r) and raises the food threshold (|cff99ccff/cvn food 40|r). On the food question click |cffffd100No|r."
-      commands:
-      - "/cvn dur 20"
-      - "/cvn ammo 200"
-      - "/cvn reagent 5"
-      - "/cvn food 40"
-    expect: "A question about the closest food vendor appears."
-    verify:
-    - assertions
-    assertions:
-    - kind: log-sequence
-      source: debug
-      sequence:
-      - contains: "question shown: supply food, "
-      - contains: "question declined: supply"
-      scope: attempt
-      label: "The food question was asked and answered"
     - kind: log
       source: debug
-      contains: "reminder: food ("
-      diagnostic: true
-      scope: attempt
-      label: "A Mage who knows Conjure Food was reminded instead"
-    notes: "A Mage who knows Conjure Food gets a reminder instead of a question, so that class presses Skip (the reminder line is diagnostic). Check 2.6 types the food default back."
-  - id: cv.s2.5
-    title: "Open a profession trainer"
-    setup: "Needs: a character with a crafting or gathering profession, standing at a trainer of that profession; otherwise press Skip."
+      pattern: "status window: shown, rows: .*bags low"
+      scope: session
+      label: "The status window holds the Bag space row, and it is low"
+    notes: "Player step. Drawing: the red row and the Low label. The window line is written when the row appears, in check 1.1 or 1.2, so the check reads the whole session. The window shows by default under test settings."
+  - id: cv.s1.5
+    title: "Put bag space back to normal: the Bag space row goes away"
     auto: true
     action:
       kind: manual
-      text: "Nothing appears. CheckThat checks by itself. Open the trainer's window and close it."
-    expect: "The addon learns the trainer and the professions it teaches, and logs the services the window lists."
+      text: "Nothing appears. CheckThat checks by itself. Press Run to put your bag warning back to normal."
+      commands:
+      - "/cvn bags 2"
+    expect: "The Bag space row leaves the status window."
     verify:
     - assertions
     assertions:
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: "trainer window opened"
+      - contains: "setting changed: bagThreshold 200 -> 2"
+      - pattern: "status window: [hs]%a+"
+      scope: attempt
+      label: "The bag threshold went back to 2, and the status window redrew without the Bag space row"
+    notes: "The window line is written only when its text changes, so a line after the threshold change proves the low row left. No trigger clear line is written here: opening the vendor in check 1.3 already ended the sell warning, and a clear is logged only for a warning that is still open. Other rows, such as water, may stay in the window."
+- id: s2
+  title: Questions from real vendor and trainer data
+  intro: Each question comes from the real vendor and trainer data around you. Any class can ask for each one.
+  steps:
+  - id: cv.s2.1
+    title: "Ask for a repair vendor and click No"
+    auto: true
+    action:
+      kind: manual
+      text: "A question appears. Click No. Press Run to ask for a repair vendor, then click No."
+      commands:
+      - "/cvn test repair"
+    expect: "A question names a repair vendor."
+    verify:
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: "test command: repair"
+      - pattern: "question shown: repair, .+ %(npc %d+%), %a+, %d+ yd"
+      - contains: "question declined: repair"
+      scope: attempt
+      label: "The repair question named a repair vendor with its source and distance, and No was answered"
+    notes: "A test command asks the same question as a real warning, whatever the gear. The real durability read is on the trigger line of check 1.1 or 1.2."
+  - id: cv.s2.4
+    title: "Ask for a food vendor and click No"
+    auto: true
+    action:
+      kind: manual
+      text: "A question appears. Click No. Press Run to ask for a food vendor, then click No."
+      commands:
+      - "/cvn test food"
+    expect: "A question names a vendor that sells food."
+    verify:
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: "test command: food"
+      - pattern: "question shown: supply food, .+ %(npc %d+%), %a+, %d+ yd, %d+ left"
+      - contains: "question declined: supply"
+      scope: attempt
+      label: "The food question named a food vendor with the food count read from the bags, and No was answered"
+    notes: "The count comes from the real bag contents, with the food items the addon knows. A character with no food shows 0 left."
+  - id: cv.s2.5
+    title: "Open a profession trainer"
+    auto: true
+    action:
+      kind: manual
+      text: "Nothing appears. CheckThat checks by itself. Open the window of any profession trainer and close it."
+    expect: "The step finishes by itself after the trainer window opens."
+    verify:
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
       - contains: "trainer learned: "
+      - contains: "trainer window opened"
       scope: attempt
       label: "The trainer was learned when its window opened"
     - kind: log
@@ -341,212 +312,38 @@ sections:
       diagnostic: true
       scope: attempt
       label: "The trainer was new to this account"
-    notes: "The line names the trainer, its npc id, new, updated or unchanged, and what it teaches. Opening the window also makes the profession known, so check 2.6 can ask about it. The services line is the trainer probe (spec diagnostics); it is written once per window with the debug log on."
-  - id: cv.s2.6
-    title: "Make the trainer warning due, craft or gather, and click No"
-    setup: "Builds on check 2.5: the profession whose trainer you opened. Needs: that profession below its current cap, at the level the next tier needs; otherwise press Skip."
+    notes: "Any profession trainer works, and the character needs no profession. The addon learns the trainer once the window lists its services (often at TRAINER_UPDATE, after a first nothing-learned line), and only then writes trainer window opened. The line names the trainer, its npc id, new, updated or unchanged, and what it teaches. The services line is the trainer probe (spec diagnostics); it is written once per window with the debug log on."
+  - id: cv.s2.7
+    title: "Ask for a trainer and click No"
     auto: true
     action:
       kind: manual
-      text: "A question appears. Click No. Press Run. It types the food default back (|cff99ccff/cvn food 5|r) and raises the profession threshold (|cff99ccff/cvn trade 300|r). Then craft one item or gather once with that profession. On the trainer question click |cffffd100No|r."
+      text: "A question appears. Click No. Press Run to ask for a trainer, then click No."
       commands:
-      - "/cvn food 5"
-      - "/cvn trade 300"
-    expect: "The trainer question names the profession, the points left and a trainer."
+      - "/cvn test trainer"
+    expect: "A question names the profession trainer you just opened."
     verify:
     - assertions
     assertions:
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: "question shown: trainer for "
+      - contains: "test command: trainer"
+      - pattern: "question shown: trainer for .+ %(npc %d+%), learned, %d+ yd"
       - contains: "question declined: trainer"
       scope: attempt
-      label: "The trainer question was asked and answered"
-    notes: "With threshold 300 every profession below its cap is near it, so the next skill change or craft asks (Professions.lua). The food default ends the food request from check 2.4, which would hold the profession check back. Check 3.1 types the profession default back."
-- id: s3
-  title: Waiting for combat and dungeons
-  intro: Do this section near a dungeon entrance with a monster to fight. A warning that comes due in a fight or a dungeon waits, and asks after it.
-  steps:
-  - id: cv.s3.1
-    title: "Make the sell warning due in a fight, then answer it after the fight"
-    setup: "Needs: a monster to fight near a dungeon entrance; otherwise press Skip. The Run button hides in combat, so press Run (or copy each line from its box into chat, in order) during the fight."
-    auto: true
-    action:
-      kind: manual
-      text: "A question appears. Click No. Start a fight. During the fight, press Run: it types |cff99ccff/cvn food 5|r, |cff99ccff/cvn trade 10|r, |cff99ccff/cvn bags 2|r and |cff99ccff/cvn bags 200|r. Finish the fight. When the sell question appears, click |cffffd100No|r."
-      commands:
-      - "/cvn food 5"
-      - "/cvn trade 10"
-      - "/cvn bags 2"
-      - "/cvn bags 200"
-    expect: "No question appears during the fight. The sell question appears after the fight ends."
-    verify:
-    - assertions
-    assertions:
-    - kind: log-sequence
-      source: debug
-      sequence:
-      - contains: "trigger held in combat: sell"
-      - contains: "event PLAYER_REGEN_ENABLED"
-      - contains: "question shown: sell, "
-      - contains: "question declined: sell"
-      scope: attempt
-      label: "The sell warning waited for the fight, asked after it and was answered"
-    notes: "The first three lines type the food, profession and bag defaults back, and the last raises the bag threshold. Pressed outside a fight, Run asks at once and the hold line is missing, so the step does not pass. A second Run in the fight works, because the bag default typed back ends the answered request first. Check 1.3 typed the bag default back, so the sell warning starts from off. Check 3.2 was merged into this step and its id is retired."
-  - id: cv.s3.3
-    title: "Leave the sell question open, enter the dungeon, come out and click No"
-    setup: "Needs: a dungeon entrance close by; otherwise press Skip."
-    auto: true
-    action:
-      kind: manual
-      text: "A question appears. Click No. Press Run. It types the bag default back and raises it again (|cff99ccff/cvn bags 2|r, |cff99ccff/cvn bags 200|r), so the sell question appears. Leave it open and walk into the dungeon: the question closes. Walk out: the question comes again. Click |cffffd100No|r."
-      commands:
-      - "/cvn bags 2"
-      - "/cvn bags 200"
-    expect: "The question closes when you enter the dungeon, nothing is asked inside, and the question is asked again outside."
-    verify:
-    - assertions
-    assertions:
-    - kind: log-sequence
-      source: debug
-      sequence:
-      - contains: "trigger go sell"
-      - contains: "question shown: sell, "
-      - contains: "question withdrawn: the player changed zone"
-      - contains: "trigger held in an instance: sell"
-      - pattern: "instance: %a+ %-> none"
-      - contains: "question shown: sell, "
-      - contains: "question declined: sell"
-      scope: attempt
-      label: "The question was withdrawn at the zone change, the warning waited inside, and it asked again outside"
-    notes: "A real warning, not a test command: a test question is never withdrawn. The first Run command ends the sell request check 3.1 left, and the second makes it due again. Checks 3.3 and 3.4 are one step now; id cv.s3.4 is retired. The bag threshold stays at 200 until check 5.1 types it back (checks 4.1 and 4.2 type it back too)."
-- id: s4
-  title: Buying at a merchant
-  intro: A Hunter buys ammo at once (the default); a class with reagents (for example a Mage) answers the reagent question. Each step says what it needs and waits for you, so press Skip when you do not have it.
-  steps:
-  - id: cv.s4.1
-    title: "Reagent class: open a vendor, click Yes, then open it again"
-    setup: "Needs: a class with reagents (for example a Mage), fewer than 20 of a watched reagent, enough gold and room in your bags for at least one full purchase (one stack); otherwise press Skip. Stand at a vendor that sells your reagent."
-    auto: true
-    action:
-      kind: manual
-      text: "A question appears. Click Yes. Press Run. It types the bag default back (|cff99ccff/cvn bags 2|r) and turns reagent buying on (|cff99ccff/cvn reagentbuy on|r). Open the vendor and click |cffffd100Yes|r on the purchase question. Close the window and open it again."
-      commands:
-      - "/cvn bags 2"
-      - "/cvn reagentbuy on"
-    expect: "Yes buys the reagents. The second time the vendor opens, nothing more is bought."
-    verify:
-    - assertions
-    assertions:
-    - kind: log-sequence
-      source: debug
-      sequence:
-      - contains: "reagent buy: asked"
-      - contains: "reagent buy: bought "
-      - pattern: "reagent buy: target %d+, money %d+, plan: nothing, cost 0, short: nil"
-      scope: attempt
-      label: "The reagent question asked, Yes bought, and the second visit found every watched reagent at the target"
-    - kind: log
-      source: debug
-      contains: "reagent buy: FAILED"
-      absent: true
-      diagnostic: true
-      scope: attempt
-      label: "No purchase failed"
-    notes: "Class step (reagents). Reagent buying asks first by default. The plan line is computed from the reagents in your bags, so an empty plan on the second visit proves the count rose to the target (20 by default). Ids cv.s4.3 and cv.s4.4 are retired. Closing the purchase question with the merchant window is covered by the unit tests (tests/test_core.lua), so no step checks it in the game."
-  - id: cv.s4.2
-    title: "Hunter: open a vendor, ammo buys at once, then open it again"
-    setup: "Needs: a Hunter with a bow, crossbow or gun, enough gold and room in the quiver or ammo pouch for at least one full purchase (one stack); otherwise press Skip. Stand at a vendor that sells your ammo."
-    auto: true
-    action:
-      kind: manual
-      text: "Nothing appears. CheckThat checks by itself. Press Run. It types the bag default back (|cff99ccff/cvn bags 2|r) and keeps ammo buying at its default, buying at once (|cff99ccff/cvn buy auto|r). Open the vendor. Close the window and open it again."
-      commands:
-      - "/cvn bags 2"
-      - "/cvn buy auto"
-    expect: "The addon buys ammo as the window opens, with no question. The second time the vendor opens, nothing more is bought: the quiver or ammo pouch is full."
-    verify:
-    - assertions
-    assertions:
-    - kind: log-sequence
-      source: debug
-      sequence:
-      - contains: "ammo buy: bought "
-      - contains: "ammo buy: less than one purchase of room"
-      scope: attempt
-      label: "Ammo was bought at once, and the second visit found the storage full"
-    - kind: log
-      source: debug
-      contains: "ammo buy: asked"
-      absent: true
-      diagnostic: true
-      scope: attempt
-      label: "Ammo buying did not ask first (the default buys at once)"
-    - kind: log
-      source: debug
-      contains: " buy: FAILED"
-      absent: true
-      diagnostic: true
-      scope: attempt
-      label: "No purchase failed"
-    notes: "Class step (Hunter). A bought line counts the purchases the game took; the game can still refuse one without an error. The room line is computed from the ammo you carry, so with room for a full purchase before the step it proves the count rose. Id cv.s4.3 is retired."
-- id: s5
-  title: Report and find
-  steps:
-  - id: cv.s5.1
-    title: "Open the debug report"
-    action:
-      kind: manual
-      text: "Look, then press Pass or Fail. Press Run. It types the bag default back (|cff99ccff/cvn bags 2|r) and opens the debug report (|cff99ccff/cvn log|r)."
-      commands:
-      - "/cvn bags 2"
-      - "/cvn log"
-    expect: "A window opens with the report selected for copying. Its first lines name the addon version and the game, and lines further down say \"color picker: available, settings button: available\" and \"CheckThat: working\". The newest log lines follow. Press Pass."
-    verify:
-    - player
-    notes: "Player step. Drawing: the copyable report window and its header, read on the real client: the color picker and settings button lines say what this client has. /cvn log writes no log line, so no assertion can prove it; the \"CheckThat:\" header line is the same text as the integration entry, which the offline block checks. /cvn bags 2 ends the sell warning from section 3 for every class."
-  - id: cv.s5.2
-    title: "Find a drink seller and pick one"
-    action:
-      kind: manual
-      text: "Look, then press Pass or Fail. Press Run (|cff99ccff/cvn find juice|r). If a menu of items opens, pick one drink. In the seller list that opens, pick a seller."
-      commands:
-      - "/cvn find juice"
-    expect: "Chat says the sellers sell drink in general. A list opens at the mouse with the nearest seller marked, each with its zone and distance. After the pick, a waypoint is set to that seller. Press Pass."
-    verify:
-    - player
-    - assertions
-    assertions:
-    - kind: log-sequence
-      source: debug
-      sequence:
-      - contains: "find: \"juice\", "
-      - pattern: "find: .+ looked up as "
-      - contains: "find: seller list for "
-      - contains: "find: chosen "
-      - pattern: "accepted: .+ via "
-      scope: attempt
-      label: "The search found drinks, listed sellers, and the pick got a waypoint"
-    - kind: log
-      source: debug
-      contains: "via nothing available"
-      absent: true
-      scope: attempt
-      label: "A waypoint provider took the waypoint"
-    notes: "Player step. Drawing: the menus at the mouse and the marked nearest seller. The menus come from the find command itself, so the picks are part of its action."
+      label: "The trainer question named a trainer this account learned, with its distance, and No was answered"
+    notes: "The trainer from check 2.5 is learned and stands next to you, so it is the nearest one. The question is a test question: no skill threshold or profession is needed."
 - id: s6
   title: Finish
   steps:
   - id: cv.s6.1
-    title: "Put the buying and waypoint settings back, then reload"
+    title: "Reload the game"
     auto: true
     action:
       kind: manual
-      text: "Nothing appears. CheckThat checks by itself. Press Run. It turns reagent buying off (|cff99ccff/cvn reagentbuy off|r), sets the waypoint choice back to Automatic (|cff99ccff/cvn nav auto|r) and reloads (|cff99ccff/reload|r)."
+      text: "Nothing appears. CheckThat checks by itself. Press Run to reload the game."
       commands:
-      - "/cvn reagentbuy off"
-      - "/cvn nav auto"
       - "/reload"
     expect: "The game reloads."
     verify:
@@ -558,41 +355,31 @@ sections:
       contains: "---- login ----"
       scope: attempt
       label: "The game reloaded"
-    notes: "Cleanup the player sees: sections 1 and 4 changed these settings. Each command is harmless when the setting is already at its default."
+    notes: "Check 6.2 needs a reload between learning the vendor and asking for it."
   - id: cv.s6.2
-    title: "After the reload, ask for a sell vendor without opening the vendor from check 1.3"
-    setup: "Do not open the vendor. Needs: the vendor you opened in check 1.3 stands next to you; otherwise press Skip."
+    title: "After the reload, open the vendor from check 1.3 again"
+    setup: "Needs: the vendor you opened in check 1.3."
     auto: true
     action:
       kind: manual
-      text: "A question appears. Click No. Press Run (|cff99ccff/cvn test sell|r). The question names the vendor next to you. Click |cffffd100No|r."
-      commands:
-      - "/cvn test sell"
-    expect: "The test question names the vendor from check 1.3, which stands next to you."
+      text: "Nothing appears. CheckThat checks by itself. Open the window of the vendor you opened in check 1.3 and close it."
+    expect: "The step finishes by itself after the vendor window opens."
     verify:
     - assertions
-    timeout: 90
     assertions:
     - kind: log-sequence
       source: debug
       sequence:
-      - contains: "test command: sell"
-      - contains: "question shown: sell, "
-      - contains: "question declined: sell"
+      - pattern: "vendor learned: .+ %(npc %d+%), u%a+"
+      - contains: "merchant window opened"
       scope: attempt
-      label: "The sell question was asked after the reload and answered"
-    - kind: log
-      source: debug
-      contains: "merchant window opened"
-      absent: true
-      scope: attempt
-      label: "No merchant window opened, so the search used the vendors loaded at login"
-    notes: "The step waits its whole timeout, because the check that no vendor window opened can only hold at the end. The vendor stands next to you, so it is the closest one. Opening a merchant window adds that vendor to the search again, so the step asks without opening it. The question proves the vendor saved before the reload only when check 1.3 learned it as new; for a vendor the addon already knew, it proves the reload path (the vendors load again at login)."
+      label: "After the reload the addon still knew the vendor: updated or unchanged, not new"
+    notes: "The learned line says new for a vendor the account never saw, and updated or unchanged for one it knows. After the reload it can only know the vendor from the saved variables. When check 1.3 learned the vendor as new, this proves that save; when the vendor was known before the run, it proves the reload path. Search over learned data is proven by check 2.7, which names a learned trainer."
   - id: cv.s6.3
     title: Turn test settings off, then check for Lua errors
     action:
       kind: manual
-      text: Nothing appears. CheckThat checks by itself. Press Run. It turns test settings off (|cff99ccff/cvn testsettings off|r) and your own settings come back. CheckThat then reads its list of Lua errors for this run.
+      text: Nothing appears. CheckThat checks by itself. Press Run to turn test settings off, so your own settings come back, and to let CheckThat read its list of Lua errors for this run.
       commands:
       - "/cvn testsettings off"
     expect: Chat says your own settings are back, and ClosestVendor raised no Lua error during this plan.

@@ -1,4 +1,4 @@
--- The in-game test plans (plans/closestvendor*.yaml: core, ui and addons) keep their numbers in order, and
+-- The in-game test plans (plans/closestvendor*.yaml: the core plan, plus any feature plan) keep their numbers in order, and
 -- every reference to a check in the code, tests and docs names a step or section one of the plans has
 -- (AGENTS.md, CheckThat). The plans are read with patterns: CI has no YAML library and no CheckThat. Each
 -- plan owns a range of section numbers, so "test plan check N.M" names one step across the set. Ids may
@@ -16,10 +16,12 @@ local function read(path)
 end
 
 -- Each plan, its section range and its step limit (a plan with 25 or more steps is split; AGENTS.md).
+-- version is the ClosestVendor version the plan's first step asks for (major*10000 + minor*100 + patch): the
+-- version that has what it checks. The core plan is the release gate. A feature plan, written when a feature is
+-- built or changed, joins this list with its own section range from s30 on: s10 to s29 belonged to the removed
+-- ui and addons plans, and their ids stay retired.
 local PLANS = {
-    { path = "plans/closestvendor.yaml", first = 0, last = 9 },
-    { path = "plans/closestvendor.ui.yaml", first = 10, last = 19 },
-    { path = "plans/closestvendor.addons.yaml", first = 20, last = 29 },
+    { path = "plans/closestvendor.yaml", first = 0, last = 9, core = true, version = 11300 },
 }
 local MAX_STEPS = 24
 
@@ -59,6 +61,7 @@ for _, plan in ipairs(PLANS) do
             local n = tonumber(s:match("^s(%d+)$"))
             eq(n ~= nil and n > section, true, plan.path .. ": sections are numbered in increasing order: " .. s)
             eq(n ~= nil and n >= plan.first and n <= plan.last, true, plan.path .. ": section " .. s .. " is in the plan's range s" .. plan.first .. " to s" .. plan.last)
+            eq(n ~= nil and (n < 10 or n >= 30), true, plan.path .. ": section " .. s .. " is not one of the retired s10 to s29")
             section, lastStep = n or section, 0
         end
         local id = line:match("^  %- id: (%S+)$")
@@ -84,7 +87,7 @@ for _, plan in ipairs(PLANS) do
     eq((first or ""):find("\n      entry: version\n", 1, true) ~= nil, true, vid .. " calls the version entry")
     eq((first or ""):find("key: entry.version", 1, true) ~= nil, true, vid .. " asserts the entry.version fact")
     eq((first or ""):find("op: ge", 1, true) ~= nil, true, vid .. " passes at the version under test or newer")
-    eq((first or ""):find("\n      value: 11200\n", 1, true) ~= nil, true, vid .. " asks for 1.12.0 (11200) or newer")
+    eq((first or ""):find("\n      value: " .. plan.version .. "\n", 1, true) ~= nil, true, vid .. " asks for the version " .. plan.version .. " or newer")
     -- Setup turns the debug log on, then test settings on, then reloads; the plan asserts both lines at login.
     local setupId = ("cv.s%d.2"):format(plan.first)
     local setup = text:match("\n  %- id: " .. setupId:gsub("%.", "%%.") .. "\n(.-)\n  %- id: ") or text:match("\n  %- id: " .. setupId:gsub("%.", "%%.") .. "\n(.-)\n%- id: ") or ""
@@ -127,6 +130,20 @@ for _, plan in ipairs(PLANS) do
         local ok = false
         for _, o in ipairs(OPENERS) do if actionText:sub(1, #o) == o then ok = true end end
         eq(ok, true, st.id .. ": the action text opens with one of the four fixed sentences: " .. actionText:sub(1, 60))
+        if plan.core then
+            -- The core plan reads like player steps: the commands sit behind Run, never in the sentence.
+            eq(actionText:find("/cvn", 1, true) == nil and actionText:find("|cff", 1, true) == nil, true, st.id .. ": the action text has no slash command or color code: " .. actionText:sub(1, 80))
+            -- One ordinary character runs it: no step needs a class, a profession, a dungeon, a fight or another addon.
+            local setupText = (st.body:match("\n    setup: ([^\n]*)") or ""):lower()
+            for _, word in ipairs({ "hunter", "mage", "warlock", "priest", "warrior", "rogue", "paladin", "shaman", "druid", "death knight",
+                                    "profession", "dungeon", "instance", "fight", "combat", "tomtom", "waypointui", "norgannondb", "addon" }) do
+                eq(setupText:find(word, 1, true) == nil, true, st.id .. ": the setup does not need '" .. word .. "': " .. setupText)
+            end
+            -- Only the two waypoint steps differ by client.
+            if st.body:find("\n    clients:", 1, true) then
+                eq(st.id == "cv.s1.1" or st.id == "cv.s1.2", true, st.id .. ": only the waypoint steps are limited to one client")
+            end
+        end
         if st.body:find("\n    timeout: ", 1, true) then
             local exempt = st.id:match("^cv%.s%d+%.[12]$") ~= nil and (st.id:match("^cv%.s(%d+)") == tostring(plan.first)) or st.id == lastId
             eq(exempt or st.body:find("absent: true", 1, true) ~= nil, true, st.id .. ": a timeout needs a required absence check")
@@ -136,15 +153,20 @@ for _, plan in ipairs(PLANS) do
 end
 
 -- Ids of steps that were merged into another or removed stay retired: no plan has them again.
-local RETIRED = { "cv.s3.2", "cv.s3.4", "cv.s4.3", "cv.s4.4", "cv.s21.2", "cv.s21.6", "cv.s21.9" }
+local RETIRED = { "cv.s3.2", "cv.s3.4", "cv.s4.3", "cv.s4.4", "cv.s21.2", "cv.s21.6", "cv.s21.9",
+                  -- The core plan became the one-character release gate; these steps moved to unit tests, the
+                  -- offline block or a feature plan (openspec change core-release-plan).
+                  "cv.s2.2", "cv.s2.3", "cv.s2.6", "cv.s3.1", "cv.s3.3", "cv.s4.1", "cv.s4.2", "cv.s5.1", "cv.s5.2" }
 for _, id in ipairs(RETIRED) do
     eq(steps[id], nil, "a retired step id is not used again: " .. id)
 end
+-- The core plan is exactly the foundation steps: each system that makes the addon work, in the real game.
 do
-    local addons = read("plans/closestvendor.addons.yaml")
-    for _, name in ipairs({ "TomTom", "WaypointUI", "NorgannonDB" }) do
-        eq(addons:find("probe: addon-loaded\n    name: " .. name .. "\n", 1, true) ~= nil, true, "the addons plan has a requirement that " .. name .. " is loaded")
-    end
+    local want = { "cv.s0.1", "cv.s0.2", "cv.s1.1", "cv.s1.2", "cv.s1.3", "cv.s1.4", "cv.s1.5", "cv.s2.1", "cv.s2.4", "cv.s2.5", "cv.s2.7",
+                   "cv.s6.1", "cv.s6.2", "cv.s6.3" }
+    local have = {}
+    for id in read("plans/closestvendor.yaml"):gmatch("\n  %- id: (cv%.s%d+%.%d+)") do have[#have + 1] = id end
+    eq(table.concat(have, " "), table.concat(want, " "), "the core plan holds the foundation steps, in order")
 end
 
 -- "test plan check 4.1", "test plan 8.2, 8.3", "test-plan section 20", "manual test plan §7".
@@ -174,7 +196,8 @@ end
 local seen = refs("see test-plan section 20; test plan check 2.1, 2.3 and 2.4; test plan §7")
 eq(table.concat(seen, " "), "20 2.1 2.3 2.4 7", "the scan reads every citation form")
 eq((resolves("99.1")), false, "a missing step does not resolve")
-eq((resolves("11.3")), true, "a step of the ui plan resolves")
+eq((resolves("2.1")), true, "a step of the core plan resolves")
+eq((resolves("11.3")), false, "a step of a removed plan does not resolve")
 
 for _, path in ipairs(files) do
     for _, n in ipairs(refs(read(path))) do

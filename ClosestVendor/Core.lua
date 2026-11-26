@@ -847,6 +847,17 @@ local function showReport()
     for _, line in ipairs(ns.Log.Format(log.Entries(), 20)) do say(line) end
 end
 
+-- Where a vendor or trainer of a question came from, for the debug log: "learned" when this account
+-- learned it, "NorgannonDB" when only that addon gave it, otherwise "shipped".
+local function sourceOf(kind, id)
+    if kind == "trainer" then
+        if DB.trainers[id] ~= nil then return "learned" end
+        return external.trainerIds[id] and "NorgannonDB" or "shipped"
+    end
+    if DB.learned[id] ~= nil then return "learned" end
+    return external.byId[id] and "NorgannonDB" or "shipped"
+end
+
 local function start()
     log.Add("---- login ----")
     if CHAR.realSettings then
@@ -873,6 +884,7 @@ local function start()
         playerPos = A.playerWorldPos,
         playerFaction = A.factionId("player"),
         buckets = buckets,
+        sourceOf = sourceOf,
         nav = nav,
         ammo = A.ammoStatus,
         reagents = reagentList,

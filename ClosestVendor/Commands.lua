@@ -1,6 +1,6 @@
 -- Pure slash-command handling: no WoW globals.
 -- Run() edits cfg and returns the lines to print, plus an optional action for the caller:
--- {"test", kind} with kind "sell", "repair", "arrow", "bullet", "reagent", "food", "water", "petfood" or "remind"; {"open"} for the settings page;
+-- {"test", kind} with kind "sell", "repair", "arrow", "bullet", "reagent", "food", "water", "petfood", "trainer" or "remind"; {"open"} for the settings page;
 -- {"find", text} for /cvn find; {"debug", on}; {"log"} to show the report; {"log", "clear"}; {"hud", "pick"} for /cvn hud color with no colour (open the colour picker); {"hud", "reset"} to put the status
 -- window back at its default position (lock, scale, opacity, text opacity, colour and row modes are
 -- plain settings); {"testsettings", on} for /cvn testsettings on|off (Core swaps the settings with SwapSettings); {"demo"} for the tour of real routes, questions and notifications.
@@ -45,7 +45,7 @@ local HELP = {
     L["/cvn anchor hearth/last  where a row click searches from inside a dungeon or raid"],
     L["/cvn ah on/off  let a row click go to the auction house when it is closer than a vendor"],
     L["/cvn test sell, repair, arrows, bullets, reagent  ask the question now"],
-    L["/cvn test food, water, petfood  ask about food, water or pet food now; /cvn test remind  show the conjure or healthstone reminder now"],
+    L["/cvn test food, water, petfood  ask about food, water or pet food now; /cvn test trainer  ask about a profession trainer now; /cvn test remind  show the conjure or healthstone reminder now"],
     L["/cvn debug on/off  record what the addon sees; /cvn log  show the report; /cvn log clear  empty it"],
     L["/cvn find <item link or name>  show the nearest known sellers of a supply or class reagent"],
     L["/cvn testsettings on/off  use fresh default settings for testing, then bring your own back"],
@@ -435,6 +435,9 @@ function M.Run(cfg, msg, class, itemName)
     end
     if cmd == "test" and (arg == "food" or arg == "water" or arg == "petfood") then
         return { L["Asking about the nearest vendor selling what you need..."] }, { "test", arg }
+    end
+    if cmd == "test" and arg == "trainer" then
+        return { L["Asking about the nearest profession trainer..."] }, { "test", "trainer" }
     end
     if cmd == "test" and arg == "remind" then
         return { L["Showing the reminder for your class..."] }, { "test", "remind" }

@@ -14,7 +14,7 @@ test-py:
 # make check never need them.
 CT ?= ct
 # The three plans: core, status window and settings, other addons. Each gets its own build/<name>.ct.
-PLANS ?= plans/closestvendor.yaml plans/closestvendor.ui.yaml plans/closestvendor.addons.yaml
+PLANS ?= plans/closestvendor.yaml
 plan:
 	@command -v "$(CT)" >/dev/null 2>&1 || { echo "plan: no CheckThat tools ($(CT) not found); install them with make install-skill BIN_DIR=\$$HOME/bin in CheckThat, or set CT=<path to ct>" >&2; exit 1; }
 	@mkdir -p build

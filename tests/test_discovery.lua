@@ -22,6 +22,34 @@ eq(count(learned), 1, "still one record")
 eq(learned[100][7], true, "repair updated")
 eq(learned[100][4], 0.6, "position updated")
 
+-- A small move on a repeat visit keeps the saved position (covers: Small moves keep the saved position).
+do
+    local L = {}
+    D.Record(L, { 300, "Baker", 1455, 0.30, 0.60, 1, false, 0, 0, 17 })
+    eq(D.Record(L, { 300, "Baker", 1455, 0.302, 0.598, 1, false, 0, 0, 17 }), false, "a step to the side: unchanged")
+    eq(L[300][4] .. "," .. L[300][5], "0.3,0.6", "the saved position stays")
+    eq(D.Record(L, { 300, "Baker", 1455, 0.3049, 0.5951, 1, false, 0, 0, 17 }), false, "just inside D.NEAR: still unchanged")
+    eq(D.Record(L, { 300, "Baker", 1455, 0.302, 0.60, 1, false, 1, 0, 17 }), true, "stock changed: updated")
+    eq(L[300][8] .. "/" .. L[300][4], "1/0.3", "the stock is new and the position is kept")
+    eq(D.Record(L, { 300, "Baker", 1455, 0.3051, 0.60, 1, false, 1, 0, 17 }), true, "just outside D.NEAR: updated")
+    eq(L[300][4], 0.3051, "the new position is saved")
+    eq(D.Record(L, { 300, "Baker", 1455, 0.32, 0.60, 1, false, 1, 0, 17 }), true, "moved 0.02: updated")
+    eq(L[300][4], 0.32, "the moved position is saved")
+    eq(D.Record(L, { 300, "Baker", 1456, 0.32, 0.60, 1, false, 1, 0, 17 }), true, "another map: updated even at the same x and y")
+    eq(D.Record(L, { 300, "Baker", 1457, 0.322, 0.60, 1, false, 1, 0, 17 }), true, "another map, a step away: updated")
+    eq(L[300][4], 0.322, "on another map the position is the new one, however close")
+    local T2 = {}
+    D.RecordTrainer(T2, { 40, "Smith", 1455, 0.5, 0.5, 1 }, { "Mining" })
+    eq(D.RecordTrainer(T2, { 40, "Smith", 1455, 0.503, 0.5, 1 }, { "Mining" }), false, "trainer: a step to the side is unchanged")
+    eq(T2[40][4], 0.5, "trainer keeps its saved position")
+    eq(D.RecordTrainer(T2, { 40, "Smith", 1455, 0.503, 0.5, 1 }, { "Mining", "Smelting" }), true, "trainer: a new profession updates")
+    eq(T2[40][4], 0.5, "and keeps the saved position")
+    local A2 = {}
+    D.RecordAuctioneer(A2, { 50, "Banker", 1455, 0.5, 0.5, 1 })
+    eq(D.RecordAuctioneer(A2, { 50, "Banker", 1455, 0.5, 0.504, 1 }), false, "auctioneer: a step to the side is unchanged")
+    eq(A2[50][5], 0.5, "auctioneer keeps its saved position")
+end
+
 -- Unidentifiable merchants are ignored.
 eq(D.Record(learned, { nil, "Ghost", 1, 0, 0, 0, false, 0 }), false, "no id")
 eq(D.Record(learned, nil), false, "nil record")

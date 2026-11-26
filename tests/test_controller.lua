@@ -56,6 +56,7 @@ local function world(over)
         end or nil,
         playerPos = function() if w.pos then return w.pos[1], w.pos[2], w.pos[3], w.pos[4] end end,
         playerFaction = 1,
+        sourceOf = w.sourceOf,
         buckets = w.buckets or { [1] = VENDORS },
         log = (not w.noLog) and function(m) w.logs[#w.logs + 1] = m end or nil,
         ammo = function() return w.ammoKind, w.ammoCount end,
@@ -259,6 +260,84 @@ w = world({ free = 1, autoAccept = false })
 w.c.Test("sell")
 w.c.Evaluate()
 eq(#w.prompts, 2, "the real trigger still asks after a test")
+
+-- The question line names where the target came from and how far it is, in whole yards (covers: Question lines name the source and the distance).
+local function questionLine(world_)
+    for _, l in ipairs(world_.logs) do if l:find("question shown:", 1, true) then return l end end
+end
+w = world({ autoAccept = false })
+w.c.Test("sell")
+eq(questionLine(w), "question shown: sell, Near Seller (npc 1), shipped, 10 yd", "no source lookup: shipped, 10 yards away")
+w = world({ autoAccept = false, pos = { 1, 10, 0 } })
+w.c.Test("sell")
+eq(questionLine(w), "question shown: sell, Near Seller (npc 1), shipped, 0 yd", "standing at the vendor: 0 yd")
+w = world({ autoAccept = false, pos = { 1, 0.4, 0 } })
+w.c.Test("sell")
+eq(questionLine(w), "question shown: sell, Near Seller (npc 1), shipped, 10 yd", "9.6 yards rounds up")
+w = world({ autoAccept = false, pos = { 1, 0.6, 0 } })
+w.c.Test("sell")
+eq(questionLine(w), "question shown: sell, Near Seller (npc 1), shipped, 9 yd", "9.4 yards rounds down")
+local asked
+w = world({ autoAccept = false, sourceOf = function(kind, id) asked = kind .. ":" .. tostring(id); return "learned" end })
+w.c.Test("repair")
+eq(questionLine(w), "question shown: repair, Far Repairer (npc 2), learned, 90 yd", "the source comes from the lookup")
+eq(asked, "repair:2", "the lookup is asked for the kind and the npc id of the target")
+
+-- The trainer form from a skill check keeps its points left after the distance.
+w = world({ skills = { { name = "Mining", rank = 70, max = 75 } }, known = { Mining = true }, trainers = { [1] = { { 20, "Near Miner", 100, 0.1, 0.1, 0, { Mining = true }, 10, 0 } } }, autoAccept = false,
+            sourceOf = function(kind, id) return kind == "trainer" and id == 20 and "NorgannonDB" or "?" end })
+w.c.OnCraft()
+eq(questionLine(w), "question shown: trainer for Mining, Near Miner (npc 20), NorgannonDB, 10 yd, 5 point(s) left", "trainer line from a skill check: " .. tostring(questionLine(w)))
+-- A real trainer question is withdrawn by a zone change, a test one is not (below).
+
+-- /cvn test trainer: the trainer question whatever the skill, and any class can run it (covers: Trainer test command).
+local TRAINERS = { [1] = {
+    { 30, "Near Smith", 100, 0.1, 0.1, 0, { Blacksmithing = true }, 10, 0 },
+    { 31, "Far Miner", 100, 0.5, 0.1, 0, { Mining = true, Herbalism = true }, 50, 0 },
+    { 32, "Herbalist Kay", 100, 0.7, 0.1, 0, { Herbalism = true }, 70, 0 },
+} }
+w = world({ autoAccept = false, trainers = TRAINERS })
+eq(w.c.Test("trainer"), nil, "test trainer: nothing to complain about, with no profession known")
+eq(#w.prompts, 1, "test trainer asks with no profession, no skills and no threshold")
+eq(w.prompts[1].kind, "trainer", "test trainer kind")
+eq(w.prompts[1].vendor[2], "Near Smith", "no profession known: the nearest trainer of any profession")
+eq(w.prompts[1].trade, "Blacksmithing", "and a profession it teaches")
+eq(w.prompts[1].count, nil, "no points left to name")
+eq(questionLine(w), "question shown: trainer for Blacksmithing, Near Smith (npc 30), shipped, 10 yd", "the line has no points part: " .. tostring(questionLine(w)))
+eq(w.setCount, 0, "no pin before Yes")
+w.prompts[1].accept()
+eq(w.setCount, 1, "Yes sets the pin")
+eq(w.last[2], "Near Smith", "to that trainer")
+w = world({ autoAccept = false, trainers = TRAINERS, known = { Mining = true } })
+w.c.Test("trainer")
+eq(w.prompts[1].vendor[2], "Far Miner", "a known profession wins over a nearer trainer of another")
+eq(w.prompts[1].trade, "Mining", "the profession is the known one")
+w = world({ autoAccept = false, trainers = TRAINERS, known = { Herbalism = true } })
+w.c.Test("trainer")
+eq(w.prompts[1].vendor[2], "Far Miner", "two known-profession trainers: the nearest one")
+eq(w.prompts[1].trade, "Herbalism", "teaching the known profession")
+w = world({ autoAccept = false, trainers = TRAINERS, combat = true, cfg = { tradeEnabled = false } })
+w.c.Test("trainer")
+eq(#w.prompts, 1, "asks in combat and with the profession warning off")
+-- The texts of a test question.
+eq(ns.Controller.PromptText("trainer", { 30, "Near Smith" }, "Ironforge", nil, "Blacksmithing"), "Navigate to the closest Blacksmithing trainer, Near Smith (Ironforge)?", "test trainer text")
+eq(ns.Controller.PromptText("trainer", { 30, "Near Smith" }, "Ironforge", 0, "Blacksmithing"):find("reached its current limit", 1, true) ~= nil, true, "a real question with 0 points keeps its text")
+-- Nothing to ask about: say why, ask nothing, leave nothing pending.
+w = world({ pos = false, trainers = TRAINERS })
+eq(w.c.Test("trainer"):find("No map position", 1, true) ~= nil, true, "test trainer: no position message")
+eq(#w.prompts, 0, "no question without a position")
+w = world({ trainers = TRAINERS, pos = { 7, 0, 0 } })
+eq(w.c.Test("trainer"):find("No known profession trainer", 1, true) ~= nil, true, "test trainer: no trainer message")
+eq(table.concat(w.logs, "\n"):find("test command: nothing asked: no known trainer", 1, true) ~= nil, true, "and the log says why")
+eq(#w.prompts, 0, "no question without a trainer")
+-- A test question is not withdrawn by a zone change; a real trainer question is.
+w = world({ autoAccept = false, trainers = TRAINERS })
+w.c.Test("trainer")
+local cancelsBefore = w.cancelCount
+w.c.OnPlaceChange()
+eq(w.cancelCount, cancelsBefore, "a zone change does not withdraw a test trainer question")
+w.prompts[1].accept()
+eq(w.setCount, 1, "a Yes after the zone change still sets the waypoint")
 
 -- Ammo: asks for the right kind, with the count, only when low.
 w = world({ ammoKind = "arrow", ammoCount = 500, autoAccept = false })
@@ -1408,6 +1487,10 @@ eq(ns.Controller.PromptText("supply", SV[2], nil, 3, "food"), "You are low on fo
 w.supplies.totals = { food = 30, water = 0, healthstone = 0 }
 w.c.Evaluate()
 eq(w.clearCount >= 1, true, "restocked: the pin is withdrawn")
+-- The supply form keeps its count after the source and the distance.
+w = supply("WARRIOR", { food = 3, water = 0, healthstone = 0 }, nil, nil, { autoAccept = false, sourceOf = function() return "learned" end })
+w.c.Evaluate()
+eq(questionLine(w):match("^question shown: supply food, Baker %(npc %d+%), learned, %d+ yd, 3 left$") ~= nil, true, "supply line: source, distance, then the count: " .. tostring(questionLine(w)))
 
 -- Water is for mana classes; food comes first, water after the food question resolves.
 w = supply("PRIEST", { food = 30, water = 2, healthstone = 0 })
