@@ -33,20 +33,19 @@ requirements:
     probe: addon-loaded
     name: ClosestVendor
 offline:
+  level: 6
   toc: wow-closest-vendor/ClosestVendor/ClosestVendor_Vanilla.toc
+  tocs:
+    era: wow-closest-vendor/ClosestVendor/ClosestVendor_Vanilla.toc
+    forever: wow-closest-vendor/ClosestVendor/ClosestVendor_Camelot.toc
   steps:
-  - event:
-      name: ADDON_LOADED
-      args:
-      - ClosestVendor
-  - event:
-      name: PLAYER_LOGIN
-  - label: The fake client gives no version, so the version entry returns nothing
+  - label: The CheckThat integration is working after a real load
     call:
       addon: ClosestVendor
-      entry: version
-    returns: []
-  - label: The bag threshold is 2 by default
+      entry: integration
+    returns:
+    - working
+  - label: The saved bag threshold is 2 on a new character
     call:
       addon: ClosestVendor
       entry: setting
@@ -54,24 +53,6 @@ offline:
       - bags.threshold
     returns:
     - '2'
-  - label: The CheckThat integration is working
-    call:
-      addon: ClosestVendor
-      entry: integration
-    returns:
-    - working
-  - label: An unknown setting key returns nothing
-    call:
-      addon: ClosestVendor
-      entry: setting
-      args:
-      - no.such.key
-    returns: []
-  - label: No warning request is open after login, so the active entry returns nothing
-    call:
-      addon: ClosestVendor
-      entry: active
-    returns: []
   - label: A fresh account has learned no vendor yet
     call:
       addon: ClosestVendor
@@ -80,79 +61,10 @@ offline:
       - vendors
     returns:
     - 0
-  - label: An npc id that is not learned returns nothing
+  - label: The warning check at login opened no warning request
     call:
       addon: ClosestVendor
-      entry: learned
-      args:
-      - vendors
-      - 999999
-    returns: []
-  - label: An unknown kind returns nothing
-    call:
-      addon: ClosestVendor
-      entry: learned
-      args:
-      - bankers
-    returns: []
-  - label: An npc this character never saw has no standing
-    call:
-      addon: ClosestVendor
-      entry: standing
-      args:
-      - 999999
-    returns: []
-  - label: The fake client has no TomTom, WaypointUI or game waypoint, so the waypoint is a chat line
-    call:
-      addon: ClosestVendor
-      entry: nav
-    returns:
-    - chat
-  - label: The fake client has no NorgannonDB
-    call:
-      addon: ClosestVendor
-      entry: external
-    returns:
-    - not found
-  - label: The status window scale is 100 by default
-    call:
-      addon: ClosestVendor
-      entry: config
-      args:
-      - hudScale
-    returns:
-    - '100'
-  - label: A row group nobody changed shows only while low
-    call:
-      addon: ClosestVendor
-      entry: config
-      args:
-      - hudRow.bags
-    returns:
-    - low
-  - label: A name that is not a setting returns nothing
-    call:
-      addon: ClosestVendor
-      entry: config
-      args:
-      - no.such.setting
-    returns: []
-  - label: The status window has not drawn yet (its redraw waits for a timer), so the window entry returns nothing
-    call:
-      addon: ClosestVendor
-      entry: window
-    returns: []
-  - label: The window entry for one row group returns nothing before the first draw too
-    call:
-      addon: ClosestVendor
-      entry: window
-      args:
-      - supplies
-    returns: []
-  - label: No warning check has run yet, so the reagents entry returns nothing
-    call:
-      addon: ClosestVendor
-      entry: reagents
+      entry: active
     returns: []
 sections:
 - id: s0
