@@ -13,7 +13,7 @@ test-py:
 # The in-game test plans, checked with the installed CheckThat tools (AGENTS.md, CheckThat). make test and
 # make check never need them.
 CT ?= ct
-# The three plans: core, status window and settings, other addons. Each gets its own build/<name>.ct.
+# The core plan, then any feature plans (AGENTS.md, CheckThat). Each gets its own build/<name>.ct.
 PLANS ?= plans/closestvendor.yaml
 plan:
 	@command -v "$(CT)" >/dev/null 2>&1 || { echo "plan: no CheckThat tools ($(CT) not found); install them with make install-skill BIN_DIR=\$$HOME/bin in CheckThat, or set CT=<path to ct>" >&2; exit 1; }

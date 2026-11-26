@@ -29,7 +29,7 @@ local found = {}
 local p = io.popen("ls plans/closestvendor*.yaml")
 for path in p:lines() do found[#found + 1] = path end
 p:close()
-eq(#found, #PLANS, "the plan set is the three plans: " .. table.concat(found, " "))
+eq(#found, #PLANS, "the plan set is the plans in PLANS: " .. table.concat(found, " "))
 for _, plan in ipairs(PLANS) do
     local ok = false
     for _, path in ipairs(found) do if path == plan.path then ok = true end end

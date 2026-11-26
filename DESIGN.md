@@ -342,7 +342,7 @@ CVN's implementation sources:
 - [Copyable report window](ClosestVendor/Report.lua)
 - [Change record and coverage](openspec/changes/cohesive-addon-presentation/coverage.md)
 
-Automated validation uses `make test` and `make check`. Before claiming visual acceptance, run `plans/closestvendor.ui.yaml` on both clients (Vanilla and Camelot/Forever). It checks the low rows, the seller menu, Move with Escape, the background color, opacity 0 with dimmed text, the demo, the notice, the preview, the AddOns list pages and the settings window size. Review by hand what the plan leaves out:
+Automated validation uses `make test` and `make check`. The core plan, `plans/closestvendor.yaml`, checks only that the status window shows the low Bag space row. No plan checks the other visuals; a feature plan covers them when that feature is built or changed. Before claiming visual acceptance, review on both clients (Vanilla and Camelot/Forever) the low rows, the seller menu, Move with Escape, the background color, opacity 0 with dimmed text, the demo, the notice, the preview, the AddOns list pages and the settings window size, and:
 
 - Every child page and tab opened directly; purpose, scope and next action are apparent.
 - Long translations and complete control labels.

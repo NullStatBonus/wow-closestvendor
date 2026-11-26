@@ -2,7 +2,7 @@
 
 ## 1.13.1
 
-- **Fixed: A known vendor or trainer keeps its saved place when you stand a few steps away.** Before, each visit saved a new place.
+- **Fixed: A known vendor, trainer or auctioneer keeps its saved place when you stand a few steps away.** Before, its waypoint moved a little after each visit.
 
 ## 1.13.0
 
