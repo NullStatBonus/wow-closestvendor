@@ -1,26 +1,26 @@
 ## MODIFIED Requirements
 
 ### Requirement: Plan of record
-The repository SHALL hold one core plan, `plans/closestvendor.yaml`, as the release gate, plus feature plans `plans/closestvendor.ui.yaml` and `plans/closestvendor.addons.yaml` that run when their feature changes. Each plan SHALL stay under 25 steps with its own section range, start with a version check and end with a Lua error check. Step ids `cv.s<N>.<M>` SHALL be unique across the plans, in order, and never renumbered or reused; every "test plan" reference SHALL name a step or section a plan has.
+The repository SHALL hold one core plan, `plans/closestvendor.yaml`, as the release gate. A feature plan, `plans/closestvendor.<feature>.yaml`, MAY be added when a feature is built or changed; it is not part of the release gate. Each plan SHALL stay under 25 steps with its own section range, start with a version check and end with a Lua error check. Step ids `cv.s<N>.<M>` SHALL be unique, in order, and never renumbered or reused, and every "test plan" reference SHALL name a step a plan has.
 
 #### Scenario: Reference check
 - **WHEN** a doc cites a numbered plan check (as "test plan" and a step number) that no plan step has
 - **THEN** the automated tests fail
 
 #### Scenario: Plan too long
-- **WHEN** one of the three plans has 25 steps or more
+- **WHEN** a plan has 25 steps or more
 - **THEN** the automated tests fail
 
 #### Scenario: Plan set
-- **WHEN** one of the three plans is missing, or a plan does not start with its version step
+- **WHEN** the core plan is missing, a plan file is not in the plan list, or a plan does not start with its version step
 - **THEN** the automated tests fail
 
 #### Scenario: Retired id reused
-- **WHEN** a plan has a step id that an earlier version of the plans removed
+- **WHEN** a plan has a step id that an earlier version of the plans removed, or a section from s10 to s29 (the removed ui and addons plans)
 - **THEN** the automated tests fail
 
 ### Requirement: Plans run under test settings
-Each plan's setup step SHALL turn the debug log on, then test settings on, then reload, and SHALL assert the debug log, the login marker and `test settings: on at login` in that order. Each plan's last step SHALL turn test settings off and assert `test settings: off (own settings restored)` in that attempt. The core plan's version step SHALL require 1.13.0 or newer; a feature plan's version step SHALL require 1.12.0 or newer.
+Each plan's setup step SHALL turn the debug log on, then test settings on, then reload, and SHALL assert the debug log, the login marker and `test settings: on at login` in that order. Each plan's last step SHALL turn test settings off and assert `test settings: off (own settings restored)` in that attempt. The core plan's version step SHALL require 1.13.0 or newer; a feature plan's version step SHALL require the version that has what it checks.
 
 #### Scenario: Tester with own settings
 - **WHEN** a tester whose settings say "Navigate without asking" runs the core plan

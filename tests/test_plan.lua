@@ -1,4 +1,4 @@
--- The in-game test plans (plans/closestvendor*.yaml: core, ui and addons) keep their numbers in order, and
+-- The in-game test plans (plans/closestvendor*.yaml: the core plan, plus any feature plan) keep their numbers in order, and
 -- every reference to a check in the code, tests and docs names a step or section one of the plans has
 -- (AGENTS.md, CheckThat). The plans are read with patterns: CI has no YAML library and no CheckThat. Each
 -- plan owns a range of section numbers, so "test plan check N.M" names one step across the set. Ids may
@@ -16,13 +16,12 @@ local function read(path)
 end
 
 -- Each plan, its section range and its step limit (a plan with 25 or more steps is split; AGENTS.md).
--- version is the ClosestVendor version the plan's first step asks for (major*10000 + minor*100 + patch). The core
--- plan is the release gate, so it asks for the version that has what it checks; a feature plan asks for the
--- version it was last revised for.
+-- version is the ClosestVendor version the plan's first step asks for (major*10000 + minor*100 + patch): the
+-- version that has what it checks. The core plan is the release gate. A feature plan, written when a feature is
+-- built or changed, joins this list with its own section range from s30 on: s10 to s29 belonged to the removed
+-- ui and addons plans, and their ids stay retired.
 local PLANS = {
     { path = "plans/closestvendor.yaml", first = 0, last = 9, core = true, version = 11300 },
-    { path = "plans/closestvendor.ui.yaml", first = 10, last = 19, version = 11200 },
-    { path = "plans/closestvendor.addons.yaml", first = 20, last = 29, version = 11200 },
 }
 local MAX_STEPS = 24
 
@@ -62,6 +61,7 @@ for _, plan in ipairs(PLANS) do
             local n = tonumber(s:match("^s(%d+)$"))
             eq(n ~= nil and n > section, true, plan.path .. ": sections are numbered in increasing order: " .. s)
             eq(n ~= nil and n >= plan.first and n <= plan.last, true, plan.path .. ": section " .. s .. " is in the plan's range s" .. plan.first .. " to s" .. plan.last)
+            eq(n ~= nil and (n < 10 or n >= 30), true, plan.path .. ": section " .. s .. " is not one of the retired s10 to s29")
             section, lastStep = n or section, 0
         end
         local id = line:match("^  %- id: (%S+)$")
@@ -168,12 +168,6 @@ do
     for id in read("plans/closestvendor.yaml"):gmatch("\n  %- id: (cv%.s%d+%.%d+)") do have[#have + 1] = id end
     eq(table.concat(have, " "), table.concat(want, " "), "the core plan holds the foundation steps, in order")
 end
-do
-    local addons = read("plans/closestvendor.addons.yaml")
-    for _, name in ipairs({ "TomTom", "WaypointUI", "NorgannonDB" }) do
-        eq(addons:find("probe: addon-loaded\n    name: " .. name .. "\n", 1, true) ~= nil, true, "the addons plan has a requirement that " .. name .. " is loaded")
-    end
-end
 
 -- "test plan check 4.1", "test plan 8.2, 8.3", "test-plan section 20", "manual test plan §7".
 local files = {}
@@ -202,7 +196,8 @@ end
 local seen = refs("see test-plan section 20; test plan check 2.1, 2.3 and 2.4; test plan §7")
 eq(table.concat(seen, " "), "20 2.1 2.3 2.4 7", "the scan reads every citation form")
 eq((resolves("99.1")), false, "a missing step does not resolve")
-eq((resolves("11.3")), true, "a step of the ui plan resolves")
+eq((resolves("2.1")), true, "a step of the core plan resolves")
+eq((resolves("11.3")), false, "a step of a removed plan does not resolve")
 
 for _, path in ipairs(files) do
     for _, n in ipairs(refs(read(path))) do

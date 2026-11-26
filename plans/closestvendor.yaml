@@ -7,7 +7,7 @@ preamble: |-
   Stand in a capital city, such as Stormwind or Orgrimmar, where a vendor and a profession trainer are both within about 30 yards. Have at least 3 free bag slots, and play with no addon except ClosestVendor and CheckThat.
   The setup step turns on test settings, so the plan runs on the default settings whatever yours are. The last step turns them off and your own settings come back.
   Each step starts with one sentence that says what to expect: a question to answer, nothing (CheckThat checks by itself), or something to look at. CheckThat records the result of most steps from the debug log or a CheckThat entry. Only the steps that ask you to look wait for Pass or Fail.
-  This plan alone is the release gate. ClosestVendor has two feature plans that go deep on one feature each: |cff99ccffplans/closestvendor.ui.yaml|r (status window, visuals and settings) and |cff99ccffplans/closestvendor.addons.yaml|r (TomTom, WaypointUI, NorgannonDB and sound packs). Run one of them when you change that feature.
+  This plan is the release gate. A feature that needs deeper checks gets its own feature plan when it is built or changed.
   Import the plan, finish it and export it (|cff99ccff/ct export|r, optionally |cff99ccff/cvn debug off|r, then |cff99ccff/reload|r).
 logs:
   debug:
@@ -146,7 +146,7 @@ sections:
       - pattern: "accepted: .+ via native"
       scope: attempt
       label: "The real bag count crossed the threshold, the question named a vendor, and Yes set the game waypoint"
-    notes: "Player step. Drawing: the map waypoint. A real warning, not a test command: the trigger line carries the real bag and durability reads. Run also picks the game waypoint, even with TomTom or WaypointUI installed (the addons plan checks those). Check 1.5 puts the bag threshold back, and the last step turns test settings off."
+    notes: "Player step. Drawing: the map waypoint. A real warning, not a test command: the trigger line carries the real bag and durability reads. Run also picks the game waypoint, even with TomTom or WaypointUI installed. Check 1.5 puts the bag threshold back, and the last step turns test settings off."
   - id: cv.s1.2
     title: "Classic Era: make bag space low and click Yes"
     clients:
@@ -171,7 +171,7 @@ sections:
       - pattern: "accepted: .+ via chat"
       scope: attempt
       label: "The real bag count crossed the threshold, the question named a vendor, and Yes gave the chat line"
-    notes: "Classic Era has no game waypoint, so the chat line is the waypoint. Run picks the chat line, so it wins even with TomTom installed (the addons plan checks TomTom). Check 1.5 puts the bag threshold back."
+    notes: "Classic Era has no game waypoint, so the chat line is the waypoint. Run picks the chat line, so it wins even with TomTom installed. Check 1.5 puts the bag threshold back."
   - id: cv.s1.3
     title: "Open that vendor: the waypoint goes away and the vendor is learned"
     setup: "Needs: the sell question from check 1.1 or 1.2, answered Yes."

@@ -17,7 +17,7 @@ The gate should prove the few systems that make the addon work at all, in the re
   - a clean load.
 
   It also has one status-window step, because the owner depends on the window.
-- **The UI and other-addons plans become feature plans.** `plans/closestvendor.ui.yaml` and `plans/closestvendor.addons.yaml` stay, still checked by `make plan`. They run when their code changes, not before every release.
+- **The UI and other-addons plans are removed.** `plans/closestvendor.ui.yaml` and `plans/closestvendor.addons.yaml` go. A feature gets its own feature plan when it is built or changed. Feature plans take sections from s30 on, and s10 to s29 stay retired.
 - **Steps leave the gate.** The ammo, reagent and real-food warnings, buying, the combat and dungeon holds, the report and find leave the core plan. They are covered by unit tests, the offline block or feature plans. Their step ids are retired and never reused.
 - **Plain wording.** Each action is one sentence in player words, and the commands stay behind Run. Each Expect says only what is on screen. No step exists only to put a setting back, because `/cvn testsettings off` restores the player's settings.
 - **New `/cvn test trainer`.** It asks the trainer question now for the nearest known profession trainer. Any character can then prove trainer routing.
@@ -31,14 +31,14 @@ None.
 
 ### Modified Capabilities
 
-- `checkthat-integration`: the plan of record is one core plan as the release gate, plus feature plans. The core plan rules: one character, no class or addon needs, and its step list.
+- `checkthat-integration`: the plan of record is one core plan as the release gate; feature plans are added per feature. The core plan rules: one character, no class or addon needs, and its step list.
 - `profession-trainer`: a trainer test command.
 - `diagnostics`: the `question shown:` line records the target's source and distance.
 
 ## Impact
 
 - Addon code: `ClosestVendor/Commands.lua` (parse `test trainer`), `ClosestVendor/Controller.lua` (the trainer test, the source and distance on the question line), `ClosestVendor/Core.lua` (pass a source lookup to the controller), `ClosestVendor/Search.lua` (distance in yards). New chat text goes in `ClosestVendor/Locales`.
-- Plans: `plans/closestvendor.yaml` rewritten. The `.ui` and `.addons` plans are relabeled as feature plans (preamble only).
+- Plans: `plans/closestvendor.yaml` rewritten. The `.ui` and `.addons` plans are removed.
 - Tests: `tests/test_plan.lua` (core plan rules), plus the controller, command and readme tests.
 - Docs: `AGENTS.md` (release rule), `docs/test-plan.md`, `docs/contracts.md` (the line format and the plan steps), `README.md` (the test command), `docs/listing.md` (the command list).
 - Version: minor bump to 1.13.0, because `/cvn test trainer` is a new player-visible command. The core plan's version step requires 1.13.0.

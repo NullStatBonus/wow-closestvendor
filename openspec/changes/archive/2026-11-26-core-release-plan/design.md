@@ -20,7 +20,7 @@ See proposal.md, "Why". Facts from the code that shape the approach:
 - Each player step is a look at something drawn (the map waypoint, the status window).
 
 **Non-Goals:**
-- Rewriting the UI and addons plans. They become feature plans as they are. Their wording is revised the next time their feature changes.
+- Keeping the UI and addons plans. They are removed after review: a feature gets a new, deep plan when it is built or changed. Their sections s10 to s29 stay retired.
 - Moving class-specific checks into the offline block now. That is #74, with recorded calls.
 - New CheckThat features. NullStatBonus/wow-checkthat#219 tracks the skill guidance and #218 the checklist Expect.
 
@@ -79,12 +79,12 @@ Format: `question shown: <kind>, <target> (npc <id>), <source>, <n> yd`. The cou
 
 - **[Class-specific reads leave the gate]** The ammo slot, pet diet and reagent spells are read only by those classes. A broken read there is not caught at release. → Unit tests cover the logic now. #74 moves the reads to the offline block with game calls recorded in game. A feature plan runs when that code changes.
 - **[Holds leave the gate]** The combat and instance holds depend on real events. → They are feature behavior, with unit tests on the hold logic. A later feature plan covers them when that code changes.
-- **[Feature plans go stale]** If no one runs them, they rot. → `make plan` still validates, replays and runs the offline block for all three plans on every change.
+- **[UI and other addons leave in-game coverage]** The status window's settings, menus and drawing, and TomTom, WaypointUI, NorgannonDB and sound packs, have no plan step now. → Unit tests cover their logic, the core plan keeps the low Bag space row, and a feature plan is written when that code next changes.
 - **[A capital lacks one target]** → Every capital has a general goods vendor, a repair vendor and profession trainers. The preamble names Stormwind or Orgrimmar as the example.
 - **[The line format changes]** → It only adds text after the npc id. Patterns are checked by a task and `ct lines`.
 
 ## Migration Plan
 
 - Release 1.13.0 with the new command and line, and the core plan's version step at 1.13.0.
-- Testers import only `build/closestvendor.ct` for a release. They run the feature plans when a change names them.
+- Testers import only `build/closestvendor.ct` for a release. A feature plan, when one exists, runs when its change names it.
 - **Rollback:** revert the commit. The retired ids stay retired either way.
