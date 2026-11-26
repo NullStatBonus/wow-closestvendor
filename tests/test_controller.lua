@@ -2146,7 +2146,7 @@ do
     ns.SupplyItems = saved
 end
 
--- Debug log lines for the in-game test plan (sections 6, 11, 16, 24, 26 and 27): exact text.
+-- Debug log lines the in-game plans assert or keep as diagnostics (docs/contracts.md): exact text.
 do
     local function logged(w, line) for _, m in ipairs(w.logs) do if m == line then return true end end return false end
     local function all(w) return table.concat(w.logs, " / ") end

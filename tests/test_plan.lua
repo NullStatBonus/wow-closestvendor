@@ -1,6 +1,7 @@
--- The in-game test plan (plans/closestvendor.yaml) keeps its numbers in order, and every reference to a
--- check in the code, tests and docs names a step or section the plan has (AGENTS.md, CheckThat).
--- The plan is read with patterns: CI has no YAML library and no CheckThat. Sections start at s0. Ids may
+-- The in-game test plans (plans/closestvendor*.yaml: core, ui and addons) keep their numbers in order, and
+-- every reference to a check in the code, tests and docs names a step or section one of the plans has
+-- (AGENTS.md, CheckThat). The plans are read with patterns: CI has no YAML library and no CheckThat. Each
+-- plan owns a range of section numbers, so "test plan check N.M" names one step across the set. Ids may
 -- have gaps (a removed step keeps its number unused, so no step is renumbered), and no doc points at a
 -- CheckThat checkout or a replay hooks file.
 package.path = "tests/?.lua;" .. package.path
@@ -14,45 +15,85 @@ local function read(path)
     return s
 end
 
-local plan = read("plans/closestvendor.yaml")
-eq(plan:match("\naddon: (%S+)"), "ClosestVendor", "the plan is ClosestVendor's")
+-- Each plan, its section range and its step limit (a plan with 25 or more steps is split; AGENTS.md).
+local PLANS = {
+    { path = "plans/closestvendor.yaml", first = 0, last = 9 },
+    { path = "plans/closestvendor.ui.yaml", first = 10, last = 19 },
+    { path = "plans/closestvendor.addons.yaml", first = 20, last = 29 },
+}
+local MAX_STEPS = 24
 
--- Sections are "- id: s<N>" at the top level; steps are "  - id: cv.s<N>.<M>" inside them.
-local sections, steps, order = {}, {}, {}
-local section, lastStep = -1, 0
-for line in (plan .. "\n"):gmatch("([^\n]*)\n") do
-    local s = line:match("^%- id: (%S+)$")
-    if s then
-        eq(sections[s], nil, "section id is unique: " .. s)
-        sections[s] = true
-        order[#order + 1] = s
-        local n = tonumber(s:match("^s(%d+)$"))
-        eq(n ~= nil and n > section, true, "sections are numbered in increasing order: " .. s)
-        section, lastStep = n or section, 0
-    end
-    local id = line:match("^  %- id: (%S+)$")
-    if id then
-        eq(steps[id], nil, "step id is unique: " .. id)
-        steps[id] = true
-        local sec, n = id:match("^cv%.s(%d+)%.(%d+)$")
-        eq(tonumber(sec), section, "a step's id names its section: " .. id)
-        eq(n ~= nil and tonumber(n) > lastStep, true, "steps are numbered in increasing order within their section: " .. id)
-        lastStep = tonumber(n) or lastStep
-    end
+local found = {}
+local p = io.popen("ls plans/closestvendor*.yaml")
+for path in p:lines() do found[#found + 1] = path end
+p:close()
+eq(#found, #PLANS, "the plan set is the three plans: " .. table.concat(found, " "))
+for _, plan in ipairs(PLANS) do
+    local ok = false
+    for _, path in ipairs(found) do if path == plan.path then ok = true end end
+    eq(ok, true, "the plan exists: " .. plan.path)
 end
-eq(order[1], "s0", "the plan starts with the setup section")
-eq(#order >= 30, true, "the plan has its sections (" .. #order .. ")")
-eq(steps["cv.s0.1"], true, "the version step is first")
--- The version step calls the version entry and needs it at least at the version under test (op: ge).
-local first = plan:match("\n  %- id: cv%.s0%.1\n(.-)\n  %- id: ")
-eq(first ~= nil, true, "cv.s0.1 has a body")
-eq((first or ""):find("\n      entry: version\n", 1, true) ~= nil, true, "cv.s0.1 calls the version entry")
-eq((first or ""):find("key: entry.version", 1, true) ~= nil, true, "cv.s0.1 asserts the entry.version fact")
-eq((first or ""):find("op: ge", 1, true) ~= nil, true, "cv.s0.1 passes at the version under test or newer")
+
+-- Sections are "- id: s<N>" at the top level; steps are "  - id: cv.s<N>.<M>" inside them. Ids are unique
+-- across the whole set.
+local sections, steps = {}, {}
+for _, plan in ipairs(PLANS) do
+    local text = read(plan.path)
+    eq(text:match("\naddon: (%S+)"), "ClosestVendor", plan.path .. " is ClosestVendor's")
+    local order, count, firstStep = {}, 0, nil
+    local section, lastStep = plan.first - 1, 0
+    local lineNo = 0
+    for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+        lineNo = lineNo + 1
+        -- Every id key is in one of the two layouts read here (a comment after it, another indent or a flow
+        -- mapping would hide a step from the count, the order and the uniqueness checks), so anything else fails.
+        if not line:match("^%s*#") and (line:match("^[%s%-]*id:") or line:match("[{,]%s*id:")) then
+            eq(line:match("^%- id: s%d+$") ~= nil or line:match("^  %- id: cv%.s%d+%.%d+$") ~= nil, true,
+                plan.path .. ":" .. lineNo .. ": an id line in a layout the test reads ('- id: s<N>' or '  - id: cv.s<N>.<M>'): " .. line)
+        end
+        local s = line:match("^%- id: (%S+)$")
+        if s then
+            eq(sections[s], nil, "section id is unique across the plans: " .. s)
+            sections[s] = true
+            order[#order + 1] = s
+            local n = tonumber(s:match("^s(%d+)$"))
+            eq(n ~= nil and n > section, true, plan.path .. ": sections are numbered in increasing order: " .. s)
+            eq(n ~= nil and n >= plan.first and n <= plan.last, true, plan.path .. ": section " .. s .. " is in the plan's range s" .. plan.first .. " to s" .. plan.last)
+            section, lastStep = n or section, 0
+        end
+        local id = line:match("^  %- id: (%S+)$")
+        if id then
+            eq(steps[id], nil, "step id is unique across the plans: " .. id)
+            steps[id] = true
+            count = count + 1
+            firstStep = firstStep or id
+            local sec, n = id:match("^cv%.s(%d+)%.(%d+)$")
+            eq(tonumber(sec), section, "a step's id names its section: " .. id)
+            eq(n ~= nil and tonumber(n) > lastStep, true, "steps are numbered in increasing order within their section: " .. id)
+            lastStep = tonumber(n) or lastStep
+        end
+    end
+    local setup = "s" .. plan.first
+    eq(order[1], setup, plan.path .. " starts with its setup section " .. setup)
+    eq(count >= 2 and count <= MAX_STEPS, true, plan.path .. " has 2 to " .. MAX_STEPS .. " steps (" .. count .. ")")
+    -- The first step calls the version entry and needs it at least at the version under test (op: ge).
+    local vid = ("cv.s%d.1"):format(plan.first)
+    eq(firstStep, vid, plan.path .. ": the version step " .. vid .. " is first")
+    local first = text:match("\n  %- id: " .. vid:gsub("%.", "%%.") .. "\n(.-)\n  %- id: ")
+    eq(first ~= nil, true, vid .. " has a body")
+    eq((first or ""):find("\n      entry: version\n", 1, true) ~= nil, true, vid .. " calls the version entry")
+    eq((first or ""):find("key: entry.version", 1, true) ~= nil, true, vid .. " asserts the entry.version fact")
+    eq((first or ""):find("op: ge", 1, true) ~= nil, true, vid .. " passes at the version under test or newer")
+    eq((first or ""):find("\n      value: 11103\n", 1, true) ~= nil, true, vid .. " asks for 1.11.3 (11103) or newer")
+    -- The last step is the automatic no-Lua-error check on CheckThat's error list, for the whole run.
+    local tail = text:match(".*\n  %- id: [^\n]+\n(.*)$") or ""
+    eq(tail:find("source: errors", 1, true) ~= nil and tail:find("absent: true", 1, true) ~= nil, true, plan.path .. " ends with the no-Lua-error step")
+    eq(tail:find("scope: session", 1, true) ~= nil and tail:find("auto: true", 1, true) ~= nil, true, plan.path .. ": the no-Lua-error step is automatic and covers the run")
+end
 
 -- "test plan check 4.1", "test plan 8.2, 8.3", "test-plan section 20", "manual test plan §7".
 local files = {}
-local p = io.popen("find ClosestVendor tests docs openspec/specs plans README.md DESIGN.md AGENTS.md CONTRIBUTING.md -path ClosestVendor/Libs -prune -o -type f \\( -name '*.lua' -o -name '*.md' -o -name '*.yaml' \\) -print")
+p = io.popen("find ClosestVendor tests docs openspec/specs plans README.md DESIGN.md AGENTS.md CONTRIBUTING.md -path ClosestVendor/Libs -prune -o -type f \\( -name '*.lua' -o -name '*.md' -o -name '*.yaml' \\) -print")
 for path in p:lines() do
     if path ~= "tests/test_plan.lua" then files[#files + 1] = path end
 end
@@ -77,11 +118,12 @@ end
 local seen = refs("see test-plan section 20; test plan check 2.1, 2.3 and 2.4; test plan §7")
 eq(table.concat(seen, " "), "20 2.1 2.3 2.4 7", "the scan reads every citation form")
 eq((resolves("99.1")), false, "a missing step does not resolve")
+eq((resolves("11.3")), true, "a step of the ui plan resolves")
 
 for _, path in ipairs(files) do
     for _, n in ipairs(refs(read(path))) do
         local ok, want = resolves(n)
-        eq(ok, true, path .. " cites test plan " .. n .. ", which the plan has as " .. want)
+        eq(ok, true, path .. " cites test plan " .. n .. ", which the plans have as " .. want)
     end
 end
 

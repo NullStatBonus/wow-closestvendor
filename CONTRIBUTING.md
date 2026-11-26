@@ -16,7 +16,7 @@ Thank you for your help. Closest Vendor is a Lua addon for WoW Classic Era and W
 
 ## Setup
 
-1. Clone the repository into a folder named `wow-closest-vendor` (the plan's offline check looks for that name).
+1. Clone the repository into a folder named `wow-closest-vendor` (the plans' offline checks look for that name).
 2. Link or copy `ClosestVendor/` into your AddOns folder (`_classic_era_` or the Forever folder).
 3. Install [LuaJIT](https://luajit.org) and Python 3.
 4. From the repository root, run these commands:
@@ -29,7 +29,7 @@ Thank you for your help. Closest Vendor is a Lua addon for WoW Classic Era and W
 
 5. After a change, type `/reload` in the game.
 6. Type `/console scriptErrors 1` to show errors as popups.
-7. The in-game checks are in `plans/closestvendor.yaml`, a CheckThat plan (see AGENTS.md, CheckThat). Run `make plan` to check it. Its offline check finds the addon as `wow-closest-vendor/` beside the other checkouts, so keep that folder name.
+7. The in-game checks are three CheckThat plans: `plans/closestvendor.yaml`, `plans/closestvendor.ui.yaml` and `plans/closestvendor.addons.yaml` (see AGENTS.md, CheckThat, and `docs/test-plan.md`). Run `make plan` to check all three. Their offline checks find the addon as `wow-closest-vendor/` beside the other checkouts, so keep that folder name.
 
 ## How changes are made
 
