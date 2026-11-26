@@ -106,6 +106,14 @@ for kind, word in pairs({ arrow = "arrows", bullet = "bullets" }) do
     eq(has(lines3, word), true, word .. ": says what it is doing")
 end
 eq(select(2, M.Run(fresh(), "test arrow")), nil, "singular is not accepted")
+-- /cvn test trainer asks for a profession trainer (covers: Trainer test command).
+do
+    local lines4, action4 = M.Run(fresh(), "test trainer")
+    eq(action4 and action4[1] .. ":" .. action4[2], "test:trainer", "test trainer: the action")
+    eq(has(lines4, "Asking about the nearest profession trainer"), true, "test trainer: says what it is doing")
+    eq(has(M.Run(fresh(), "help"), "/cvn test trainer"), true, "help lists the trainer test")
+    eq(select(2, M.Run(fresh(), "test trainers")), nil, "plural is not accepted")
+end
 local _, action = M.Run(fresh(), "bags 5")
 eq(action, nil, "other commands return no action")
 for _, bad in ipairs({ "test", "test x", "test sell2", "test arrowss" }) do

@@ -2545,6 +2545,37 @@ g.free = 1
 g.onEvent("BAG_UPDATE_DELAYED")
 eq(lastPrinted(g):find("Hyjal Seller", 1, true) ~= nil, true, "NorgannonDB vendor is the nearest: " .. lastPrinted(g))
 eq(has(reportOf(g), "NorgannonDB: found, schema 1.5, 1 vendors added, 0 skipped"), true, "report line")
+-- The question line names where its target came from (covers: Question lines name the source and the distance).
+do
+    local function questionOf(gg)
+        for line in logText(gg):gmatch("[^\n]+") do if line:find("question shown:", 1, true) then return line end end
+    end
+    local function lowBags(gg)
+        gg.env.SlashCmdList.CLOSESTVENDOR("debug on")
+        gg.free = 1
+        gg.onEvent("BAG_UPDATE_DELAYED")
+        return questionOf(gg)
+    end
+    local gn = boot({ ng = fakeNG() }); login(gn)
+    gn.pos = { map = 2482, x = 0.5, y = 0.5 }
+    eq(lowBags(gn):match("^question shown: sell, Hyjal Seller %(npc 9001%), NorgannonDB, %d+ yd$") ~= nil, true, "a vendor only NorgannonDB gave: " .. tostring(questionOf(gn)))
+    local gs = boot(); login(gs)
+    eq(lowBags(gs):match("^question shown: sell, Ally Seller %(npc 4%), shipped, %d+ yd$") ~= nil, true, "a shipped vendor: " .. tostring(questionOf(gs)))
+    local gl = boot({ db = { learned = { [777] = { 777, "Learned Seller", 100, 0.76, 0.5, 1, false, 0, 0, 0 } } } }); login(gl)
+    gl.pos = { map = 100, x = 0.76, y = 0.5 }
+    eq(lowBags(gl):match("^question shown: sell, Learned Seller %(npc 777%), learned, %d+ yd$") ~= nil, true, "a vendor this account learned: " .. tostring(questionOf(gl)))
+    -- /cvn test trainer end to end (covers: Trainer test command): a character with no profession, a learned trainer.
+    local gt = boot({ db = { trainers = { [30] = { 30, "Near Smith", 100, 0.76, 0.5, 1, { Blacksmithing = true } } } } }); login(gt)
+    gt.pos = { map = 100, x = 0.76, y = 0.5 }
+    gt.autoAccept = false
+    gt.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    gt.env.SlashCmdList.CLOSESTVENDOR("test trainer")
+    eq(questionOf(gt), "question shown: trainer for Blacksmithing, Near Smith (npc 30), learned, 0 yd", "test trainer names the learned trainer: " .. tostring(questionOf(gt)))
+    eq(gt.popup ~= nil and gt.popup.text:find("Near Smith", 1, true) ~= nil, true, "and the dialog names the trainer")
+    local gn2 = boot(); login(gn2)
+    gn2.env.SlashCmdList.CLOSESTVENDOR("test trainer")
+    eq(has(lastPrinted(gn2), "No known profession trainer"), true, "no trainer known: chat says so: " .. tostring(lastPrinted(gn2)))
+end
 -- A trainer only NorgannonDB knows: an Unfriendly reaction is remembered, so it is not offered.
 do
     local ng = fakeNG()

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.13.0
+
+- **New: `/cvn test trainer` asks about the nearest profession trainer the addon knows.** You do not need a profession.
+- Changed: The debug log tells where each vendor or trainer in a question comes from. It also gives the distance in yards.
+
 ## 1.12.0
 
 - **New: `/cvn testsettings on` puts your settings aside while you run a test plan.** `/cvn testsettings off` brings them back.

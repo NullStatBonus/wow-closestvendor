@@ -62,7 +62,8 @@ function C.PromptText(kind, vendor, zone, count, trade, two, otherZone)
     if two then
         local a, b = target(vendor, zone, two.dist), target(two.other, otherZone, two.otherDist)
         if kind == "trainer" then
-            if count and count > 0 then
+            if count == nil then return L["Which %s trainer do you want to navigate to?\n\n%s\n%s"]:format(trade, a, b) end
+            if count > 0 then
                 return L["Your %s skill is %d point(s) from its current limit.\n\nWhich %s trainer do you want to navigate to?\n\n%s\n%s"]:format(trade, count, trade, a, b)
             end
             return L["Your %s skill has reached its current limit.\n\nWhich %s trainer do you want to navigate to?\n\n%s\n%s"]:format(trade, trade, a, b)
@@ -84,7 +85,8 @@ function C.PromptText(kind, vendor, zone, count, trade, two, otherZone)
         return L["Your bags are almost full.\n\nWhich vendor do you want to navigate to?\n\n%s\n%s"]:format(a, b)
     end
     if kind == "trainer" then
-        if count and count > 0 then
+        if count == nil then return L["Navigate to the closest %s trainer, %s?"]:format(trade, who) end
+        if count > 0 then
             return L["Your %s skill is %d point(s) from its current limit.\n\nNavigate to the closest %s trainer, %s?"]:format(trade, count, trade, who)
         end
         return L["Your %s skill has reached its current limit.\n\nNavigate to the closest %s trainer, %s?"]:format(trade, trade, who)
@@ -327,12 +329,15 @@ function C.New(env)
         local first, second = v, nil
         if onMap and mapFirst then first, second = onMap, v elseif onMap then second = onMap end
         if onMap then logTwo(v, onMap) end
+        -- Where the target came from and how far it is from the search start, after its npc id.
+        local from = ("%s, %d yd"):format(env.sourceOf and env.sourceOf(kind, first[1]) or "shipped", yards(first, i, x, y))
         if trade then
-            log(("question shown: trainer for %s, %s (npc %s), %d point(s) left"):format(trade, first[2], tostring(first[1]), count))
+            log(("question shown: trainer for %s, %s (npc %s), %s%s"):format(trade, first[2], tostring(first[1]), from,
+                count and (", %d point(s) left"):format(count) or ""))
         elseif name then
-            log(("question shown: %s %s, %s (npc %s), %d left"):format(kind == "supply" and "supply" or "reagent", name, first[2], tostring(first[1]), count))
+            log(("question shown: %s %s, %s (npc %s), %s, %d left"):format(kind == "supply" and "supply" or "reagent", name, first[2], tostring(first[1]), from, count))
         else
-            log(("question shown: %s, %s (npc %s)"):format(kind, first[2], tostring(first[1])))
+            log(("question shown: %s, %s (npc %s), %s"):format(kind, first[2], tostring(first[1]), from))
         end
         fresh()
         local function answer(t)
@@ -355,11 +360,12 @@ function C.New(env)
 
     -- Offer a target: in "auto" mode pin without asking, otherwise ask (see ask for the arguments).
     -- yields: a warning asked this, so No ends that request (a test command's question does not).
-    local function offer(kind, v, onMap, x, y, count, trade, name, id, yields)
+    -- test: a /cvn test trainer question, which a zone change does not withdraw.
+    local function offer(kind, v, onMap, x, y, count, trade, name, id, yields, test)
         if env.cfg.vendorMode == "auto" then return autoPin(kind, v, onMap, x, y, trade, name, id) end
         ask(kind, v, onMap, x, y, count, trade, name, id, nil, yields and function() release(kind, id) end or nil)
         -- A warning's question, or an automatic trainer question: either ends with the place.
-        asking = (yields or kind == "trainer") and { kind = kind, id = id, prompt = promptId } or nil
+        asking = (yields or (kind == "trainer" and not test)) and { kind = kind, id = id, prompt = promptId } or nil
     end
 
     -- The professions near their cap now, or nil when the skills cannot be read.
@@ -688,6 +694,41 @@ function C.New(env)
         offer("supply", v, onMap, x, y, s.totals and s.totals[key] or 0, nil, name, key)
     end
 
+    -- /cvn test trainer: the trainer question whatever the skill, tier, threshold or combat. The nearest
+    -- trainer of a profession the player knows, else the nearest trainer of any profession (the first
+    -- one it teaches by name). Returns a message when there is nothing to ask about.
+    local function testTrainer()
+        local at = here()
+        if not at then return L["No map position here (dungeons and some areas have none). Try again outside."], "no map position here" end
+        local bucket = (env.trainerBuckets or {})[at.continent] or {}
+        local names, seen = {}, {}
+        for _, t in ipairs(bucket) do
+            for name in pairs(t[7]) do if not seen[name] then seen[name] = true; names[#names + 1] = name end end
+        end
+        table.sort(names)
+        -- The nearest trainer among the professions in set (a table of names), or nil.
+        local function nearest(set)
+            local best, bestOnMap, bestTrade, bestD
+            for _, name in ipairs(names) do
+                if set == nil or set[name] then
+                    local v, onMap = ns.Search.NearestTrainer(bucket, at.x, at.y, name, env.playerFaction, at.map)
+                    if v then
+                        local d = dist(v, 8, at.x, at.y)
+                        if not bestD or d < bestD then best, bestOnMap, bestTrade, bestD = v, onMap, name, d end
+                    end
+                end
+            end
+            return best, bestOnMap, bestTrade
+        end
+        local v, onMap, trade = nearest(env.known or {})
+        if not v then v, onMap, trade = nearest(nil) end
+        if not v then
+            return L["No known profession trainer on this continent for your faction. Open a trainer window once and the addon will remember where it is."], "no known trainer"
+        end
+        if onMap == v then onMap = nil end
+        offer("trainer", v, onMap, at.x, at.y, nil, trade, nil, nil, nil, true) -- a test question is not withdrawn by a zone change
+    end
+
     -- /cvn test remind: always shows a reminder and plays the sound, whatever the class, count, settings,
     -- combat or bags. A mage and a warlock get their own; any other class gets a plain test line.
     local function testRemind()
@@ -707,6 +748,7 @@ function C.New(env)
     local function test(kind)
         if kind == "food" or kind == "water" or kind == "petfood" then return testSupply(kind) end
         if kind == "remind" then return testRemind() end
+        if kind == "trainer" then return testTrainer() end
         local r
         if kind == "reagent" then
             r = (env.reagents and env.reagents() or {})[1]

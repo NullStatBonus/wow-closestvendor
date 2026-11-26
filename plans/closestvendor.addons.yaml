@@ -3,8 +3,9 @@ kind: plan
 addon: ClosestVendor
 title: 'ClosestVendor in-game test plan: other addons'
 preamble: |-
-  These checks cover ClosestVendor with other addons: TomTom, WaypointUI (WoW Forever), NorgannonDB (WoW Forever) and a sound pack (an addon that adds LibSharedMedia sounds). Each step starts with Needs: the addon it needs. The card says Blocked when that addon is not loaded: press Skip. Run the plan on WoW Forever and on Classic Era.
-  ClosestVendor has three plans, and all three run before each release: |cff99ccffplans/closestvendor.yaml|r (core), |cff99ccffplans/closestvendor.ui.yaml|r (status window, visuals and settings) and |cff99ccffplans/closestvendor.addons.yaml|r (this one). Import one plan, finish it and export it (|cff99ccff/ct export|r, optionally |cff99ccff/cvn debug off|r, then |cff99ccff/reload|r) before you import the next: a run uses the last plan imported.
+  This is a feature plan. It checks ClosestVendor with other addons: TomTom, WaypointUI (WoW Forever), NorgannonDB (WoW Forever) and a sound pack (an addon that adds LibSharedMedia sounds). Run it when you change code that talks to one of them. It is not part of the release gate: |cff99ccffplans/closestvendor.yaml|r is.
+  Each step starts with Needs: the addon it needs. The card says Blocked when that addon is not loaded: press Skip. Run the plan on WoW Forever and on Classic Era.
+  Import the plan, finish it and export it (|cff99ccff/ct export|r, optionally |cff99ccff/cvn debug off|r, then |cff99ccff/reload|r) before you import another plan: a run uses the last plan imported.
 
   The setup step turns on test settings, so the plan runs on the default settings whatever yours are. The last step turns them off and your own settings come back.
   Each step starts with one sentence that says what to expect: a question to answer, nothing (CheckThat checks by itself), or something to look at. CheckThat records the result of most steps from the debug log. Only the steps that ask you to look or listen wait for Pass or Fail.
