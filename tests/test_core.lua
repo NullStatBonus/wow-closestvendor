@@ -1323,7 +1323,7 @@ eq(box.shown, false, "notice off: nothing more on screen")
 -- 31. Class reagents: watched when the spell is known, asked about at or below the threshold, learned
 -- from merchants, switched off one by one, covered by the master switch.
 local function mage(over)
-    local gg = boot({ tomtom = true })
+    local gg = boot({ tomtom = true, checkThat = over and over.checkThat })
     gg.ns.ShippedVendors = {
         { 81, "Plain Shop",   100, 0.51, 0.5, 0, false, 0, 0 },
         { 82, "Reagent Shop", 100, 0.70, 0.5, 0, false, 0, 1 }, -- sells Arcane Powder (bit 0)
@@ -1375,6 +1375,16 @@ eq(g.popup ~= nil, true, "asks once the spell is learned")
 -- Unreadable counts are not "none".
 g = mage(); breakApi(g, "GetItemCount", "throws"); g.onEvent("BAG_UPDATE_DELAYED")
 eq(g.popup, nil, "an unreadable reagent count is not treated as none")
+
+-- The CheckThat reagents entry says nothing, never "none", when a watched count cannot be read.
+do
+    local fns = {}
+    local ct = { Entry = function(_, name, fn) fns[name] = fn; return true end }
+    g = mage({ checkThat = ct }); g.onEvent("BAG_UPDATE_DELAYED")
+    eq(fns.reagents(), "17020:3", "reagents entry: the readable count")
+    breakApi(g, "GetItemCount", "throws"); g.onEvent("BAG_UPDATE_DELAYED")
+    eq(select("#", fns.reagents()), 0, "reagents entry: nothing when the count cannot be read, never none")
+end
 
 -- A settings default exists and the off-list is created for old saved data.
 g = boot({ tomtom = true, db = { cfg = { ammoThreshold = 100 } } }); login(g)
@@ -3213,6 +3223,125 @@ do
     eq(g2.env.ClosestVendorCharDB.cfg.bagThreshold, 2, "the test set is still in use after the reload")
     g2.env.SlashCmdList.CLOSESTVENDOR("testsettings off")
     eq(g2.env.ClosestVendorCharDB.cfg.bagThreshold, 4, "off after a reload restores the own settings")
+end
+
+-- Test settings follow the CheckThat run (spec checkthat-integration): a run start turns them on once, a run end
+-- turns them off, a login with no run open restores what a run left on, and a CheckThat without the
+-- callback changes nothing.
+do
+    local function runGame(charDb, open, noHook)
+        local f = { open = open }
+        function f.Entry() return true end
+        if not noHook then
+            function f.OnRun(_, fn) f.run = fn; return true end
+            function f.ActiveRun() return f.open end
+        end
+        local gg = boot({ charDb = charDb, checkThat = f }); login(gg)
+        gg.env.SlashCmdList.CLOSESTVENDOR("debug on")
+        return gg, f
+    end
+    local function bags(gg) return gg.env.ClosestVendorCharDB.cfg.bagThreshold end
+
+    -- Start turns them on, end brings the own settings back.
+    local g, f = runGame({ cfg = { bagThreshold = 4 } }, "plan")
+    f.run("start", { runId = "r1" })
+    eq(bags(g), 2, "run start: the test set is in use")
+    eq(g.env.ClosestVendorCharDB.realSettings.cfg.bagThreshold, 4, "run start: the own settings are put aside")
+    eq(has(logText(g), "test settings: run started"), true, "run start: logged")
+    f.run("end", { runId = "r1", reason = "replaced" })
+    eq(bags(g), 4, "run end: the own settings are back")
+    eq(has(logText(g), "test settings: run ended: replaced"), true, "run end: logged with the reason")
+    eq(g.env.ClosestVendorCharDB.realSettings, nil, "run end: nothing put aside")
+    eq(g.env.ClosestVendorCharDB.testRun, nil, "run end: no run kept")
+
+    -- The plan's last step turned them off; a start for the same run after a reload keeps them off.
+    g, f = runGame({ cfg = { bagThreshold = 4 } }, "plan")
+    f.run("start", { runId = "r1" })
+    g.env.SlashCmdList.CLOSESTVENDOR("testsettings off")
+    f.run("start", { runId = "r1" })
+    eq(bags(g), 4, "run seen: still off after a repeated start")
+    eq(has(logText(g), "test settings: run already seen"), true, "run seen: logged")
+    f.run("start", { runId = "r2" })
+    eq(bags(g), 2, "a new run turns them on again")
+
+    -- Start while already on keeps the test set as it is.
+    g, f = runGame({ cfg = { bagThreshold = 4 } }, "plan")
+    g.env.SlashCmdList.CLOSESTVENDOR("testsettings on")
+    g.env.SlashCmdList.CLOSESTVENDOR("bags 9")
+    f.run("start", { runId = "r1" })
+    eq(bags(g), 9, "start while on: no reset")
+    eq(has(logText(g), "test settings: already on (run started)"), true, "start while on: logged")
+    f.run("end", { reason = "ended" })
+    eq(bags(g), 4, "the run owns the mode once it started")
+
+    -- End while off changes nothing.
+    g, f = runGame({ cfg = { bagThreshold = 4 } }, "plan")
+    f.run("end", { reason = "deleted" })
+    eq(bags(g), 4, "end while off: settings unchanged")
+    eq(has(logText(g), "test settings: run ended: deleted"), true, "end while off: logged")
+
+    -- Login: a run left test settings on and no run is open any more.
+    g, f = runGame({ cfg = { bagThreshold = 4 } }, "plan")
+    f.run("start", { runId = "r1" })
+    local saved = g.env.ClosestVendorCharDB
+    local g2 = boot({ charDb = saved, checkThat = { Entry = function() return true end, OnRun = function() return true end, ActiveRun = function() return nil end } })
+    login(g2)
+    eq(bags(g2), 4, "login without a run: the own settings are back")
+    eq(has(logText(g2), "test settings: no run open at login"), true, "login without a run: logged")
+    eq(saved.testRun, nil, "login without a run: no run kept")
+
+    -- Login with the run still open: they stay on, and the catch-up start for the same run changes nothing.
+    g, f = runGame({ cfg = { bagThreshold = 4 } }, "plan")
+    f.run("start", { runId = "r1" })
+    local reg
+    g2 = boot({ charDb = g.env.ClosestVendorCharDB, checkThat = { Entry = function() return true end, ActiveRun = function() return "plan" end,
+        OnRun = function(_, fn) reg = fn; return true end } })
+    login(g2)
+    reg("start", { runId = "r1" })
+    eq(bags(g2), 2, "login with the run open: still the test set")
+    eq(g2.env.ClosestVendorCharDB.realSettings.cfg.bagThreshold, 4, "login with the run open: the own settings stay put aside")
+
+    -- Test settings typed by hand are not turned off at login.
+    g, f = runGame({ cfg = { bagThreshold = 4 } }, "plan")
+    g.env.SlashCmdList.CLOSESTVENDOR("testsettings on")
+    g2 = boot({ charDb = g.env.ClosestVendorCharDB, checkThat = { Entry = function() return true end, OnRun = function() return true end, ActiveRun = function() return nil end } })
+    login(g2)
+    eq(bags(g2), 2, "typed on, no run: still on at login")
+
+    -- Like CheckThat: an open run sends its start inside OnRun, during login.
+    local function liveCT(open, runId)
+        return { Entry = function() return true end, ActiveRun = function() return open end,
+                 OnRun = function(_, fn) if open then fn("start", { runId = runId, plan = open }) end return true end }
+    end
+    g2 = boot({ charDb = { cfg = { bagThreshold = 4 } }, checkThat = liveCT("plan", 1700000000) }); login(g2)
+    eq(bags(g2), 2, "catch-up start at login turns test settings on")
+    eq(g2.env.ClosestVendorCharDB.testRun, "1700000000", "a number run id is kept as text")
+    local g3 = boot({ charDb = g2.env.ClosestVendorCharDB, checkThat = liveCT("plan", 1700000000) }); login(g3)
+    eq(bags(g3), 2, "the same number id after a reload: still on, no reset")
+
+    -- Run r1 ended while the addon was not loaded and r2 is open at login: r2 starts from fresh defaults.
+    g, f = runGame({ cfg = { bagThreshold = 4 } }, "plan")
+    f.run("start", { runId = "r1" })
+    g.env.SlashCmdList.CLOSESTVENDOR("bags 9")
+    g2 = boot({ charDb = g.env.ClosestVendorCharDB, checkThat = liveCT("plan", "r2") }); login(g2)
+    eq(bags(g2), 2, "another run: the test set is reset to the defaults")
+    eq(g2.env.ClosestVendorCharDB.realSettings.cfg.bagThreshold, 4, "another run: the own settings stay put aside")
+    eq(has(logText(g2), "test settings: another run started"), true, "another run: logged")
+    g2.env.SlashCmdList.CLOSESTVENDOR("testsettings off")
+    eq(bags(g2), 4, "another run: off still brings the own settings back")
+
+    -- A start without a run id is ignored.
+    g, f = runGame({ cfg = { bagThreshold = 4 } }, "plan")
+    f.run("start", {})
+    eq(bags(g), 4, "no run id: nothing turned on")
+    eq(g.env.ClosestVendorCharDB.testRun, nil, "no run id: nothing kept")
+    eq(has(logText(g), "test settings: run start without an id"), true, "no run id: logged")
+
+    -- A CheckThat without the callback: only the commands change test settings.
+    g, f = runGame({ cfg = { bagThreshold = 4 } }, nil, true)
+    eq(f.run, nil, "no callback: nothing registered")
+    g.env.SlashCmdList.CLOSESTVENDOR("testsettings on")
+    eq(bags(g), 2, "no callback: the command still works")
 end
 
 -- Test settings: what holds the old settings ends at the switch (review findings): a pending purchase retry,

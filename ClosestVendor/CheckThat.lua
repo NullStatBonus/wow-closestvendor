@@ -192,7 +192,7 @@ end)
 
 -- The class reagents the warning watched at its last check: "<item id>:<count>" sorted by id and
 -- joined by "," ("17020:5,17031:3"), "none" when none is watched, or nothing before the first check
--- or when the last check could not read them (class unknown).
+-- or when the last check could not read them (class unknown, or the count of a watched reagent unread).
 -- With an item id, that reagent's count, or nothing when it is not watched. A reagent switched off,
 -- or one whose spell is not known, is not watched; the count is the bags only, never the bank.
 add("reagents", function(id)
@@ -234,11 +234,46 @@ function CT.RegisterEntries()
     return CT.registered
 end
 
+-- Calls one of Core's run handlers in pcall. A raised error is logged and leaves the integration on.
+-- After a failure only the handlers that restore the tester's settings still run.
+local function runHandler(name, ...)
+    if (failed and name == "runStarted") or type(ctx[name]) ~= "function" then return end
+    local ok, err = pcall(ctx[name], ...)
+    if not ok then log("checkthat: FAILED: " .. name .. ": " .. cut(err)) end
+end
+
+-- Registers the run callback once: a run start turns test settings on, a run end turns them off, and a
+-- login with no open run restores what a run left on (read before registering, so the catch-up start
+-- CheckThat sends for an open run comes after it). A CheckThat without the callback changes nothing.
+function CT.RegisterRunHook()
+    if CT.runHook ~= nil or failed then return CT.runHook end
+    local t = api()
+    if not t or type(t.OnRun) ~= "function" then
+        if t then CT.runHook = false; log("checkthat: run hook not available") end
+        return false
+    end
+    if type(t.ActiveRun) == "function" then
+        local ok, plan = pcall(t.ActiveRun, CT.ADDON)
+        if not ok then CT.Fail("ActiveRun: " .. tostring(plan)) return false end
+        if plan == nil then runHandler("runGone") end
+    end
+    local ok, stored = pcall(t.OnRun, CT.ADDON, function(event, info)
+        info = type(info) == "table" and info or {}
+        if event == "start" then runHandler("runStarted", info.runId)
+        elseif event == "end" then runHandler("runEnded", info.reason) end
+    end)
+    if not ok then CT.Fail("OnRun: " .. tostring(stored)) return false end
+    CT.runHook = stored == true
+    log(CT.runHook and "checkthat: run hook registered" or "checkthat: run hook refused")
+    return CT.runHook
+end
+
 function CT.Start(c)
     ctx = type(c) == "table" and c or {}
     if type(ctx.version) == "function" then
         local ok, v = pcall(ctx.version)
         version = ok and v or nil
     end
+    CT.RegisterRunHook()
     return CT.RegisterEntries()
 end

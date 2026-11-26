@@ -24,7 +24,7 @@ local function world(over)
     local env = {
         cfg = { bagThreshold = 2, durThreshold = 20, ammoThreshold = 200, bagEnabled = true, durEnabled = true, ammoEnabled = true, suppliesEnabled = true, reagentsEnabled = true,
                  tradeThreshold = 10, tradeEnabled = true, reagentThreshold = 5 },
-        reagents = function() return w.reagents end,
+        reagents = function() return w.reagents, w.unread end,
         supplies = function() return w.supplies end,
         playSound = function(key) w.sounds[#w.sounds + 1] = key or "unset" end,
         skills = function() return w.skills end,
@@ -2442,6 +2442,17 @@ do
     wr.c.Evaluate()
     eq(wr.c.Reagents(), nil, "reagents: nothing when the list is unknown")
     eq(wr.c.Reagents(17020), nil, "reagents: no count when the list is unknown")
+    -- A watched reagent whose count cannot be read: nothing, never "none" and never a partial list.
+    wr.reagents, wr.unread = {}, true
+    wr.c.Evaluate()
+    eq(wr.c.Reagents(), nil, "reagents: nothing when every count is unread")
+    wr.reagents = { { item = POWDER, count = 7, name = "Arcane Powder" } }
+    wr.c.Evaluate()
+    eq(wr.c.Reagents(), nil, "reagents: nothing when one count is unread")
+    eq(wr.c.Reagents(17020), nil, "reagents: no count when one count is unread")
+    wr.unread = nil
+    wr.c.Evaluate()
+    eq(wr.c.Reagents(), "17020:7", "reagents: readable again")
 end
 
 H.done()

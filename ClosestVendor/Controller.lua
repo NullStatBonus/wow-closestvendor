@@ -530,7 +530,8 @@ function C.New(env)
         local free, dur, combat, inside = env.freeSlots(), env.lowestDurability(), fighting or isDead, instance()
         -- Reagents.Low is the one "is it low" test for reagents; the status window uses it too.
         local items, watched = {}, {}
-        local list = env.reagents and env.reagents() -- nil: the class or the spells are unknown
+        local list, unread
+        if env.reagents then list, unread = env.reagents() end -- nil: the class or the spells are unknown
         for _, r in ipairs(list or {}) do
             items[#items + 1] = r.item
             watched[r.item.id] = r
@@ -542,7 +543,7 @@ function C.New(env)
         for i, id in ipairs(ids) do ids[i] = id .. ":" .. tostring(watched[id].count) end
         watchedText = #ids > 0 and table.concat(ids, ",") or "none"
         -- Unknown is not "none": the entry answers nothing until a check can read the reagents.
-        if list == nil then watchedText, watchedCount = nil, nil end
+        if list == nil or unread then watchedText, watchedCount = nil, nil end
         lowReagents = {}
         local lowIds = {}
         for _, low in ipairs(ns.Reagents.Low(items, function(id) return watched[id].count end, env.cfg.reagentThreshold)) do
