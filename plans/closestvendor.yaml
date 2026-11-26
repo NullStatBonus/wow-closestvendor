@@ -207,6 +207,7 @@ sections:
     verify:
     - player
     reload: after_action
+    notes: 'Player step. Setup: installing addons, Lua error popups and the character are outside the log.'
   - id: cv.s0.3
     title: 'Optional: install TomTom, and WaypointUI (WoW Forever only)'
     action:
@@ -218,6 +219,7 @@ sections:
     - player
     clients:
     - forever-camelot
+    notes: 'Player step. Setup: installing addons, Lua error popups and the character are outside the log.'
   - id: cv.s0.4
     title: 'Ammo sections: use a ranged class with ammo equipped'
     action:
@@ -227,6 +229,7 @@ sections:
     expect: The ammo shows in the ammo slot. Press Pass.
     verify:
     - player
+    notes: 'Player step. Setup: installing addons, Lua error popups and the character are outside the log.'
   - id: cv.s0.5
     title: Turn debug logging on
     action:
@@ -2036,6 +2039,7 @@ sections:
     expect: The addon sentences are in English. Spell and zone names are the game's. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: translated text on screen; the log is not translated.'
   - id: cv.s9.2
     title: Install a translation file (see docs/localization.md). Enter /cvn status
     action:
@@ -2046,6 +2050,7 @@ sections:
     expect: The output shows the translation. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: translated text on screen; the log is not translated.'
   - id: cv.s9.3
     title: With the translation file installed, trigger a question
     action:
@@ -2054,6 +2059,7 @@ sections:
     expect: The question shows the translation. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: translated text on screen; the log is not translated.'
   - id: cv.s9.4
     title: With the translation file installed, open the settings page
     action:
@@ -2062,6 +2068,7 @@ sections:
     expect: The page shows the translation. Press Pass.
     verify:
     - player
+    notes: 'Player step. Drawing: translated text on screen; the log is not translated.'
 - id: s10
   title: Buying ammo
   intro: 'Hunter only; press Skip otherwise. Use a Hunter with a bow or gun and a quiver. Defaults: buying
