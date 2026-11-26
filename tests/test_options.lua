@@ -153,6 +153,20 @@ ns,r=boot({noNative=true});eq(ns.Options.Open(ns.Options.APP),true,"standalone w
 ns,r,c,p=boot({missing=true});eq(p,nil,"missing libraries tolerated");eq(ns.Options.Open(p),false,"missing libraries fail clearly")
 ns,r,c,p=boot({failRegister=true});eq(p,nil,"failed registration tolerated")
 ns,r=boot({},"WARRIOR");eq(r.tree.args.appearance.args.hud.args.rowreagents.disabled,true,"irrelevant row disabled")
+-- Food and water settings (spec food-and-water): every class sees the food controls, and only a class
+-- that uses mana sees the water controls (Supplies.UsesMana, as the water warning itself).
+do
+    local function supplies(class) local _,rr=boot({},class); return rr.tree.args.restock.args.supplies.args end
+    local w,m=supplies("WARRIOR"),supplies("MAGE")
+    eq(w.foodEnabled~=nil and w.foodThreshold~=nil,true,"a warrior sees the food controls")
+    eq(w.waterEnabled==nil and w.waterThreshold==nil,true,"a warrior uses no mana, so no water controls")
+    eq(m.waterEnabled~=nil and m.waterThreshold~=nil,true,"a mage uses mana, so the water controls show")
+    -- Pet food settings (spec pet-food): the pet food controls show to hunters only.
+    local h=supplies("HUNTER")
+    eq(h.petFoodEnabled~=nil and h.petFoodThreshold~=nil,true,"a hunter sees the pet food controls")
+    eq(m.petFoodEnabled==nil and m.petFoodThreshold==nil,true,"a mage sees no pet food controls")
+    eq(w.petFoodEnabled==nil,true,"a warrior sees no pet food controls")
+end
 -- Validate the actual option table using the bundled upstream implementation.
 dofile("ClosestVendor/Libs/LibStub/LibStub.lua")
 dofile("ClosestVendor/Libs/CallbackHandler-1.0/CallbackHandler-1.0.lua")

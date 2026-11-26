@@ -1,0 +1,353 @@
+ct: 1
+kind: plan
+addon: ClosestVendor
+title: 'ClosestVendor in-game test plan: other addons'
+preamble: |-
+  These checks cover ClosestVendor with other addons: TomTom, WaypointUI (WoW Forever), NorgannonDB (WoW Forever) and a sound pack (an addon that adds LibSharedMedia sounds). Each step names the addon it needs: press Skip when it is not installed and enabled. Run the plan on WoW Forever and on Classic Era.
+  ClosestVendor has three plans, and all three run before each release: |cff99ccffplans/closestvendor.yaml|r (core), |cff99ccffplans/closestvendor.ui.yaml|r (status window, visuals and settings) and |cff99ccffplans/closestvendor.addons.yaml|r (this one). Import one plan, finish it and export it (|cff99ccff/ct export|r, optionally |cff99ccff/cvn debug off|r, then |cff99ccff/reload|r) before you import the next: a run uses the last plan imported.
+
+  Each step has one player action. A player step says what to look or listen for; the log lines are for the reviewer.
+logs:
+  debug:
+    global: ClosestVendorCharDB
+    path: log.entries
+    format: entries
+    cap: 1000
+  facts:
+    global: CheckThatDB
+    path: global.facts
+    format: strings
+    cap: 300
+  errors:
+    global: CheckThatDB
+    path: global.errors
+    format: strings
+    quiet: true
+    cap: 100
+requirements:
+  addon-loaded:
+    text: ClosestVendor is loaded
+    probe: addon-loaded
+    name: ClosestVendor
+offline:
+  toc: wow-closest-vendor/ClosestVendor/ClosestVendor_Vanilla.toc
+  steps:
+  - event:
+      name: ADDON_LOADED
+      args:
+      - ClosestVendor
+  - event:
+      name: PLAYER_LOGIN
+  - label: The fake client gives no version, so the version entry returns nothing
+    call:
+      addon: ClosestVendor
+      entry: version
+    returns: []
+  - label: The fake client has no TomTom, WaypointUI or game waypoint, so the waypoint is a chat line
+    call:
+      addon: ClosestVendor
+      entry: nav
+    returns:
+    - chat
+  - label: The fake client has no NorgannonDB
+    call:
+      addon: ClosestVendor
+      entry: external
+    returns:
+    - not found
+sections:
+- id: s20
+  title: Setup
+  intro: Copy ClosestVendor/ into the AddOns folder, enable the other addons you have, and log in.
+  steps:
+  - id: cv.s20.1
+    title: Check the ClosestVendor version
+    auto: true
+    action:
+      kind: manual
+      text: CheckThat reads the ClosestVendor version.
+    expect: The ClosestVendor version is 1.11.3 or newer. If the step fails, copy ClosestVendor 1.11.3 into the game again.
+    verify:
+    - assertions
+    call:
+      addon: ClosestVendor
+      entry: version
+    timeout: 30
+    assertions:
+    - kind: fact
+      source: facts
+      addon: ClosestVendor
+      key: entry.version
+      op: ge
+      value: 11103
+      label: ClosestVendor is 1.11.3 or newer
+    notes: The entry returns major*10000 + minor*100 + patch, so 1.11.3 is 11103. It reads a fact, not the debug log, so it runs before debug logging is on. CheckThat too old to offer entries leaves this step unverified.
+  - id: cv.s20.2
+    title: Turn on Lua errors and debug logging, then reload
+    action:
+      kind: manual
+      text: Press Run. It turns on Lua error popups (|cff99ccff/console scriptErrors 1|r) and the debug log (|cff99ccff/cvn debug on|r), then reloads (|cff99ccff/reload|r).
+      commands:
+      - "/console scriptErrors 1"
+      - "/cvn debug on"
+      - "/reload"
+    expect: The game reloads with no Lua error popup, and the debug log keeps recording after the reload.
+    verify:
+    - assertions
+    auto: true
+    reload: after_action
+    timeout: 120
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: debug log turned on
+      - contains: "---- login ----"
+      scope: attempt
+      label: The debug log turned on and still records after the reload
+    notes: The login marker comes after the reload, so the Run command alone cannot pass the step. A Lua error popup is also caught by the last step of the plan, which reads CheckThat's error list.
+- id: s21
+  title: Other addons
+  intro: Each step for one addon says so at the start. Press Skip when you do not have that addon, before the step's timeout ends, because an automatic step records a fail when its time runs out.
+  steps:
+  - id: cv.s21.1
+    title: 'TomTom: ask the test sell question and click Yes'
+    action:
+      kind: manual
+      text: TomTom only; press Skip otherwise. Press Run. It sets the waypoint choice to Automatic (|cff99ccff/cvn nav auto|r) and asks the sell question (|cff99ccff/cvn test sell|r). Click |cffffd100Yes|r (|cffffd100This map|r or |cffffd100Closest|r when it names two vendors).
+      commands:
+      - "/cvn nav auto"
+      - "/cvn test sell"
+    expect: The TomTom arrow points at the vendor. Press Pass.
+    verify:
+    - player
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'accepted: .+ via tomtom'
+      scope: attempt
+      label: TomTom took the waypoint
+    notes: 'Player step. Drawing: the TomTom arrow. Automatic uses TomTom first when it is installed.'
+  - id: cv.s21.2
+    title: 'TomTom: open any vendor window'
+    setup: The TomTom waypoint from check 21.1 is set.
+    action:
+      kind: manual
+      text: TomTom only; press Skip otherwise. Open any vendor's window.
+    expect: The TomTom arrow goes away when the window opens. Press Pass.
+    verify:
+    - player
+    - assertions
+    assertions:
+    - kind: log-sequence
+      source: debug
+      sequence:
+      - contains: merchant window opened
+      - contains: 'waypoint cleared: a merchant window opened'
+      scope: attempt
+      label: The merchant window cleared the TomTom waypoint
+    notes: 'Player step. Drawing: the arrow going away.'
+  - id: cv.s21.3
+    title: 'WoW Forever, WaypointUI: ask the test sell question and click Yes'
+    action:
+      kind: manual
+      text: WaypointUI only; press Skip otherwise. Press Run. It picks WaypointUI (|cff99ccff/cvn nav waypointui|r) and asks the sell question (|cff99ccff/cvn test sell|r). Click |cffffd100Yes|r (|cffffd100This map|r or |cffffd100Closest|r when it names two vendors).
+      commands:
+      - "/cvn nav waypointui"
+      - "/cvn test sell"
+    expect: The WaypointUI destination shows. Press Pass.
+    verify:
+    - player
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'accepted: .+ via waypointui'
+      scope: attempt
+      label: WaypointUI took the waypoint
+    notes: 'Player step. Drawing: the WaypointUI destination. The choice makes WaypointUI take the waypoint even with TomTom installed. Check 21.10 sets the choice back to Automatic.'
+    clients:
+    - forever-camelot
+  - id: cv.s21.4
+    title: 'WoW Forever, NorgannonDB: the addon read it at login'
+    clients:
+    - forever-camelot
+    action:
+      kind: manual
+      text: 'NorgannonDB only; press Skip otherwise. Nothing to type: CheckThat reads what ClosestVendor took from NorgannonDB.'
+    expect: The addon found NorgannonDB at login and added its vendors.
+    verify:
+    - assertions
+    auto: true
+    timeout: 60
+    call:
+      addon: ClosestVendor
+      entry: external
+    assertions:
+    - kind: fact
+      source: facts
+      addon: ClosestVendor
+      key: entry.external
+      op: contains
+      value: 'found, schema '
+      label: NorgannonDB was found with a supported schema
+    - kind: log
+      source: debug
+      contains: 'NorgannonDB: found, schema '
+      scope: session
+      label: The login line says NorgannonDB was found
+    notes: The login line comes from the reload of check 20.2, so it uses scope session. The entry gives the same text as the report line.
+  - id: cv.s21.5
+    title: 'WoW Forever, NorgannonDB: ask for a vendor in a Forever-only zone'
+    action:
+      kind: manual
+      text: NorgannonDB only; press Skip otherwise. Press Run (|cff99ccff/cvn test sell|r). Click |cffffd100No|r on the question.
+      commands:
+      - "/cvn test sell"
+    expect: The question names a vendor in that zone, where a real vendor stands. Press Pass.
+    verify:
+    - player
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'question shown: sell, '
+      scope: attempt
+      label: The question named a vendor
+    notes: 'Player step. Map knowledge: the shipped data has no vendor on these maps, so the vendor comes from NorgannonDB. Check 21.6 opens it.'
+    clients:
+    - forever-camelot
+    setup: NorgannonDB enabled. Stand in Riverglades or Zephras Isle (maps only WoW Forever has).
+  - id: cv.s21.6
+    title: 'WoW Forever, NorgannonDB: open the vendor the question named'
+    setup: Stand next to the vendor the question in check 21.5 named.
+    action:
+      kind: manual
+      text: NorgannonDB only; press Skip otherwise. Open the vendor's window.
+    expect: The addon records whether the vendor stands where NorgannonDB says.
+    verify:
+    - assertions
+    auto: true
+    timeout: 120
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'vendor learned: '
+      scope: attempt
+      label: The vendor was learned
+    - kind: log
+      source: debug
+      contains: NorgannonDB position
+      scope: attempt
+      label: The addon decided whose position to use
+    notes: The line ends with "replaces the NorgannonDB position" (another map, or more than 0.03 of the map away) or "the NorgannonDB position is kept". The next pin uses the position named.
+    clients:
+    - forever-camelot
+  - id: cv.s21.7
+    title: 'WoW Forever, NorgannonDB: Artisan asks for a trainer that teaches it'
+    setup: NorgannonDB enabled. A crafting profession at 215 to 225 of 225, level 35 or more. No other known profession is 10 points or fewer from its limit.
+    action:
+      kind: manual
+      text: NorgannonDB only, with a profession at 215 to 225 of 225; press Skip otherwise. Craft one item or gain a point in it.
+    expect: The question names a Master trainer (for example Brikk Keencraft in Booty Bay for Blacksmithing).
+    verify:
+    - assertions
+    auto: true
+    timeout: 180
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'trainer search: .+ needs tier 4; nearest .+ teaches tier 4'
+      scope: attempt
+      label: A trainer that teaches Artisan was chosen
+    - kind: log
+      source: debug
+      contains: 'question shown: trainer for '
+      scope: attempt
+      label: The trainer question was asked
+    clients:
+    - forever-camelot
+    notes: Without NorgannonDB trainer tiers the addon does not route Artisan (unit tested). Tier 4 is Artisan; the trainer search names the trainer that teaches it.
+  - id: cv.s21.8
+    title: 'Sound pack: choose a pack sound'
+    action:
+      kind: manual
+      text: Sound pack only; press Skip otherwise. Open Appearance, Sound in the settings and choose a sound marked "(sound pack)".
+    expect: Pack sounds follow the built-in ones, each marked "(sound pack)"; choosing one plays it. Press Pass.
+    verify:
+    - player
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      contains: 'setting changed: remindSound '
+      scope: attempt
+      label: The chosen pack sound was saved
+    notes: Player step. The sound and the list marks are heard and seen. The setting changed line proves the choice was saved.
+  - id: cv.s21.9
+    title: 'Sound pack: type /cvn test remind'
+    action:
+      kind: manual
+      text: Sound pack only; press Skip otherwise. Press Run (|cff99ccff/cvn test remind|r).
+      commands:
+      - "/cvn test remind"
+    expect: The pack sound you chose in check 21.8 plays. Press Pass.
+    verify:
+    - player
+    - assertions
+    assertions:
+    - kind: log
+      source: debug
+      pattern: 'reminder: [tfh]%a+'
+      scope: attempt
+      label: The reminder line was written for this class (test, food or healthstone)
+    - kind: log
+      source: debug
+      contains: 'test command: remind'
+      scope: attempt
+      label: The test command ran
+      diagnostic: true
+    notes: 'Player step. Sound: the chosen sound plays again; no line proves a sound. The reminder line proves the reminder ran (non mage or warlock: reminder: test; Mage: reminder: food (N); Warlock: reminder: healthstone (0)). test command is written by the command itself: diagnostic only.'
+  - id: cv.s21.10
+    title: Put the waypoint and sound settings back
+    action:
+      kind: manual
+      text: Press Run. It sets the waypoint choice back to Automatic (|cff99ccff/cvn nav auto|r) and the notification sound back to the default (|cff99ccff/cvn sound whisper|r).
+      commands:
+      - "/cvn nav auto"
+      - "/cvn sound whisper"
+    expect: Chat shows the waypoint choice Automatic, and the default whisper sound plays. Press Pass.
+    verify:
+    - player
+    notes: 'Player step. Cleanup the player sees: checks 21.1, 21.3 and 21.8 changed these settings. Each command is harmless when the setting is already at its default.'
+  - id: cv.s21.11
+    title: No Lua error from ClosestVendor during the run
+    action:
+      kind: manual
+      text: Nothing to do. CheckThat reads its list of Lua errors for this run.
+    expect: ClosestVendor raised no Lua error during this plan.
+    verify:
+    - assertions
+    auto: true
+    timeout: 15
+    call:
+      addon: ClosestVendor
+      entry: config
+      args:
+      - remindSound
+    assertions:
+    - kind: fact
+      source: facts
+      addon: ClosestVendor
+      key: entry.config
+      op: eq
+      value: whisper
+      label: The notification sound is back to the default whisper after check 21.10
+    - kind: log
+      source: errors
+      pattern: "%[ClosestVendor%]"
+      absent: true
+      scope: session
+      label: ClosestVendor raised no Lua error in this run
+    notes: 'The config entry runs when the step opens, after check 21.10 typed the sound default back. Scope session reads CheckThat''s whole error list. CheckThat keeps an error only while a run is open, across /reload, up to the last 100, so the check covers every step of this run. CheckThat 0.21.0 has no scope for one run, and starting a run keeps the list: a ClosestVendor error from an earlier run (also of another ClosestVendor plan) fails this step too. When it fails, compare the error time with the start of this run. It passes when the 15 seconds end with no ClosestVendor error in the list. After this step, export the run (/ct export), optionally turn the debug log off (/cvn debug off), and type /reload so the game saves the log.'

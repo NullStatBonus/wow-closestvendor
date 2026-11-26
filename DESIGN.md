@@ -342,16 +342,14 @@ CVN's implementation sources:
 - [Copyable report window](ClosestVendor/Report.lua)
 - [Change record and coverage](openspec/changes/cohesive-addon-presentation/coverage.md)
 
-Automated validation uses `make test` and `make check`. Before claiming visual acceptance, review on both clients (Vanilla and Camelot/Forever) at matching UI scale, following `plans/closestvendor.yaml`:
+Automated validation uses `make test` and `make check`. Before claiming visual acceptance, run `plans/closestvendor.ui.yaml` on both clients (Vanilla and Camelot/Forever). It checks the low rows, the seller menu, Move with Escape, the background color, opacity 0 with dimmed text, the demo, the notice, the preview, the AddOns list pages and the settings window size. Review by hand what the plan leaves out:
 
-- All six pages and their child pages and tabs opened directly; purpose, scope and next action are apparent.
-- Compact window, resizing, scrolling, long translations and complete control labels.
+- Every child page and tab opened directly; purpose, scope and next action are apparent.
+- Long translations and complete control labels.
 - Each class's Ammo, Reagents and Supplies page state.
-- Opacity at 0/80/100; scale at 100/150 and the bounds.
-- Low rows red with the Low label; display-only rows never red.
-- Warning and Toast styles; prompts keep Accept/Cancel.
+- Scale at 100/150 and the bounds.
 - Disabled-feature samples, repeat/expiry and concurrent real updates.
-- Move edge clamping, Done/Cancel/Escape, lock and combat.
+- Move edge clamping, Done, lock and combat.
 
 ## 12. Differences from KeepThat
 

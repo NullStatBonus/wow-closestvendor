@@ -910,6 +910,45 @@ local windows = 0
 for _, f in ipairs(g.frames) do if f.name == "ClosestVendorReport" then windows = windows + 1 end end
 eq(windows, 1, "asking again reuses the window")
 
+-- Presentation diagnostics (spec diagnostics): the header names the style, the sample state, the notice
+-- switch, the toast look and Move. A preview shows as a sample and changes no setting and no decision:
+-- a real question open before the preview stays open, and its Yes still navigates.
+do
+    local fns = {}
+    local gp = boot({ checkThat = { Entry = function(_, name, fn) fns[name] = fn; return true end } }); login(gp)
+    gp.env.SlashCmdList.CLOSESTVENDOR("debug on")
+    gp.env.SlashCmdList.CLOSESTVENDOR("set appearance.notification-style toast")
+    local function header()
+        gp.env.SlashCmdList.CLOSESTVENDOR("log")
+        for _, f in ipairs(gp.frames) do if f.name == "ClosestVendorReport" then return f.box.text end end
+        return ""
+    end
+    local t = header()
+    for _, part in ipairs({ "presentation scope: This character; style toast; sample off", "on-screen notice on",
+                            "toast: background 100%, text/icons 100%, scale 100%, position ", "Move: hud false, toast false" }) do
+        eq(has(t, part), true, "presentation report contains '" .. part .. "'")
+    end
+    gp.free = 1; gp.onEvent("BAG_UPDATE_DELAYED")
+    local real = gp.popup
+    eq(real ~= nil and real.text:find("bags are almost full", 1, true) ~= nil, true, "a real sell question is open before the preview")
+    eq(fns.active(), "sell", "the sell request is the open one before the preview")
+    local before = #gp.env.ClosestVendorCharDB.log.entries
+    gp.env.SlashCmdList.CLOSESTVENDOR("preview notice")
+    t = header()
+    eq(has(t, "presentation scope: This character; style toast; sample notice"), true, "a preview shows in the report as a sample, the style unchanged")
+    local added = {}
+    for i = before + 1, #gp.env.ClosestVendorCharDB.log.entries do added[#added + 1] = gp.env.ClosestVendorCharDB.log.entries[i].msg end
+    eq(has(table.concat(added, "\n"), "setting changed: "), false, "the preview changes no setting")
+    eq(has(table.concat(added, "\n"), "question shown: "), false, "the preview records no decision")
+    eq(has(table.concat(added, "\n"), "question withdrawn"), false, "the preview withdraws no question")
+    eq(gp.popup, real, "the real sell question is still the one shown after the preview")
+    eq(fns.active(), "sell", "the sell request is still open after the preview")
+    gp.env.StaticPopupDialogs.CLOSESTVENDOR_CONFIRM.OnAccept(nil, real.accept)
+    local after = {}
+    for i = before + 1, #gp.env.ClosestVendorCharDB.log.entries do after[#after + 1] = gp.env.ClosestVendorCharDB.log.entries[i].msg end
+    eq(has(table.concat(after, "\n"), "accepted: "), true, "Yes on the real question still navigates after the preview")
+end
+
 -- The report works with the log off, and says how to turn it on.
 g = boot(); login(g)
 g.env.SlashCmdList.CLOSESTVENDOR("log")
@@ -2680,7 +2719,7 @@ do
     eq(#n.tomtom, 1, "and the row click still pins a vendor")
 end
 
--- Debug log lines and CheckThat entries for the in-game test plan (sections 3, 4, 6, 19, 21 and 24): exact text.
+-- Debug log lines and CheckThat entries the in-game plans assert or keep as diagnostics (docs/contracts.md): exact text.
 do
     local function msgs(gg) local t = {} for _, e in ipairs(gg.env.ClosestVendorCharDB.log.entries) do t[#t + 1] = e.msg end return t end
     local function times(gg, line) local n = 0 for _, m in ipairs(msgs(gg)) do if m == line then n = n + 1 end end return n end
